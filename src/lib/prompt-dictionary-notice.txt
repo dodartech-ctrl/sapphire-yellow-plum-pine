@@ -1,0 +1,1 @@
+The prompt wording in prompt-blocks.json is copied from https://github.com/lutiy-dev/ARCHVIZ-Prompt-Dictionary-Builder (GPL-3.0-only). Copyright the original authors. Placeholders were filled with that file's own default parameter values. The rest of Oriel is not offered under the GPL by this notice.

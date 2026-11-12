@@ -1,0 +1,632 @@
+[
+  {
+    "id": "facade",
+    "name": "Facade",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "facade",
+      "brick",
+      "overcast"
+    ]
+  },
+  {
+    "id": "road",
+    "name": "Road",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "road",
+      "overcast"
+    ]
+  },
+  {
+    "id": "greenery",
+    "name": "Greenery",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "greenery"
+    ]
+  },
+  {
+    "id": "people",
+    "name": "People",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "people"
+    ]
+  },
+  {
+    "id": "interior",
+    "name": "Interior",
+    "blocks": [
+      "interior",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc"
+    ]
+  },
+  {
+    "id": "exterior",
+    "name": "Exterior",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "overcast"
+    ]
+  },
+  {
+    "id": "final-polish",
+    "name": "Final Polish",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "polish"
+    ]
+  },
+  {
+    "id": "material-study",
+    "name": "Material Study",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "facade",
+      "limestone"
+    ]
+  },
+  {
+    "id": "day-→-night",
+    "name": "Day → Night",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "night"
+    ]
+  },
+  {
+    "id": "portfolio-polish",
+    "name": "Portfolio Polish",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "photo",
+      "exclude",
+      "qc",
+      "polish",
+      "overcast"
+    ]
+  },
+  {
+    "id": "object-3d-asset",
+    "name": "Object / 3D Asset",
+    "blocks": [
+      "asset-goal",
+      "asset-reference",
+      "asset-shape",
+      "asset-material",
+      "microdetail",
+      "roughness-variation",
+      "soft-diffused-light",
+      "asset-view",
+      "asset-background",
+      "asset-qc",
+      "final-cleanup"
+    ]
+  },
+  {
+    "id": "archviz-video",
+    "name": "Archviz Image-to-Video",
+    "blocks": [
+      "video-arch-goal",
+      "video-reference",
+      "video-arch-preserve",
+      "video-motion",
+      "exclude",
+      "video-stability"
+    ]
+  },
+  {
+    "id": "object-video",
+    "name": "Object Video",
+    "blocks": [
+      "video-object-goal",
+      "video-reference",
+      "asset-shape",
+      "video-motion",
+      "video-stability"
+    ]
+  },
+  {
+    "id": "environment-context",
+    "name": "Environment / Context",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "mask",
+      "environment-extension",
+      "context-description",
+      "match-source-lighting",
+      "photo",
+      "perspective-scale-match",
+      "context-restrictions",
+      "environment-qc",
+      "final-cleanup"
+    ]
+  },
+  {
+    "id": "night-lighting",
+    "name": "Night / Existing Sources",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "night",
+      "night-windows",
+      "night-street-sources",
+      "night-headlights",
+      "photo",
+      "exclude",
+      "qc",
+      "night-source-qc"
+    ]
+  },
+  {
+    "id": "people-insertion",
+    "name": "Add People",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "mask",
+      "add-people",
+      "people-integration",
+      "photo",
+      "perspective-scale-match",
+      "exclude",
+      "qc",
+      "add-people-qc"
+    ]
+  },
+  {
+    "id": "season-spring",
+    "name": "Spring / Весна",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "mask",
+      "photo",
+      "exclude",
+      "qc",
+      "spring",
+      "final-cleanup"
+    ]
+  },
+  {
+    "id": "season-summer",
+    "name": "Summer / Лето",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "mask",
+      "photo",
+      "exclude",
+      "qc",
+      "summer",
+      "final-cleanup"
+    ]
+  },
+  {
+    "id": "season-autumn",
+    "name": "Autumn / Осень",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "mask",
+      "photo",
+      "exclude",
+      "qc",
+      "autumn",
+      "autumn-fallen-leaves",
+      "final-cleanup"
+    ]
+  },
+  {
+    "id": "season-winter",
+    "name": "Winter / Зима",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "mask",
+      "photo",
+      "exclude",
+      "qc",
+      "winter",
+      "added-snow-cover",
+      "final-cleanup"
+    ]
+  },
+  {
+    "id": "first-last-video",
+    "name": "First → Last Frame / Первый → последний кадр",
+    "blocks": [
+      "first-last-goal",
+      "first-last-reference",
+      "video-arch-preserve",
+      "first-last-transition",
+      "first-last-camera",
+      "video-stability"
+    ]
+  },
+  {
+    "id": "material-id-map",
+    "name": "Material ID Map / Карта материалов",
+    "blocks": [
+      "material-id-goal",
+      "source",
+      "material-id-preserve",
+      "material-id-rules",
+      "material-id-classes",
+      "material-id-restrictions",
+      "material-id-qc"
+    ]
+  },
+  {
+    "id": "hdri-realism",
+    "name": "HDRI Realism / HDRI реализм",
+    "blocks": [
+      "hdri-realism-positive",
+      "hdri-realism-negative"
+    ]
+  },
+  {
+    "id": "hero-photo-clean",
+    "name": "HERO PHOTO CLEAN / Чистый герой-фотореал",
+    "blocks": [
+      "hero-photo-clean-positive",
+      "hero-photo-clean-negative"
+    ]
+  },
+  {
+    "id": "hero-photo-dramatic",
+    "name": "HERO PHOTO DRAMATIC / Драматичный герой-фотореал",
+    "blocks": [
+      "hero-photo-dramatic-positive",
+      "hero-photo-dramatic-negative"
+    ]
+  },
+  {
+    "id": "hero-sunset-gold",
+    "name": "HERO SUNSET GOLD / Золотой час",
+    "blocks": [
+      "hero-sunset-gold-positive",
+      "hero-sunset-gold-negative"
+    ]
+  },
+  {
+    "id": "director-villeneuve",
+    "name": "DIRECTOR · Monumental Atmospheric Cinema",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "cinema-villeneuve"
+    ]
+  },
+  {
+    "id": "director-anderson",
+    "name": "DIRECTOR · Graphic Pastel Cinema",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "cinema-anderson"
+    ]
+  },
+  {
+    "id": "director-nolan",
+    "name": "DIRECTOR · Natural Epic Cinema",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "cinema-nolan"
+    ]
+  },
+  {
+    "id": "director-fincher",
+    "name": "DIRECTOR · Precision Low-Key Cinema",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "cinema-fincher"
+    ]
+  },
+  {
+    "id": "director-scott",
+    "name": "DIRECTOR · Layered Night Cinema",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "cinema-scott"
+    ]
+  },
+  {
+    "id": "director-malick",
+    "name": "DIRECTOR · Golden-Hour Naturalism",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "cinema-malick"
+    ]
+  },
+  {
+    "id": "photography-editorial-modernist",
+    "name": "PHOTO · Modernist Architectural Editorial",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "photo-editorial-modernist"
+    ]
+  },
+  {
+    "id": "photography-sculptural-shadows",
+    "name": "PHOTO · Sculptural Architectural Photography",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "photo-sculptural-shadows"
+    ]
+  },
+  {
+    "id": "photography-documentary-context",
+    "name": "PHOTO · Documentary Architecture",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "photo-documentary-context"
+    ]
+  },
+  {
+    "id": "photography-warm-human-scale",
+    "name": "PHOTO · Human-Centered Architecture",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "photo-warm-human-scale"
+    ]
+  },
+  {
+    "id": "controlled-custom-material",
+    "name": "CONTROL · Custom Material",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "custom-material",
+      "upscale-safety"
+    ]
+  },
+  {
+    "id": "controlled-material-reference",
+    "name": "CONTROL · Material Reference",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "custom-material",
+      "reference-material"
+    ]
+  },
+  {
+    "id": "controlled-reference-light",
+    "name": "CONTROL · Reference Lighting",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "reference-lighting",
+      "custom-grading"
+    ]
+  },
+  {
+    "id": "controlled-multi-reference",
+    "name": "CONTROL · Multi-Reference",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "multi-reference-roles",
+      "custom-art-direction"
+    ]
+  },
+  {
+    "id": "controlled-photorealism",
+    "name": "CONTROL · Photorealism Recovery",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "photorealism-recovery",
+      "upscale-safety"
+    ]
+  },
+  {
+    "id": "controlled-multi-view",
+    "name": "CONTROL · Multi-View Consistency",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "multiview-consistency"
+    ]
+  },
+  {
+    "id": "controlled-art-direction",
+    "name": "CONTROL · Custom Art Direction",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "custom-art-direction",
+      "custom-light",
+      "custom-atmosphere",
+      "custom-grading"
+    ]
+  },
+  {
+    "id": "marketing-developer",
+    "name": "MARKETING · Developer Hero",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "developer-story",
+      "photo-documentary-context"
+    ]
+  },
+  {
+    "id": "heritage-context",
+    "name": "HERITAGE · Protected Context",
+    "blocks": [
+      "goal",
+      "source",
+      "geometry",
+      "windows",
+      "exclude",
+      "qc",
+      "heritage-protection",
+      "photo-sculptural-shadows"
+    ]
+  },
+  {
+    "id": "video-art-direction",
+    "name": "VIDEO · Camera and Environment",
+    "blocks": [
+      "video-arch-goal",
+      "video-arch-preserve",
+      "video-motion-custom",
+      "video-environment-custom",
+      "video-temporal-qc"
+    ]
+  }
+]

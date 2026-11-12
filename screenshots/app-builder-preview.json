@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Oriel — Architectural visualization studio",
+      "hasCanvas": false,
+      "bodyTextLen": 791,
+      "bodyTextHash": "687583bce88821a2b6a3114030a1cd1e9c1046ee963c2dabafc77f6e12f20dec",
+      "bodyTextPrefix": "Oriel ARCHVIZ STUDIO Interior Exterior Amenities Landscape Studi",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Oriel — Architectural visualization studio",
+      "hasCanvas": false,
+      "bodyTextLen": 628,
+      "bodyTextHash": "43de696318aba8e37b33856689cd69895e4b52642ff9033af123ecf182361a9f",
+      "bodyTextPrefix": "Oriel Interior Exterior Amenities Landscape ARCHITECTURAL ASSIST",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

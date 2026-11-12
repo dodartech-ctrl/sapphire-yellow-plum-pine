@@ -1,0 +1,1174 @@
+# Oriel Studio – Enterprise Design Properties & AI ArchViz Platform PRD
+
+Product Requirements Document
+
+Enterprise SaaS
+
+AI + ArchViz
+
+Product: Oriel Studio\
+Module: AI Design Properties & Interactive Image Editing\
+Version: 1.0\
+Platform: Web-based SaaS\
+Frontend: React.js / Next.js / Three.js\
+Design System: Luxury Ivory, Charcoal & Champagne Gold
+
+## 1. Product vision
+
+Build a comprehensive AI-powered architectural visualization platform where users can upload an existing photograph, floor plan, sketch, 3D render or architectural model and transform it into photorealistic architectural designs.
+
+The platform must cover four primary design verticals:
+
+1. Interior Design
+2. Exterior Architecture
+3. Amenities & Lifestyle
+4. Landscape Architecture
+
+Each vertical must have its own contextual Design Properties panel, extensive visual element library, material catalog, mood controls, human characteristics, tags and AI editing capabilities.
+
+Core principle: Every design property must be selectable, configurable, previewable and applicable to the selected image or region without unnecessarily changing the rest of the design.
+
+## 2. Product scope and navigation
+
+### 2.1 Main application navigation
+
+| Navigation     | Purpose                                   |
+| -------------- | ----------------------------------------- |
+| Studio         | Main AI design workspace                  |
+| Interior       | Interior-specific design workspace        |
+| Exterior       | Building and facade design                |
+| Amenities      | Lifestyle and recreational spaces         |
+| Landscape      | Outdoor and garden design                 |
+| Studies        | Design comparisons and analysis           |
+| AI Chat        | Conversational design assistant           |
+| Method         | Design workflow and methodology           |
+| Projects       | Saved projects and versions               |
+| Assets Library | Materials, furniture, models and textures |
+| Templates      | Ready-made architectural styles           |
+
+### 2.2 Workspace layout
+
+The application must contain five primary areas:
+
+| Area                      | Function                                                 |
+| ------------------------- | -------------------------------------------------------- |
+| Left navigation           | Modules, projects, recent chats and libraries            |
+| Main canvas               | Uploaded image and generated architectural visualization |
+| Right properties panel    | Contextual design controls                               |
+| Bottom prompt composer    | Natural-language AI instructions                         |
+| Bottom variation explorer | Generated alternatives and version comparison            |
+
+The right panel must be collapsible, resizable and scrollable. Its configuration must change automatically according to the active vertical.
+
+## 3. Design Properties – Core architecture
+
+The Design Properties engine is the most important component of this PRD.
+
+### 3.1 Common panel structure
+
+DESIGN PROPERTIES
+
+Contextual panel
+
+Design
+
+Camera
+
+Lighting
+
+Human
+
+Mood
+
+Shared property groups
+
+- Design category and element library
+- Material and finish
+- Color palette
+- Look & Feel
+- Mood and atmosphere
+- Human characteristics
+- Tags and attributes
+- Camera and composition
+- Lighting and environment
+- Output quality
+
+  Apply to Image
+
+### 3.2 Required interaction types
+
+Every property must support the appropriate interaction:
+
+- Selectable cards and thumbnail grids.
+- Searchable dropdowns and expandable accordions.
+- Single-select and multi-select chips.
+- Color picker and material swatches.
+- Sliders for intensity, scale, density and quantity.
+- Numeric inputs for dimensions and measurements.
+- Uploadable reference images.
+- Draggable asset placement where supported.
+- Reset, undo, redo and apply actions.
+
+### 3.3 Property application engine
+
+Every property selection must create a structured editing instruction.
+
+Example:
+
+```
+{
+  "vertical": "interior",
+  "element": "flooring",
+  "selection": {
+    "material": "italian_marble",
+    "finish": "polished",
+    "color": "warm_white",
+    "pattern": "large_slab"
+  },
+  "target": {
+    "region": "floor_surface",
+    "scope": "selected_region"
+  },
+  "preserve": [
+    "architecture",
+    "camera",
+    "furniture",
+    "lighting"
+  ],
+  "action": "apply_material"
+}
+```
+
+The AI engine must translate property selections into image-editing operations while preserving unselected regions.
+
+## 4. Vertical 1 – Interior Design
+
+Full property library required
+
+[Moderna Villa de Lujo DELMARE en Calpe con Solárium y Spa Privado | Ref: VILLA DELMARE](https://images.openai.com/static-rsc-4/x69PhaHMl66z5ObEkF0Bx1VW13C-LZCdBlyi2CarpkUIdkFmNTUyWPS65Iz3s-n20-h5bWT5i600pUGpQ4DWSm4YW-BSRDiqCytsT3mCokvLk-jhZSTCaMXHbzbrRS3Z8w-pYVUltb24SkasPS_wv17x-T4EYHNyt0gg9KJ7kdQ?purpose=inline)
+
+[Find Modern Upholstered Bed Master Bedroom with Sliding Wardrobe - PureSpace](https://images.openai.com/static-rsc-4/0SqlekZ_1g93OIgt012IWb01DB_MwwyYMa8olTuzQPJYHZfPgirPCQpUf8Gozae0au9djjS3JRosloqgWNynMkZUDxUcjReMLtSkrCIMnNzSGI5JEzGfVkZCT4F_cN3ouDpN4pqetT7PqSbxfZfrph5ofDSceiTzIcrj-NRFIoE?purpose=inline)
+
+[In this modern house, the kitchen features a stunning island with a marble counter, perf… | Kitchen room interior design, Modern kitchen, Kitchen inspiration design](https://images.openai.com/static-rsc-4/mftpSm9okZIodGO0UtPky3EwDC70umqhRj5H_gpqJzBR3LQ3LqKUjgHGBQ0QocgTX_sV1hlE46Bjw3CImmhky-k0T4qCBtmqdI85IG3e21SLMRsOIm35UBldb66hDnbQb7x3Dl6c2wpXMDepksQMQO0l4r7nSBmEZR1WjPFox_0?purpose=inline)
+
+12
+
+### 4.1 Interior element categories
+
+| Category      | Selectable elements and properties                                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Flooring      | Italian marble, travertine, granite, porcelain, ceramic, hardwood, engineered wood, SPC, vinyl, microcement, carpet, terrazzo |
+| Rugs          | Persian, modern, geometric, abstract, wool, jute, silk                                                                        |
+| Wall paint    | Matte, satin, eggshell, gloss, limewash, textured paint                                                                       |
+| Wall finishes | Wallpaper, fluted panels, wood cladding, stone, microcement, fabric panels                                                    |
+| Ceiling       | Gypsum, false ceiling, coffered, tray ceiling, wooden ceiling, acoustic ceiling                                               |
+| Lighting      | Chandelier, pendant, recessed, cove, track, wall sconce, floor lamp, table lamp, LED strip                                    |
+| Furniture     | Sofa, sectional, accent chair, coffee table, dining table, desk, console, side table                                          |
+| Seating       | Leather, fabric, velvet, boucle, lounge chairs, stools, benches                                                               |
+| Bedroom       | Beds, headboards, wardrobes, bedside tables, dressers, dressing units                                                         |
+| Kitchen       | Cabinets, island, countertop, backsplash, sink, hob, refrigerator, oven                                                       |
+| Bathroom      | Bathtub, shower, vanity, faucets, mirrors, toilets, basins, accessories                                                       |
+| Doors         | Wooden, glass, sliding, pivot, flush, panelled                                                                                |
+| Windows       | Sliding, casement, floor-to-ceiling, skylight, tinted glass                                                                   |
+| Decor         | Artwork, sculpture, mirrors, plants, vases, curtains, cushions                                                                |
+| Materials     | Stone, marble, wood, glass, metal, leather, fabric, concrete                                                                  |
+| Colors        | Walls, furniture, flooring, ceiling, accents and trim                                                                         |
+
+### 4.2 Interior design-specific controls
+
+Each category must have its own configuration.
+
+Flooring configuration
+
+- Material type
+- Color
+- Finish: matte / polished / honed / brushed
+- Pattern: straight / herringbone / chevron / grid
+- Tile dimensions
+- Joint width
+- Reflection and roughness
+
+Furniture configuration
+
+- Furniture category
+- Model selection
+- Style
+- Size and proportions
+- Material and upholstery
+- Color
+- Position and rotation
+- Arrangement
+- Replace / Add / Remove
+
+Wall configuration
+
+- Paint color
+- Texture
+- Material
+- Panel layout
+- Pattern
+- Finish
+- Coverage and intensity
+
+Lighting configuration
+
+- Fixture type
+- Fixture style
+- Color temperature
+- Intensity
+- Direction
+- Shadow softness
+- Placement
+
+### 4.3 Room selector
+
+Users must be able to choose individual rooms:
+
+- Living room
+- Master bedroom
+- Guest bedroom
+- Children's bedroom
+- Kitchen
+- Dining room
+- Bathroom
+- Powder room
+- Home office
+- Home theatre
+- Balcony
+- Foyer
+- Corridor
+- Staircase
+- Utility room
+- Walk-in wardrobe
+
+The system must preserve separate room configurations within one project.
+
+### 4.4 Interior-specific AI actions
+
+- Redesign entire room.
+- Replace selected furniture.
+- Change flooring only.
+- Repaint walls.
+- Change ceiling design.
+- Replace lighting fixtures.
+- Change kitchen cabinets.
+- Add or remove furniture.
+- Change material without changing geometry.
+- Apply a reference interior style.
+- Restyle the room while preserving layout.
+
+## 5. Vertical 2 – Exterior Architecture
+
+[外观渲染AI - 照片级真实立面 | Armox AI](https://images.openai.com/static-rsc-4/IzgZsPfLwpnoLrtW04Gf9q1ueFR2uun9tUHXZA35OeNa5ZHEEEK-3DVqtfxSb6io6B6S5zhzqeMkeEYbKFFuoSUkMtsY9EpZ0V7H0piQUPb6uSY_ASTalLBI7eKKe5lfuN2rbzEZ4fyhJzx3UbRlLIpJQoyMKXsLp4FLe5t4x-s?purpose=inline)
+
+[Jumeirah Villa 23 | Luxury Design & Build Projects Dubai | Xena Design & Build Portfolio](https://images.openai.com/static-rsc-4/_iPAYnpwa80ktgOTQJ6slvrSfh6184vVlR4EqeS72B9NrmTHwdwPNP2rxuUTDBjNj5zPdSG5SRDGKRL4GXhjnCufKXjZrIMqmebMELMWzpfPwGDT205YyMGOkLUMck76bfJz1FtL0Kli1sIj71kgrnKWQqK6WXMvIHCyyFTqahI?purpose=inline)
+
+[Craft Your Dream Home with House Banao](https://images.openai.com/static-rsc-4/NfALYoxKWxeIyp_JaikSZZbH1yLSpagdIpLJOO-IL1jxsnJuo6CRDblV5pAuG6mxKAnecSqILGbT2b4E-MUITiJguXNnf5sAtTqwLpvvdcvkZlNzOngRfBCdhglju7k_kGpFe6rxs4vfVGFy3erVyxIPvHKP8gFvZzIokjxHXf4?purpose=inline)
+
+15
+
+### 5.1 Exterior property categories
+
+| Category          | Elements                                              |
+| ----------------- | ----------------------------------------------------- |
+| Facade            | Stone, wood, glass, metal, concrete, brick, ACP, HPL  |
+| Walls             | Paint, texture, cladding, exposed concrete, stone     |
+| Roof              | Flat, pitched, sloped, green roof, pergola            |
+| Windows           | Frames, glazing, tint, dimensions, shutters           |
+| Doors             | Main entrance, sliding, pivot, garage                 |
+| Balcony           | Glass railing, metal railing, parapet, deck           |
+| Terrace           | Pergola, seating, planters, outdoor flooring          |
+| Columns           | Concrete, stone, decorative, metal                    |
+| Staircase         | Floating, exterior, landscape steps                   |
+| Compound          | Boundary wall, fencing, gates                         |
+| Entrance          | Portico, canopy, entrance landscaping                 |
+| Driveway          | Concrete, pavers, cobblestone, asphalt                |
+| Parking           | Open parking, covered parking, garage                 |
+| Exterior lighting | Facade lighting, garden lights, bollards, wall lights |
+| Water features    | Reflecting pools, fountains, cascades                 |
+
+### 5.2 Facade material controls
+
+- Material selection.
+- Texture and pattern.
+- Color and finish.
+- Roughness and reflectivity.
+- Panel size and orientation.
+- Surface coverage.
+- Installation direction.
+- Region-based application.
+
+### 5.3 Architectural style library
+
+- Modern
+- Contemporary
+- Minimalist
+- Tropical
+- Mediterranean
+- Classical
+- Neoclassical
+- Colonial
+- Industrial
+- Brutalist
+- Scandinavian
+- Futuristic
+- Sustainable
+- Parametric
+
+### 5.4 Exterior-specific actions
+
+- Facade redesign.
+- Change roof.
+- Replace windows.
+- Change wall material.
+- Modify balcony railing.
+- Add pergola.
+- Redesign entrance.
+- Add garage and parking.
+- Modify compound wall.
+- Add exterior lighting.
+- Change building colors.
+- Preserve existing building geometry.
+
+## 6. Vertical 3 – Amenities & Lifestyle
+
+[Prestige Shettigere | Ultra-Luxury Villas, North Bengaluru](https://images.openai.com/static-rsc-4/qKEKLwWgRAH280vg4opdfipZ4JPNDaBFknBcuJrQJxInwdEk1LIFK3kIzen3qzSMvmARqGiFMQUDiyewj2A9Ct7TlelTxB01bD3gz4eayrl0y6w9u7JnjOzXErL2cRV5S1im6bEw5pCcZP_rpeFGo7HR3TNT2pk6E3QLTQ99y7A?purpose=inline)
+
+[Enhancing Health and Wellness: Fitness and Wellness Amenities](https://images.openai.com/static-rsc-4/TDHb_KG4JiPzvTGcUNmClptacm5TRq_3Tw8NWlVmN_6nnURJi7Np0xuLbckXMZ9YMrkwvm3x39AjYnUbtDsXM-uEVJtXjQxq7s8PfdtRPgD018VV3VqYZFDWZrg1sIRfn6AGt-YVxnvyBYs3VBPiQTeA6d-nQI-iAAmgIFzyoxU?purpose=inline)
+
+[Clubhouse Restaurant | Heritage Golf Club Mauritius](https://images.openai.com/static-rsc-4/W0VVzm2Hihn_dK6ZV2HiuMP0H7X00oBMr1mNcSGYtXnLE2ObNal3aCeXgEUSFKCJPNRea9LM2oaDsfttVON28S5QJ7lxWtEqDYs9EfpkFGM3CsuhIxac09UET1UwBIUO4TVAEOxgqxcakbzBJ2CWC9jXn2rJj9_gRXnhB084Yjc?purpose=inline)
+
+15
+
+### 6.1 Amenities library
+
+| Category   | Selectable elements                                          |
+| ---------- | ------------------------------------------------------------ |
+| Water      | Swimming pool, infinity pool, jacuzzi, splash pool, fountain |
+| Wellness   | Gym, spa, yoga deck, meditation room                         |
+| Sports     | Tennis, basketball, badminton, football, cricket             |
+| Recreation | Clubhouse, lounge, gaming room, library                      |
+| Social     | Restaurant, café, party hall, event lawn                     |
+| Family     | Kids' play area, daycare, family seating                     |
+| Outdoor    | BBQ, fire pit, outdoor kitchen, pergola                      |
+| Work       | Coworking, meeting room, business lounge                     |
+| Security   | CCTV, security cabin, access gate                            |
+| Mobility   | Parking, EV charging, bicycle stand                          |
+
+### 6.2 Lifestyle and human characteristics
+
+Human characters must be independently configurable.
+
+| Property            | Options                                                          |
+| ------------------- | ---------------------------------------------------------------- |
+| Count               | None, Few, Medium, Crowd                                         |
+| Age group           | Children, Teenagers, Adults, Seniors                             |
+| Gender presentation | Male, Female, Mixed                                              |
+| Clothing            | Casual, Business, Formal, Sportswear, Traditional                |
+| Activity            | Walking, Sitting, Dining, Working, Swimming, Exercising, Playing |
+| Placement           | Foreground, Midground, Background                                |
+| Density             | Low, Medium, High                                                |
+| Pose                | Standing, Sitting, Walking, Running, Interacting                 |
+| Realism             | Standard, Photorealistic, Cinematic                              |
+| Visibility          | Full body, Half body, Silhouette                                 |
+
+Additional requirements:
+
+- Realistic scale relative to architecture.
+- Natural shadows and lighting.
+- Correct contact with floors and surfaces.
+- No duplicated or distorted people.
+- Appropriate placement and perspective.
+- Optional vehicles and pets.
+
+### 6.3 Amenities-specific actions
+
+- Add swimming pool.
+- Add gym and wellness facilities.
+- Add sports courts.
+- Add clubhouse.
+- Add restaurant and café.
+- Add outdoor seating.
+- Add people and activities.
+- Add vehicles.
+- Generate lifestyle scenes.
+- Generate marketing visuals.
+
+## 7. Vertical 4 – Landscape Architecture
+
+[Presidential Villa Collection](https://images.openai.com/static-rsc-4/y8SI-QCASI1uVi32KXQ5Ou3Wr3my3ir0UB7VY77ERM03fs-c2vCCBq0FL82fZSaD4cEeDSclqdFUQN9bBZSsNQpznoIS0-589TuEqicdtKovpOp9F0Bp4g_DgKLQ8-mAvwmGClKv4DsNJ8uOJrxEKuTr7glKWMIASIcGOfqzbqU?purpose=inline)
+
+[Ornamental Grass Garden Ideas - HomeDesignsAI](https://images.openai.com/static-rsc-4/A3haDbse-sA4oWbN9ZoEq8GzCw55MHjNihH8pe6yzr9n8iY9iAhBxAsdtOqsL2-hitGJdleCsV1-9_H2c6BXH_iCNOZIs7fqaFcDDQALbh5WfF1WdJxVtEfWPMwBSxQO3s1jH4WL9V5uD0_q2dAQp54XNxv8EfEMnKBsZy2DOFk?purpose=inline)
+
+[Ландшафтный дизайн для усадьбы 3 га: Как Студия ART Story воплощает мировые тренды| Блог о ландшафтном дизайне](https://images.openai.com/static-rsc-4/VYr2TFrCUZY9hl-r57Kcya76OVS05AKHi2oGKJD281plK530tRmiWOXe2rBrWb-3sfPPooN1ezkBcR03EYNeZqPvQ_oe9WLHt_UJ90BVoGW6UELVe42Wkm641BExCWC6LCnuD_yh4QyRmWkWnKxVvZV-Fpsyv8pwl8zcd3G8b1w?purpose=inline)
+
+14
+
+### 7.1 Landscape property categories
+
+| Category    | Elements                                                |
+| ----------- | ------------------------------------------------------- |
+| Trees       | Palm, coconut, oak, maple, ornamental, fruit trees      |
+| Plants      | Shrubs, flowering plants, hedges, indoor/outdoor plants |
+| Lawn        | Natural grass, artificial turf, meadow                  |
+| Garden      | Tropical, Japanese, Zen, Mediterranean, formal          |
+| Pathways    | Stone, pavers, gravel, concrete, timber                 |
+| Water       | Pond, waterfall, fountain, stream                       |
+| Seating     | Benches, lounge chairs, outdoor sofas                   |
+| Structures  | Pergola, gazebo, pavilion, garden arch                  |
+| Lighting    | Bollards, uplights, path lights, tree lights            |
+| Boundaries  | Fences, hedges, retaining walls                         |
+| Decor       | Sculptures, planters, garden art                        |
+| Environment | Terrain, slopes, hills, rocks, soil                     |
+
+### 7.2 Landscape configuration
+
+- Plant species.
+- Plant size and maturity.
+- Density and spacing.
+- Seasonal appearance.
+- Flower color.
+- Grass type.
+- Terrain height.
+- Pathway material.
+- Water feature dimensions.
+- Garden lighting.
+- Irrigation zones.
+- Climate and environment.
+
+### 7.3 Landscape-specific actions
+
+- Add trees and plants.
+- Replace planting types.
+- Change garden style.
+- Add pathways.
+- Add water features.
+- Create outdoor seating.
+- Add lighting.
+- Change terrain.
+- Increase or decrease greenery.
+- Generate day/night landscape variations.
+
+## 8. Common design system – All verticals
+
+This module must be shared across Interior, Exterior, Amenities and Landscape.
+
+### 8.1 Design range
+
+Design quality selector
+
+Basic
+
+Standard
+
+Premium
+
+Luxury
+
+Ultra Luxury
+
+Selected: Ultra Luxury. This is a project-wide quality preset, not an automatic material replacement.
+
+| Level        | Design characteristics                                   |
+| ------------ | -------------------------------------------------------- |
+| Basic        | Affordable, simple materials, functional design          |
+| Standard     | Balanced materials, contemporary design                  |
+| Premium      | High-quality finishes, sophisticated details             |
+| Luxury       | Premium stone, bespoke furniture, layered lighting       |
+| Ultra Luxury | Rare materials, custom detailing, cinematic presentation |
+
+Each level must support customization rather than locking users into fixed designs.
+
+### 8.2 Look & Feel library
+
+| Group       | Presets                             |
+| ----------- | ----------------------------------- |
+| Modern      | Modern, contemporary, minimalist    |
+| Traditional | Classic, colonial, neoclassical     |
+| Natural     | Organic, tropical, biophilic        |
+| European    | Mediterranean, Scandinavian, French |
+| Industrial  | Industrial, brutalist, loft         |
+| Artistic    | Art Deco, maximalist, eclectic      |
+| Futuristic  | Parametric, futuristic, sci-fi      |
+
+### 8.3 Mood library
+
+Every mood should have an icon, preview image, name, description and selection state.
+
+Bright
+
+Calm
+
+Premium
+
+Natural
+
+Dramatic
+
+Warm
+
+Elegant
+
+Serene
+
+Vibrant
+
+Romantic
+
+Corporate
+
+Resort
+
+### 8.4 Common camera and environment
+
+Camera
+
+- Eye-level, elevated, aerial, bird's-eye, drone.
+- Wide angle, standard, telephoto.
+- Perspective, orthographic.
+- Focal length.
+- Camera height and rotation.
+- Depth of field.
+- Composition and framing.
+
+Lighting
+
+- Morning, noon, afternoon, golden hour, sunset, blue hour, night.
+- Natural daylight, artificial, studio, cinematic.
+- Warm, neutral, cool.
+- Ambient occlusion, shadows, reflections.
+- Light intensity and exposure.
+
+Weather
+
+- Clear, cloudy, overcast, rain, fog, mist, snow.
+- Seasonal environment.
+- Sky and cloud presets.
+
+### 8.5 Tags and metadata
+
+Tags must be searchable, reusable and customizable.
+
+Suggested tag groups:
+
+- Property: Villa, Apartment, Penthouse, Commercial, Resort.
+- Style: Modern, Classic, Minimal, Contemporary.
+- Quality: Basic, Premium, Luxury, Ultra Luxury.
+- Audience: Family, Young Professionals, Investors, Hospitality.
+- Environment: Urban, Coastal, Mountain, Tropical.
+- Purpose: Residential, Commercial, Marketing, Presentation.
+- Design: Sustainable, Smart Home, Biophilic, Accessible.
+
+Support:
+
+- Add custom tag.
+- Remove tag.
+- Multi-select.
+- Save tag combinations.
+- Filter asset libraries using tags.
+- Generate designs using selected tags.
+
+## 9. Interactive image editing engine
+
+Critical functionality
+
+### 9.1 Selection and application workflow
+
+## Image editing workflow
+
+1. Upload base image
+
+   Accept JPG, PNG, WebP, HEIC and supported architectural references.
+2. Analyze image
+
+   Identify surfaces, furniture, walls, floors, objects, geometry and scene boundaries.
+3. Select target element
+
+   Click the image hotspot or choose an element from Design Properties.
+4. Choose replacement
+
+   Select material, furniture, finish, color, model or visual reference.
+5. Preview changes
+
+   Display selected region and proposed result before committing.
+6. Apply to image
+
+   Generate the edited region while protecting unaffected elements.
+7. Compare and save
+
+   Before/After, variations, undo, redo, version history and export.
+
+### 9.2 Image interaction modes
+
+| Mode            | Behaviour                            |
+| --------------- | ------------------------------------ |
+| Select          | Click objects or regions             |
+| Brush           | Paint a selection mask               |
+| Erase           | Remove part of a selection           |
+| Polygon         | Select a custom area                 |
+| Object select   | Detect and select individual objects |
+| Material select | Select surfaces by material          |
+| Replace         | Replace selected element             |
+| Add             | Introduce new elements               |
+| Remove          | Remove unwanted elements             |
+| Refine          | Improve selected region              |
+| Compare         | Before/After slider                  |
+
+### 9.3 Image preservation requirements
+
+The AI editing engine must support:
+
+- Mask-based inpainting and outpainting.
+- Region-aware image editing.
+- Surface segmentation.
+- Depth and perspective awareness.
+- Shadow and reflection preservation.
+- Material texture consistency.
+- Geometry preservation.
+- Image-to-image reference guidance.
+- Multiple reference images.
+- Non-destructive editing.
+
+For example, changing flooring must not unexpectedly alter furniture, wall paint, windows or camera position.
+
+### 9.4 Hotspot system
+
+Every generated image should support contextual hotspots.
+
+Example for an interior:
+
+- Flooring hotspot.
+- Sofa hotspot.
+- Wall paint hotspot.
+- Ceiling hotspot.
+- Lighting hotspot.
+- Window hotspot.
+- Decor hotspot.
+
+Clicking a hotspot opens the corresponding Design Properties category.
+
+Hotspots must be draggable where appropriate, repositionable, removable and linked to an element ID or segmented region.
+
+## 10. Asset and material library
+
+The platform needs a unified asset management system.
+
+### Asset types
+
+1. PBR material textures.
+2. Furniture models.
+3. Architectural objects.
+4. Interior decorations.
+5. Trees and plants.
+6. Human models.
+7. Vehicles.
+8. Lighting fixtures.
+9. HDRI environments.
+10. Architectural reference images.
+
+### Asset capabilities
+
+- Search and filter.
+- Category browsing.
+- 2D thumbnail preview.
+- 3D model preview.
+- Favorite and save.
+- Add to project.
+- Upload custom asset.
+- Replace existing asset.
+- Material mapping.
+- Texture resolution selection.
+- License and source metadata.
+
+### Supported formats
+
+| Asset       | Formats                           |
+| ----------- | --------------------------------- |
+| Images      | JPG, PNG, WebP, HEIC              |
+| 3D models   | GLB, glTF, FBX, OBJ               |
+| CAD/BIM     | IFC, supported DWG/DXF conversion |
+| Textures    | PNG, JPG, TIFF, EXR               |
+| Environment | HDR, EXR                          |
+| Plans       | PDF, SVG, PNG                     |
+
+## 11. AI assistant and prompt engine
+
+The AI assistant must understand both natural-language instructions and selected Design Properties.
+
+### Prompt examples
+
+Interior
+
+- Replace flooring with Italian marble.
+- Change sofa to beige boucle fabric.
+- Add a luxury chandelier.
+- Make the ceiling design contemporary.
+- Change the wall finish to walnut wood panels.
+
+Exterior
+
+- Change facade to travertine and glass.
+- Add a pergola to the terrace.
+- Change the roof to a modern flat roof.
+- Add warm exterior lighting.
+
+Amenities
+
+- Add a swimming pool with an infinity edge.
+- Add families relaxing around the clubhouse.
+- Create a premium outdoor restaurant.
+- Add a modern fitness and wellness zone.
+
+Landscape
+
+- Add tropical trees along the boundary.
+- Create a Japanese Zen garden.
+- Add stepping-stone pathways.
+- Add garden lighting and water features.
+
+### Prompt composition
+
+The prompt engine should combine:
+
+`Base Image + Vertical + Selected Region + Elements + Materials + Style + Mood + Human Settings + Camera + Lighting + Quality + Preservation Rules`
+
+Users must be able to:
+
+- Enhance prompt.
+- Generate from properties.
+- Generate from text.
+- Generate from reference image.
+- Save prompt templates.
+- Reuse previous instructions.
+- View AI interpretation before generation.
+
+## 12. Main user interface requirements
+
+### 12.1 Design Properties panel
+
+The panel must contain:
+
+| Tab         | Content                                            |
+| ----------- | -------------------------------------------------- |
+| Design      | Elements, materials, colors, furniture and objects |
+| Camera      | Angle, lens, framing, perspective                  |
+| Lighting    | Light source, intensity, temperature, time         |
+| Human       | Count, age, clothing, activity and placement       |
+| Mood        | Mood icons, atmosphere and environment             |
+| Tags        | Searchable project and style tags                  |
+| Look & Feel | Style presets and design range                     |
+| Output      | Resolution, quality and export options             |
+
+Each vertical must have its own Design tab configuration, while shared settings retain consistent behaviour.
+
+### 12.2 Image workspace
+
+- Large central preview.
+- Zoom and pan.
+- Full-screen preview.
+- Hotspot overlay.
+- Original image comparison.
+- Selected-region highlight.
+- Variations carousel.
+- Download and export.
+- Regenerate and refine.
+- Version history.
+
+### 12.3 Prompt composer
+
+- Text prompt.
+- Image reference attachment.
+- Voice input.
+- Prompt enhancement.
+- Selected-property summary.
+- Generate button.
+- Credit estimate.
+- Generation progress.
+
+### 12.4 Design range selector
+
+The Basic → Standard → Premium → Luxury → Ultra Luxury selector must be visible in the Studio, but also accessible from each vertical.
+
+## 13. Functional requirements and priorities
+
+| ID     | Requirement                            | Priority |
+| ------ | -------------------------------------- | -------- |
+| DP-001 | Vertical-specific property panels      | P0       |
+| DP-002 | Searchable element library             | P0       |
+| DP-003 | Selectable material and color swatches | P0       |
+| DP-004 | Image upload and analysis              | P0       |
+| DP-005 | Region selection and masking           | P0       |
+| DP-006 | AI apply-to-image functionality        | P0       |
+| DP-007 | Before/After comparison                | P0       |
+| DP-008 | Undo/Redo and versions                 | P0       |
+| DP-009 | Look & Feel presets                    | P0       |
+| DP-010 | Mood selection with icons              | P0       |
+| DP-011 | Human characteristics                  | P1       |
+| DP-012 | Tags and metadata                      | P1       |
+| DP-013 | Camera and lighting controls           | P0       |
+| DP-014 | 3D asset library                       | P1       |
+| DP-015 | Furniture and object placement         | P1       |
+| DP-016 | Multi-reference image editing          | P1       |
+| DP-017 | Save reusable property presets         | P1       |
+| DP-018 | Batch design variations                | P1       |
+| DP-019 | Project-wide design consistency        | P1       |
+| DP-020 | Advanced 3D material editing           | P2       |
+
+P0 = essential for MVP, P1 = next release, P2 = advanced release.
+
+## 14. Technical architecture
+
+### 14.1 Proposed technology stack
+
+| Layer            | Technology                                       |
+| ---------------- | ------------------------------------------------ |
+| Frontend         | React.js / Next.js / TypeScript                  |
+| UI               | Tailwind CSS + component library                 |
+| 3D rendering     | Three.js / React Three Fiber                     |
+| Image editing    | Canvas, WebGL, image masking                     |
+| State management | Zustand                                          |
+| Backend          | Node.js / NestJS                                 |
+| Database         | PostgreSQL                                       |
+| ORM              | Prisma                                           |
+| Storage          | S3-compatible object storage                     |
+| Authentication   | Auth.js / Supabase Auth                          |
+| AI orchestration | Python / FastAPI                                 |
+| Image AI         | Model-agnostic image generation and editing APIs |
+| Segmentation     | SAM-family segmentation models                   |
+| Depth estimation | Depth estimation models                          |
+| Queue            | Redis + BullMQ                                   |
+| Realtime         | WebSocket                                        |
+| Analytics        | PostHog                                          |
+| Deployment       | Docker + cloud infrastructure                    |
+
+### 14.2 High-level architecture
+
+\#chatgpt-mermaid-\_r_1q0\_{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;fill:rgb(13, 13, 13);}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#chatgpt-mermaid-\_r_1q0\_ .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_1q0\_ .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_1q0\_ .error-icon{fill:rgb(243, 243, 243);}#chatgpt-mermaid-\_r_1q0\_ .error-text{fill:rgb(13, 13, 13);stroke:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ .edge-thickness-normal{stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ .edge-thickness-thick{stroke-width:3.5px;}#chatgpt-mermaid-\_r_1q0\_ .edge-pattern-solid{stroke-dasharray:0;}#chatgpt-mermaid-\_r_1q0\_ .edge-thickness-invisible{stroke-width:0;fill:none;}#chatgpt-mermaid-\_r_1q0\_ .edge-pattern-dashed{stroke-dasharray:3;}#chatgpt-mermaid-\_r_1q0\_ .edge-pattern-dotted{stroke-dasharray:2;}#chatgpt-mermaid-\_r_1q0\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1q0\_ .marker.cross{stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1q0\_ svg{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;}#chatgpt-mermaid-\_r_1q0\_ p{margin:0;}#chatgpt-mermaid-\_r_1q0\_ .label{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ .cluster-label text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ .cluster-label span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ .cluster-label span p{background-color:transparent;}#chatgpt-mermaid-\_r_1q0\_ .label text,#chatgpt-mermaid-\_r_1q0\_ span{fill:rgb(13, 13, 13);color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ .node rect,#chatgpt-mermaid-\_r_1q0\_ .node circle,#chatgpt-mermaid-\_r_1q0\_ .node ellipse,#chatgpt-mermaid-\_r_1q0\_ .node polygon,#chatgpt-mermaid-\_r_1q0\_ .node path{fill:rgb(222, 234, 251);stroke:rgb(83, 154, 248);stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ .rough-node .label text,#chatgpt-mermaid-\_r_1q0\_ .node .label text,#chatgpt-mermaid-\_r_1q0\_ .image-shape .label,#chatgpt-mermaid-\_r_1q0\_ .icon-shape .label{text-anchor:middle;}#chatgpt-mermaid-\_r_1q0\_ .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ .rough-node .label,#chatgpt-mermaid-\_r_1q0\_ .node .label,#chatgpt-mermaid-\_r_1q0\_ .image-shape .label,#chatgpt-mermaid-\_r_1q0\_ .icon-shape .label{text-align:center;}#chatgpt-mermaid-\_r_1q0\_ .node.clickable{cursor:pointer;}#chatgpt-mermaid-\_r_1q0\_ .root .anchor path{fill:rgb(143, 143, 143)!important;stroke-width:0;stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1q0\_ .arrowheadPath{fill:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1q0\_ .edgePath .path{stroke:rgb(143, 143, 143);stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ .flowchart-link{stroke:rgb(143, 143, 143);fill:none;}#chatgpt-mermaid-\_r_1q0\_ .edgeLabel{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_1q0\_ .edgeLabel p{background-color:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1q0\_ .edgeLabel rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1q0\_ .labelBkg{background-color:rgba(252, 252, 252, 0.5);}#chatgpt-mermaid-\_r_1q0\_ .cluster rect{fill:rgb(243, 243, 243);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ .cluster text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ .cluster span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:12px;background:rgb(243, 243, 243);border:1px solid rgba(0, 0, 0, 0.1);border-radius:2px;pointer-events:none;z-index:100;}#chatgpt-mermaid-\_r_1q0\_ .flowchartTitleText{text-anchor:middle;font-size:18px;fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1q0\_ rect.text{fill:none;stroke-width:0;}#chatgpt-mermaid-\_r_1q0\_ .icon-shape,#chatgpt-mermaid-\_r_1q0\_ .image-shape{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_1q0\_ .icon-shape p,#chatgpt-mermaid-\_r_1q0\_ .image-shape p{background-color:rgb(252, 252, 252);padding:2px;}#chatgpt-mermaid-\_r_1q0\_ .icon-shape .label rect,#chatgpt-mermaid-\_r_1q0\_ .image-shape .label rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1q0\_ .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#chatgpt-mermaid-\_r_1q0\_ .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#chatgpt-mermaid-\_r_1q0\_ .node .neo-node{stroke:rgb(83, 154, 248);}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].node rect,#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].cluster rect,#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].node polygon{stroke:url(#chatgpt-mermaid-\_r_1q0\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].swimlane.cluster rect{filter:none;}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].node path{stroke:url(#chatgpt-mermaid-\_r_1q0\_-gradient);stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].node .neo-line path{stroke:rgb(83, 154, 248);filter:none;}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].node circle{stroke:url(#chatgpt-mermaid-\_r_1q0\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].node circle .state-start{fill:#000000;}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].icon-shape .icon{fill:url(#chatgpt-mermaid-\_r_1q0\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1q0\_ [data-look="neo"].icon-shape .icon-neo path{stroke:url(#chatgpt-mermaid-\_r_1q0\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1q0\_ .node text{font-size:14px;font-weight:600;letter-spacing:normal;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_1q0\_ .edgeLabels text{font-size:13px;font-weight:600;letter-spacing:-0.08px;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_1q0\_ .node tspan[font-weight="normal"],#chatgpt-mermaid-\_r_1q0\_ .edgeLabels tspan[font-weight="normal"]{font-weight:600;}#chatgpt-mermaid-\_r_1q0\_ .edgeLabel .label rect{opacity:1;rx:13px;ry:13px;fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ .node rect,#chatgpt-mermaid-\_r_1q0\_ .node circle,#chatgpt-mermaid-\_r_1q0\_ .node ellipse,#chatgpt-mermaid-\_r_1q0\_ .node polygon,#chatgpt-mermaid-\_r_1q0\_ .node path{fill:rgb(229, 243, 255);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_1q0\_ .node rect{rx:16px;ry:16px;}#chatgpt-mermaid-\_r_1q0\_ .mermaid-decision .label-container{fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-dasharray:2,2;}#chatgpt-mermaid-\_r_1q0\_ .edgePaths .flowchart-link{stroke:rgb(143, 143, 143);stroke-width:1px;stroke-linecap:round;stroke-linejoin:round;}#chatgpt-mermaid-\_r_1q0\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1q0\_ :root{--mermaid-font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";}Oriel Studio UIDesign Properties EngineAI Chat AssistantImage WorkspaceProperty Configuration APIPrompt OrchestratorSegmentation and MaskingAI Generation QueueImage Editing Models3D Asset and Material EngineResult ProcessingVersion and Variation ManagerObject StoragePostgreSQL
+
+### 14.3 Modular frontend structure
+
+```
+src/
+├── app/
+│   ├── studio/
+│   ├── interior/
+│   ├── exterior/
+│   ├── amenities/
+│   ├── landscape/
+│   └── chat/
+├── components/
+│   ├── DesignProperties/
+│   ├── PropertyTabs/
+│   ├── ElementLibrary/
+│   ├── MaterialLibrary/
+│   ├── MoodSelector/
+│   ├── HumanEditor/
+│   ├── TagManager/
+│   ├── CameraControls/
+│   ├── LightingControls/
+│   ├── ImageCanvas/
+│   ├── HotspotEditor/
+│   ├── PromptComposer/
+│   └── VariationExplorer/
+├── config/
+│   ├── interior.config.ts
+│   ├── exterior.config.ts
+│   ├── amenities.config.ts
+│   └── landscape.config.ts
+├── services/
+│   ├── imageEditing/
+│   ├── segmentation/
+│   ├── generation/
+│   └── assets/
+└── stores/
+    ├── projectStore.ts
+    ├── propertyStore.ts
+    ├── selectionStore.ts
+    └── generationStore.ts
+```
+
+### 14.4 Data model
+
+Core entities:
+
+- User
+- Organization
+- Workspace
+- Project
+- DesignVertical
+- BaseImage
+- DesignScene
+- DesignElement
+- PropertyCategory
+- PropertyOption
+- Material
+- Asset
+- StylePreset
+- MoodPreset
+- HumanConfiguration
+- Tag
+- SelectionMask
+- AIJob
+- GeneratedImage
+- Variation
+- DesignVersion
+- ExportJob
+
+Every element should have a stable identifier, category, configuration, selection state and project association.
+
+## 15. API design
+
+Suggested API endpoints:
+
+| Method | Endpoint                          | Purpose                                 |
+| ------ | --------------------------------- | --------------------------------------- |
+| GET    | `/api/verticals`                  | List all verticals                      |
+| GET    | `/api/properties/:vertical`       | Fetch contextual property configuration |
+| GET    | `/api/elements/:category`         | Fetch element library                   |
+| GET    | `/api/materials`                  | Search material library                 |
+| GET    | `/api/styles`                     | Fetch design styles                     |
+| GET    | `/api/moods`                      | Fetch mood presets                      |
+| POST   | `/api/projects`                   | Create project                          |
+| POST   | `/api/images/upload`              | Upload base image                       |
+| POST   | `/api/images/analyze`             | Analyze architecture and surfaces       |
+| POST   | `/api/selections/mask`            | Create region mask                      |
+| POST   | `/api/design/apply`               | Apply selected property                 |
+| POST   | `/api/design/generate`            | Generate AI design                      |
+| POST   | `/api/design/variations`          | Create alternatives                     |
+| POST   | `/api/design/refine`              | Refine selected image                   |
+| POST   | `/api/design/undo`                | Undo last operation                     |
+| GET    | `/api/design/versions/:projectId` | Retrieve versions                       |
+| POST   | `/api/assets`                     | Upload custom assets                    |
+| POST   | `/api/export`                     | Export final output                     |
+
+All generation APIs must support asynchronous jobs, progress reporting, failure handling and retry.
+
+## 16. UX interaction specifications
+
+### Example: Change flooring
+
+Interior → Flooring
+
+Interactive prototype
+
+Italian MarbleSelected
+
+Travertine
+
+Hardwood
+
+Terrazzo
+
+Concrete
+
+Ceramic
+
+Finish
+
+Matte
+
+Polished
+
+Honed
+
+Pattern
+
+Large Slab
+
+Herringbone
+
+Grid
+
+Apply to Image
+
+
+
+This interaction pattern must be reused across all design elements.
+
+### Example: Human characteristics
+
+People count
+
+None
+
+Few
+
+Medium
+
+Crowd
+
+Activity
+
+Relaxing
+
+Clothing
+
+Casual
+
+Placement
+
+Foreground
+
+Midground
+
+Background
+
+AI configuration
+
+Medium people · Relaxing · Casual · Midground
+
+These are functional interaction examples for the specification. Production controls must be connected to actual application state and AI APIs.
+
+## 17. Non-functional requirements
+
+| Area                 | Requirement                                    |
+| -------------------- | ---------------------------------------------- |
+| Performance          | Fast panel interactions and lazy-loaded assets |
+| Scalability          | Multi-tenant project architecture              |
+| Responsiveness       | Desktop-first, tablet and mobile support       |
+| Security             | RBAC, secure uploads, access controls          |
+| Privacy              | Private project and image storage              |
+| Reliability          | Retryable generation jobs                      |
+| Versioning           | Non-destructive image editing                  |
+| Accessibility        | Keyboard support and accessible contrast       |
+| Internationalization | Multi-language ready                           |
+| Observability        | Job logs, errors, usage and analytics          |
+
+### Performance targets
+
+- Design Properties interaction: under 150 ms target.
+- Panel switching: under 200 ms target.
+- Thumbnail browsing: progressive loading.
+- Image preview: progressive rendering.
+- Generation: asynchronous, with provider-dependent completion time.
+- Asset libraries: pagination and search indexing.
+
+These are engineering targets to validate under realistic workloads, not guaranteed performance figures.
+
+## 18. Acceptance criteria
+
+The release is accepted only when the following conditions are met:
+
+- Four verticals have independent property configurations.
+- Interior contains flooring, walls, ceilings, furniture, kitchen and bathroom elements.
+- Exterior contains facade, roof, windows, balconies, entrance and driveway.
+- Amenities contains lifestyle facilities and activity libraries.
+- Landscape contains plants, trees, lawns, pathways and water features.
+- All element categories support search and selection.
+- Material thumbnails display visual previews.
+- Every selectable property can be applied to a target region.
+- Image masks and selection overlays work.
+- Before/After comparison works.
+- Undo and redo work.
+- Human characteristics can be configured.
+- Mood and Look & Feel selections work.
+- Tags can be added, removed and reused.
+- Camera and lighting controls are configurable.
+- The right panel adapts to the active vertical.
+- Users can save and restore project configurations.
+- AI generation jobs report progress and errors.
+- Generated results support variations and version history.
+- Original images remain recoverable.
+
+## 19. Development roadmap
+
+## Implementation phases
+
+1. Phase 1 – Design System & Properties Engine
+
+   2–3 weeks
+   - Luxury UI system.
+   - Reusable property panels.
+   - Four vertical configurations.
+   - Element libraries and search.
+   - Mood, tags and Look & Feel.
+2. Phase 2 – Image Workspace
+
+   3–4 weeks
+   - Upload and preview.
+   - Image selection and masking.
+   - Hotspots.
+   - Material and element selection.
+   - Before/After and version controls.
+3. Phase 3 – AI Editing Integration
+
+   3–5 weeks
+   - Prompt orchestration.
+   - Region-aware editing.
+   - Inpainting and outpainting.
+   - Variation generation.
+   - Refinement and preservation.
+4. Phase 4 – Advanced Architectural Features
+
+   4–6 weeks
+   - 3D asset placement.
+   - PBR materials.
+   - Furniture libraries.
+   - Human and vehicle placement.
+   - Camera and environment controls.
+5. Phase 5 – Enterprise Readiness
+
+   3–4 weeks
+   - Multi-tenant support.
+   - Project management.
+   - Asset permissions.
+   - Usage and credits.
+   - Export, monitoring and security.
+
+Indicative sequential estimates: approximately 15–22 weeks. Parallel teams, model selection and integration complexity can change the timeline.
+
+## 20. Product success metrics
+
+| Metric                | Measurement                               |
+| --------------------- | ----------------------------------------- |
+| Design adoption       | Usage across all four verticals           |
+| Property engagement   | Number of selected properties per project |
+| AI editing success    | Successful region-aware edits             |
+| Preservation          | Percentage of unaffected regions retained |
+| Generation efficiency | Time per completed generation             |
+| User productivity     | Time from upload to final render          |
+| Asset engagement      | Reuse of saved materials and assets       |
+| Retention             | Repeat project creation                   |
+| Conversion            | Free-to-paid subscriptions                |
+
+## 21. Important product decisions
+
+I recommend these architectural decisions before development:
+
+1. One unified properties engine: Do not build separate editing engines for four verticals.
+2. Configuration-driven UI: Each vertical loads its own categories and controls from JSON configuration.
+3. Region-aware editing: A property must target the selected surface or object, not blindly regenerate the entire image.
+4. Non-destructive editing: Preserve the original and every approved version.
+5. Hybrid AI + 3D: Use image AI for photorealistic redesign and actual 3D assets for editable geometry and placement.
+6. Reusable asset ecosystem: Materials, furniture, plants, humans and architectural assets should be shared across projects.
+7. Consistent luxury design language: Keep the champagne-gold, ivory and charcoal visual identity throughout.
+
+## 22. Final product vision
+
+[Studio Axis - Premium Architectural Visualization & 3D Rendering | Orange County](https://images.openai.com/static-rsc-4/VWthtb48VGrg6EKAPz-4odERIK6Ioi5M1Wr8RH_o4I7Bd7AfIZ9Tm-_BYDcufsC4v7pWOoOGOqTlC1FTkTGh863FWRaT8-mcajs4tI4NCL0cs5kRz2OB9g2gKd4IFwhxUSdlOPiwcfvPi66IcGbLLH4dz29p0foiDxpoEx0am_Y?purpose=inline)
+
+[The Foundry | Luxury Real Estate Brokerage in Dubai](https://images.openai.com/static-rsc-4/NaWbES5tQ4ILsERK9e_iowG83FYN0aTUH-5Tym-rENZ-QGL6rXnNbs5xyTk6CoE0LuKpDHKL4wtiT2vT8b4hgBpLK8pVSNHrnbt5wios28UiHJ3SWvh5Fu-R5YG00eBh773IuEEUbsm6nQlWXnTMaTSLBGm3ENKqmG2Q7Uv79U4?purpose=inline)
+
+[Sobha Sacred Grove by the Lake Amenities | Club, Forest BLR](https://images.openai.com/static-rsc-4/cn7BBUFhh8WQBi3Xi0T8iW4UJYTiDSfNnU5pQH1_VyDauTCfXiSqTjef0UkusP27H-OC6Mg1SbzciMBI2XHI8z_qtcq4RY7cASWmB350hrWoHkyc_o2m-btrrcUtMK6lFCm2VrLxJv2rpS2bTkdQNfVDG2zfWPfLO-yKUANe3is?purpose=inline)
+
+15
+
+Oriel Studio should ultimately become an integrated AI architectural design environment covering:
+
+- Architecture and building design.
+- Interior visualization.
+- Exterior and facade visualization.
+- Amenities and lifestyle visualization.
+- Landscape architecture.
+- Human and vehicle population.
+- Material and furniture replacement.
+- AI image editing and generation.
+- 3D asset placement and scene editing.
+- Cinematic renders, animations and virtual tours.
+- Marketing-ready real estate experiences.
+
+The most important distinction: Oriel should not simply generate attractive images. It should allow users to control, modify and build architectural designs through visual properties and natural-language instructions.
+
+This PRD establishes the foundation for that product direction, aligned with the broader architectural visualization and real-estate experience platform roadmap.&#x20;
+
+Recommended next implementation milestone: Build the reusable Design Properties Engine first, with complete Interior, Exterior, Amenities and Landscape JSON configurations, before connecting the image-generation APIs.
