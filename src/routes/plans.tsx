@@ -125,7 +125,7 @@ function PlansPage() {
               <li key={request.id} className="rounded-xl border border-line px-3 py-2 text-sm">
                 <p className="text-fg">{request.studio}</p>
                 <p className="text-muted">{request.email}</p>
-                <p className="text-xs text-faint">
+                <p className="text-xs text-faint" suppressHydrationWarning>
                   {request.note} · {formatWhen(request.at)}
                 </p>
               </li>

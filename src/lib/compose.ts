@@ -195,7 +195,7 @@ const EXACT: Record<string, string> = {
 
 export function parseTemplate(template: string): Part[] {
   const parts: Part[] = [];
-  const re = /\[([^\[\]]+)\]/g;
+  const re = /\[([^\][]+)\]/g;
   let last = 0;
   let index = 0;
   let match: RegExpExecArray | null;

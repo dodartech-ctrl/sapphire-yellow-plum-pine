@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, react-refresh/only-export-components */
 import { useNavigate } from "@tanstack/react-router";
 import { Check, Copy, ImagePlus, RotateCcw, Star } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";

@@ -113,9 +113,9 @@ export function Shell() {
           <span className="flex items-center gap-2 text-sm font-medium">
             <Crown className="size-4 text-[#e7c27a]" /> Pro Plan
           </span>
-          <span className="mt-2 block text-xs text-[#cbbba6]">{credits.toLocaleString()} / {CREDIT_MAX.toLocaleString()} credits</span>
-          <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-white/10">
-            <span className="block h-full rounded-full bg-[#e7c27a]" style={{ width: `${Math.round((credits / CREDIT_MAX) * 100)}%` }} />
+          <span className="mt-2 block text-xs text-[#cbbba6]" suppressHydrationWarning>{credits.toLocaleString()} / {CREDIT_MAX.toLocaleString()} credits</span>
+          <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-white/10" suppressHydrationWarning>
+            <span className="block h-full rounded-full bg-[#e7c27a]" style={{ width: `${Math.round((credits / CREDIT_MAX) * 100)}%` }} suppressHydrationWarning />
           </span>
           <span className="mt-3 block text-sm text-[#e7c27a]">Upgrade Plan →</span>
         </Link>
@@ -167,7 +167,7 @@ export function Shell() {
         {pathname === "/" ? null : <Composer />}
       </div>
       <SearchDialog open={open} onOpenChange={setOpen} />
-      <Toaster theme="light" position="bottom-center" />
+      {hydrated ? <Toaster theme="light" position="bottom-center" /> : null}
     </div>
   );
 }

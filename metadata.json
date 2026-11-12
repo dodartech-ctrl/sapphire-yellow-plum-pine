@@ -1,0 +1,6 @@
+{
+  "name": "Oriel — Architectural Visualization Studio",
+  "description": "Compose architectural visualization briefs and adapt them for AI visual models.",
+  "requestFramePermissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

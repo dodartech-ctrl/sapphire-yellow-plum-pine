@@ -12,7 +12,7 @@ function AssetsPage() {
   const setPick = useOriel((state) => state.setPick);
   const navigate = useNavigate();
 
-  function useLook(vertical: VerticalId, name: string) {
+  function applyLook(vertical: VerticalId, name: string) {
     setVertical(vertical);
     setDesignField("look", name);
     void navigate({ to: "/" });
@@ -27,7 +27,7 @@ function AssetsPage() {
           <h2 className="font-syne text-xl font-semibold">{vertical.label}</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
             {LOOKS[vertical.id].map((look) => (
-              <button key={look.name} type="button" onClick={() => useLook(vertical.id, look.name)} className="overflow-hidden rounded-2xl border border-line text-left">
+              <button key={look.name} type="button" onClick={() => applyLook(vertical.id, look.name)} className="overflow-hidden rounded-2xl border border-line text-left">
                 <img src={look.image} alt="" className="h-28 w-full object-cover" />
                 <span className="block px-3 py-2 text-sm">{look.name}</span>
               </button>

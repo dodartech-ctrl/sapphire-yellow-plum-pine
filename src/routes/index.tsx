@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Circle, ImagePlus, Layers, MousePointer2, Pencil, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AgentDock } from "@/components/agent-dock";
 import { Compare } from "@/components/compare";
 import { Composer } from "@/components/composer";
 import { PropertiesPanel } from "@/components/properties-panel";
@@ -85,7 +84,7 @@ function WorkspacePage() {
     setTool("compare");
   }
 
-  function useTool(next: typeof tool) {
+  function handleTool(next: typeof tool) {
     if (next === "compare") {
       showCompare();
       return;
@@ -216,7 +215,7 @@ function WorkspacePage() {
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  useTool(id);
+                  handleTool(id);
                 }}
                 className={cn(
                   "grid size-9 place-items-center rounded-full text-white/90 transition hover:bg-[#e7c27a]/25 hover:text-[#f6e7c8] hover:ring-1 hover:ring-[#e7c27a]",
@@ -254,7 +253,6 @@ function WorkspacePage() {
           />
         </div>
         <Composer />
-        <AgentDock />
         {tool === "layers" || history.length > 0 ? (
           <div className="mt-4 flex gap-2 overflow-x-auto">
             {history.length === 0 ? <p className="text-sm text-muted">Earlier plates will stack here after you generate.</p> : null}

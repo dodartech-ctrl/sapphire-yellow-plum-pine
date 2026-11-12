@@ -105,7 +105,7 @@ var HEADERS = { TSS_SHELL: "X-TSS_SHELL" };
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-_uUg9kzN.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-xMd7TpWd.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -127,7 +127,7 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"59971a0ccc36de086fd91d2c8d337fabb9420074790beb05e8c717ef794a8f8f": {
 		functionName: "generatePlate_createServerFn_handler",
-		importer: () => import("./generate-CXPr4mom.mjs")
+		importer: () => import("./generate-CqbehVbp.mjs")
 	},
 	"784f407cb6d96f7e14268500687060171afa82b7e6a85a0a6ab4de7e4aadbf5e": {
 		functionName: "getStudioCredits_createServerFn_handler",
@@ -135,11 +135,7 @@ var manifest = {
 	},
 	"93625d71a6a82f6db479f7e153142e22888c8d7791218dad1a9aa6847d52c617": {
 		functionName: "enhanceIdea_createServerFn_handler",
-		importer: () => import("./generate-CXPr4mom.mjs")
-	},
-	"fe98c99093c4e3d274a505402118d08fd2ce84795c322935fd397e12b07ec25a": {
-		functionName: "runAgentStep_createServerFn_handler",
-		importer: () => import("./agent-BarYBmZS.mjs")
+		importer: () => import("./generate-CqbehVbp.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -1544,7 +1540,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-BMrN6z9B.mjs").then((n) => n.t),
+		import("./router-CNCHip8V.mjs").then((n) => n.t),
 		import("./start-5Z2QO8AU.mjs"),
 		import("./empty-plugin-adapters-D9UWiqvJ.mjs")
 	]);

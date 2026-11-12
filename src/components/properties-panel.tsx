@@ -15,11 +15,10 @@ import {
   WEATHER,
   type PanelTab,
 } from "@/lib/properties";
-import { COLOR_SWATCH, imageFor } from "@/lib/pill-visuals";
 import { useOriel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { ADVANCED_GROUPS, EXTRA_PILLS } from "@/lib/dictionary";
-import { Camera, ChevronDown, Cloud, Crown, Eye, Focus, Gem, Hash, Heart, Hexagon, Leaf, Maximize2, Minus, Moon, Pencil, Redo2, Scan, SlidersHorizontal, Sun, TreePine, Undo2, User, Users, Waves } from "lucide-react";
+import { Camera, ChevronDown, Heart, Hexagon, Pencil, SlidersHorizontal, Sun, User } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const TABS: { id: PanelTab; label: string; icon: typeof Pencil }[] = [
@@ -32,44 +31,44 @@ const TABS: { id: PanelTab; label: string; icon: typeof Pencil }[] = [
 
 const TILES: Record<string, { id: string; label: string; image: string }[]> = {
   interior: [
-    { id: "floor", label: "Flooring", image: "/pills/marble.jpg" },
-    { id: "wall", label: "Walls", image: "/pills/limewash.jpg" },
-    { id: "ceiling", label: "Ceiling", image: "/pills/ceiling.jpg" },
-    { id: "furniture", label: "Furniture", image: "/pills/furniture.jpg" },
-    { id: "fixture", label: "Lighting", image: "/pills/chandelier.jpg" },
-    { id: "openings", label: "Doors", image: "/pills/door.jpg" },
-    { id: "kitchen", label: "Windows", image: "/pills/window.jpg" },
-    { id: "decor", label: "Decor", image: "/pills/decor.jpg" },
+    { id: "floor", label: "Flooring", image: "/viz/t08-material-junction.jpg" },
+    { id: "wall", label: "Walls", image: "/viz/t09-living-room-clay-edit.jpg" },
+    { id: "ceiling", label: "Ceiling", image: "/viz/t03-compact-living-room.jpg" },
+    { id: "furniture", label: "Furniture", image: "/viz/t03-compact-living-room.jpg" },
+    { id: "fixture", label: "Lighting", image: "/viz/t04-neighborhood-cafe.jpg" },
+    { id: "openings", label: "Doors", image: "/viz/t02-sectional-arts-center.jpg" },
+    { id: "kitchen", label: "Windows", image: "/viz/t05-subtropical-home.jpg" },
+    { id: "decor", label: "Decor", image: "/viz/t06-urban-courtyard.jpg" },
   ],
   exterior: [
-    { id: "facade", label: "Facade", image: "/pills/facade.jpg" },
-    { id: "roof", label: "Roof", image: "/pills/brick.jpg" },
-    { id: "windows", label: "Windows", image: "/pills/window.jpg" },
-    { id: "entry", label: "Entrance", image: "/pills/door.jpg" },
-    { id: "balcony", label: "Balcony", image: "/pills/facade.jpg" },
-    { id: "terrace", label: "Terrace", image: "/pills/garden.jpg" },
-    { id: "drive", label: "Driveway", image: "/pills/travertine.jpg" },
-    { id: "water", label: "Water", image: "/pills/pool.jpg" },
+    { id: "facade", label: "Facade", image: "/viz/t05-subtropical-home.jpg" },
+    { id: "roof", label: "Roof", image: "/viz/t10-home-dusk-edit.jpg" },
+    { id: "windows", label: "Windows", image: "/viz/t01-public-library.jpg" },
+    { id: "entry", label: "Entrance", image: "/viz/t02-sectional-arts-center.jpg" },
+    { id: "balcony", label: "Balcony", image: "/viz/t07-cultural-campus.jpg" },
+    { id: "terrace", label: "Terrace", image: "/viz/t06-urban-courtyard.jpg" },
+    { id: "drive", label: "Driveway", image: "/viz/t08-material-junction.jpg" },
+    { id: "water", label: "Water", image: "/viz/t05-subtropical-home.jpg" },
   ],
   amenities: [
-    { id: "water", label: "Water", image: "/pills/pool.jpg" },
-    { id: "wellness", label: "Wellness", image: "/pills/bath.jpg" },
-    { id: "social", label: "Social", image: "/pills/dining.jpg" },
-    { id: "sport", label: "Sport", image: "/pills/garden.jpg" },
-    { id: "outdoor", label: "Outdoor", image: "/pills/garden.jpg" },
-    { id: "family", label: "Family", image: "/pills/living.jpg" },
-    { id: "work", label: "Work", image: "/pills/office.jpg" },
-    { id: "security", label: "Arrival", image: "/pills/door.jpg" },
+    { id: "water", label: "Water", image: "/viz/t06-urban-courtyard.jpg" },
+    { id: "wellness", label: "Wellness", image: "/viz/t04-neighborhood-cafe.jpg" },
+    { id: "social", label: "Social", image: "/viz/t03-compact-living-room.jpg" },
+    { id: "sport", label: "Sport", image: "/viz/t07-cultural-campus.jpg" },
+    { id: "outdoor", label: "Outdoor", image: "/viz/t05-subtropical-home.jpg" },
+    { id: "family", label: "Family", image: "/viz/t09-living-room-clay-edit.jpg" },
+    { id: "work", label: "Work", image: "/viz/t01-public-library.jpg" },
+    { id: "security", label: "Arrival", image: "/viz/t02-sectional-arts-center.jpg" },
   ],
   landscape: [
-    { id: "trees", label: "Trees", image: "/pills/garden.jpg" },
-    { id: "planting", label: "Planting", image: "/pills/garden.jpg" },
-    { id: "lawn", label: "Lawn", image: "/pills/garden.jpg" },
-    { id: "garden", label: "Garden", image: "/pills/garden.jpg" },
-    { id: "path", label: "Paths", image: "/pills/travertine.jpg" },
-    { id: "water", label: "Water", image: "/pills/pool.jpg" },
-    { id: "structure", label: "Structure", image: "/pills/timber.jpg" },
-    { id: "edge", label: "Boundary", image: "/pills/brick.jpg" },
+    { id: "trees", label: "Trees", image: "/viz/t05-subtropical-home.jpg" },
+    { id: "planting", label: "Planting", image: "/viz/t06-urban-courtyard.jpg" },
+    { id: "lawn", label: "Lawn", image: "/viz/t07-cultural-campus.jpg" },
+    { id: "garden", label: "Garden", image: "/viz/t10-home-dusk-edit.jpg" },
+    { id: "path", label: "Paths", image: "/viz/t08-material-junction.jpg" },
+    { id: "water", label: "Water", image: "/viz/t06-urban-courtyard.jpg" },
+    { id: "structure", label: "Structure", image: "/viz/t02-sectional-arts-center.jpg" },
+    { id: "edge", label: "Boundary", image: "/viz/t09-living-room-clay-edit.jpg" },
   ],
 };
 
@@ -93,11 +92,11 @@ export function PropertiesPanel() {
       <div className="flex items-center gap-2 px-1 py-1">
         <Hexagon className="size-4 text-[#b08a45]" />
         <h2 className="font-serif text-lg">Design Properties</h2>
-        <button type="button" onClick={() => undo()} className="ml-auto grid size-8 place-items-center rounded-full text-muted" aria-label="Undo">
-          <Undo2 className="size-4" />
+        <button type="button" onClick={() => undo()} className="ml-auto grid size-8 place-items-center rounded-full text-sm text-muted" aria-label="Undo">
+          ↩
         </button>
-        <button type="button" onClick={() => redo()} className="grid size-8 place-items-center rounded-full text-muted" aria-label="Redo">
-          <Redo2 className="size-4" />
+        <button type="button" onClick={() => redo()} className="grid size-8 place-items-center rounded-full text-sm text-muted" aria-label="Redo">
+          ↪
         </button>
       </div>
       <div className="mt-2 grid grid-cols-5 gap-1 rounded-2xl bg-raised p-1">
@@ -171,17 +170,16 @@ export function PropertiesPanel() {
               <ChipRow label="Strength" value={design.strength} options={STRENGTHS} onPick={(value) => setDesignField("strength", value)} />
               <ChipRow label="Detail" value={design.detail} options={DETAILS} onPick={(value) => setDesignField("detail", value)} />
             </Fold>
-            <Fold title="Tags" icon={<Hash className="size-4 text-[#b08a45]" />}>
+            <Fold title="Tags" icon={<span className="text-sm text-[#b08a45]">#</span>}>
               <div className="flex flex-wrap gap-2">
                 {TAGS.map((tag) => (
                   <button
                     key={tag}
                     type="button"
                     onClick={() => toggleTag(tag)}
-                    className={cn("hover-chip inline-flex h-11 items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm", design.tags.includes(tag) ? "gold-fill border-transparent" : "border-line text-muted")}
+                    className={cn("hover-chip h-9 rounded-full border px-3 text-sm", design.tags.includes(tag) ? "gold-fill border-transparent" : "border-line text-muted")}
                     aria-pressed={design.tags.includes(tag)}
                   >
-                    <PillMark label={tag} />
                     {tag}
                   </button>
                 ))}
@@ -204,10 +202,9 @@ export function PropertiesPanel() {
                     key={pill.id}
                     type="button"
                     onClick={() => toggleExtra(pill.id)}
-                    className={cn("hover-chip inline-flex h-11 items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm", design.advanced.extras.includes(pill.id) ? "gold-fill border-transparent" : "border-line text-muted")}
+                    className={cn("hover-chip h-9 rounded-full border px-3 text-sm", design.advanced.extras.includes(pill.id) ? "gold-fill border-transparent" : "border-line text-muted")}
                     aria-pressed={design.advanced.extras.includes(pill.id)}
                   >
-                    <PillMark label={pill.label} />
                     {pill.label}
                   </button>
                 ))}
@@ -269,38 +266,6 @@ function Fold({ title, icon, children, watch }: { title: string; icon: ReactNode
   );
 }
 
-function iconFor(label: string) {
-  const key = label.toLowerCase();
-  if (key.includes("none") || key.includes("unchanged") || key.includes("keep") || key.includes("unspecified")) return Minus;
-  if (key.includes("ultra") || key.includes("luxury") || key.includes("premium")) return Crown;
-  if (key.includes("basic") || key.includes("standard")) return Gem;
-  if (key.includes("eye")) return Eye;
-  if (key.includes("wide")) return Maximize2;
-  if (key.includes("close") || key.includes("detail") || key.includes("micro")) return Scan;
-  if (key.includes("crowd") || key.includes("people") || key.includes("medium")) return Users;
-  if (key.includes("few")) return User;
-  if (key.includes("cloud") || key.includes("mist") || key.includes("haze") || key.includes("rain")) return Cloud;
-  if (key.includes("night") || key.includes("evening")) return Moon;
-  if (key.includes("day") || key.includes("morning") || key.includes("sun") || key.includes("light")) return Sun;
-  if (key.includes("tree") || key.includes("plant") || key.includes("garden") || key.includes("green")) return TreePine;
-  if (key.includes("leaf") || key.includes("season")) return Leaf;
-  if (key.includes("pool") || key.includes("water") || key.includes("swim")) return Waves;
-  return Hexagon;
-}
-
-function PillMark({ label }: { label: string }) {
-  const swatch = COLOR_SWATCH[label];
-  const image = swatch ? undefined : imageFor(label);
-  if (swatch) return <span className="size-8 shrink-0 rounded-full border border-black/10" style={{ background: swatch }} />;
-  if (image) return <img src={image} alt="" className="size-8 shrink-0 rounded-full object-cover" />;
-  const Icon = iconFor(label);
-  return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-raised text-[#b08a45]">
-      <Icon className="size-4" />
-    </span>
-  );
-}
-
 function ChipRow({
   label,
   value,
@@ -324,12 +289,11 @@ function ChipRow({
             type="button"
             onClick={() => onPick(option)}
             className={cn(
-              "hover-chip inline-flex h-11 items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm",
+              "hover-chip h-10 rounded-full border px-3 text-sm",
               value === option ? "border-lime bg-lime text-ink" : "border-line text-muted",
             )}
             aria-pressed={value === option}
           >
-            <PillMark label={labels?.[option] ?? option} />
             {labels?.[option] ?? option}
           </button>
         ))}
