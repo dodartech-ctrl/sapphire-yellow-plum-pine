@@ -25,28 +25,28 @@ export const TAGS = ["Luxury", "Residential", "Villa", "Glass", "Biophilic", "Qu
 
 export const LOOKS: Record<VerticalId, { name: string; image: string }[]> = {
   interior: [
-    { name: "Modern luxury", image: "/viz/t03-compact-living-room.jpg" },
-    { name: "Quiet mineral", image: "/viz/t09-living-room-clay-edit.jpg" },
-    { name: "Warm hospitality", image: "/viz/t04-neighborhood-cafe.jpg" },
-    { name: "Material study", image: "/viz/t08-material-junction.jpg" },
+    { name: "Modern luxury", image: "/pills/living.jpg" },
+    { name: "Quiet mineral", image: "/pills/limewash.jpg" },
+    { name: "Warm hospitality", image: "/pills/dining.jpg" },
+    { name: "Material study", image: "/pills/marble.jpg" },
   ],
   exterior: [
-    { name: "Modern", image: "/viz/t05-subtropical-home.jpg" },
-    { name: "Dusk villa", image: "/viz/t10-home-dusk-edit.jpg" },
-    { name: "Civic", image: "/viz/t07-cultural-campus.jpg" },
-    { name: "Massing", image: "/viz/t02-sectional-arts-center.jpg" },
+    { name: "Modern", image: "/pills/facade.jpg" },
+    { name: "Dusk villa", image: "/pills/night.jpg" },
+    { name: "Civic", image: "/pills/brick.jpg" },
+    { name: "Massing", image: "/pills/timber.jpg" },
   ],
   amenities: [
-    { name: "Clubhouse", image: "/viz/t04-neighborhood-cafe.jpg" },
-    { name: "Pool terrace", image: "/viz/t06-urban-courtyard.jpg" },
-    { name: "Evening", image: "/viz/t10-home-dusk-edit.jpg" },
-    { name: "Resort", image: "/viz/t05-subtropical-home.jpg" },
+    { name: "Clubhouse", image: "/pills/dining.jpg" },
+    { name: "Pool terrace", image: "/pills/pool.jpg" },
+    { name: "Evening", image: "/pills/golden.jpg" },
+    { name: "Resort", image: "/pills/pool.jpg" },
   ],
   landscape: [
-    { name: "Courtyard", image: "/viz/t06-urban-courtyard.jpg" },
-    { name: "Tropical", image: "/viz/t05-subtropical-home.jpg" },
-    { name: "Campus green", image: "/viz/t07-cultural-campus.jpg" },
-    { name: "Dusk garden", image: "/viz/t10-home-dusk-edit.jpg" },
+    { name: "Courtyard", image: "/pills/garden.jpg" },
+    { name: "Tropical", image: "/pills/garden.jpg" },
+    { name: "Campus green", image: "/pills/garden.jpg" },
+    { name: "Dusk garden", image: "/pills/night.jpg" },
   ],
 };
 
