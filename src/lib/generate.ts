@@ -1,3 +1,4 @@
+import { sanitizeWorkflow, workflowInstruction } from "@/lib/archviz-workflows";
 import { createServerFn } from "@tanstack/react-start";
 import { PLATE_COST } from "@/lib/credits";
 import { TEMPLATES } from "@/lib/catalog";
@@ -7,6 +8,7 @@ import { sanitizeFrame, type Frame } from "@/lib/frame";
 
 type Input = {
   idea: string;
+  workflow: ReturnType<typeof sanitizeWorkflow>;
   image?: string;
   templateId?: string;
   studyId?: string;
@@ -17,6 +19,7 @@ type Input = {
 function parseInput(input: unknown): Input {
   const data = input as {
     idea?: unknown;
+    workflow?: unknown;
     image?: unknown;
     templateId?: unknown;
     studyId?: unknown;
@@ -28,7 +31,7 @@ function parseInput(input: unknown): Input {
   if (image && image.length > 2_500_000) throw new Error("That image is too large. Try a smaller photo.");
   const templateId = typeof data.templateId === "string" ? data.templateId.slice(0, 80) : undefined;
   const studyId = typeof data.studyId === "string" ? data.studyId.slice(0, 80) : undefined;
-  return { idea, image, templateId, studyId, design: sanitizeDesign(data.design), frame: sanitizeFrame(data.frame) };
+  return { idea, workflow: sanitizeWorkflow(data.workflow), image, templateId, studyId, design: sanitizeDesign(data.design), frame: sanitizeFrame(data.frame) };
 }
 
 function libraryPrompt(data: Input): string | undefined {
@@ -46,7 +49,7 @@ export const generatePlate = createServerFn({ method: "POST" })
     const wallet = await charge(PLATE_COST, data.image ? "edit" : "plate");
     try {
       const { dictionaryBrief } = await import("@/lib/blocks.server");
-      const prompt = [assembleBrief(data.design, data.idea, libraryPrompt(data)), dictionaryBrief(data.design.vertical, data.design.advanced)]
+      const prompt = [assembleBrief(data.design, data.idea, libraryPrompt(data)), workflowInstruction(data.workflow, Boolean(data.image)), dictionaryBrief(data.design.vertical, data.design.advanced)]
         .filter(Boolean)
         .join("\n\n")
         .slice(0, 8000);
