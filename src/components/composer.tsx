@@ -1,3 +1,4 @@
+import { WORKFLOWS, type Workflow } from "@/lib/archviz-workflows";
 import { ImagePlus, Loader2, SlidersHorizontal, Sparkles, SwatchBook, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ export function Composer() {
   const setPanel = useOriel((state) => state.setPanel);
   const { busy, generate } = useGenerate();
   const [enhancing, setEnhancing] = useState(false);
+  const [workflow, setWorkflow] = useState<Workflow>("concept");
   const fileRef = useRef<HTMLInputElement>(null);
   const ideaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -48,7 +50,7 @@ export function Composer() {
       className="mt-3"
       onSubmit={(event) => {
         event.preventDefault();
-        void generate();
+        void generate("plate", workflow);
       }}
     >
       <div className="rounded-[28px] border border-white bg-surface px-3 py-3 shadow-[0_18px_40px_rgba(70,48,16,0.08)]">
@@ -110,6 +112,11 @@ export function Composer() {
               suppressHydrationWarning
             />
           </label>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Architectural workflow">
+          {Object.entries(WORKFLOWS).map(([key, preset]) => (
+            <button key={key} type="button" aria-pressed={workflow === key} onClick={() => setWorkflow(key as Workflow)} className={cn("hover-chip rounded-full border px-3 py-1.5 text-xs", workflow === key ? "gold-fill border-transparent" : "border-line text-muted")} title={preset.instruction}>{preset.label}</button>
+          ))}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-xs text-faint">Resolution</span>
