@@ -9,15 +9,21 @@ import {
   ImagePlus,
   MapPin,
   Maximize2,
+  MessageSquarePlus,
+  Paintbrush,
   Search,
+  Share2,
   Sliders,
   Split,
+  Trash2,
   Wand2,
   X,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Compare } from "@/components/compare";
+import { PanoramaViewer } from "@/components/panorama-viewer";
+import { decodeReviewPinsParam, encodeReviewPinsParam, type ReviewPin } from "@/lib/archviz-suite";
 import {
   GALLERY_PROJECTS,
   type ComparisonType,
@@ -32,12 +38,17 @@ export const Route = createFileRoute("/gallery")({
   component: GalleryPage,
 });
 
-export function GalleryPage() {
+function GalleryPage() {
   const navigate = useNavigate();
   const setIdea = useOriel((state) => state.setIdea);
   const history = useOriel((state) => state.history);
   const upload = useOriel((state) => state.upload);
   const plate = useOriel((state) => state.plate);
+  const publishedGallery = useOriel((state) => state.publishedGallery);
+  const removePublishedProject = useOriel((state) => state.removePublishedProject);
+  const setReviewPins = useOriel((state) => state.setReviewPins);
+  const setUpload = useOriel((state) => state.setUpload);
+  const setMaskDataUrl = useOriel((state) => state.setMaskDataUrl);
 
   // Filters
   const [selectedDiscipline, setSelectedDiscipline] = useState<ProjectDiscipline | "All">("All");
@@ -56,9 +67,51 @@ export function GalleryPage() {
   const beforeInputRef = useRef<HTMLInputElement>(null);
   const afterInputRef = useRef<HTMLInputElement>(null);
 
+  // Combined curated + user-published projects
+  const allProjects = useMemo(() => {
+    const publishedMapped: (GalleryProject & { isUserPublished?: boolean })[] = publishedGallery.map((p) => ({
+      id: p.id,
+      title: p.title,
+      location: p.location,
+      year: p.year,
+      discipline: p.discipline,
+      comparisonType: p.comparisonType,
+      beforeImage: p.beforeImage,
+      afterImage: p.afterImage,
+      beforeLabel: p.beforeLabel,
+      afterLabel: p.afterLabel,
+      beforeAlt: `${p.title} before`,
+      afterAlt: `${p.title} after`,
+      summary: p.summary,
+      architecturalIntent: `${p.summary} (${p.engineMeta})`,
+      keyChanges: [p.engineMeta, p.lightingTechnique],
+      materialsUsed: p.materialsUsed.length ? p.materialsUsed : ["Architectural concrete", "Warm oak"],
+      lightingTechnique: p.lightingTechnique,
+      aspect: p.aspect,
+      promptBlueprint: p.promptBlueprint,
+      isUserPublished: true,
+    }));
+    return [...publishedMapped, ...GALLERY_PROJECTS];
+  }, [publishedGallery]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const rev = sp.get("review");
+    const pid = sp.get("project");
+    if (rev) {
+      const decoded = decodeReviewPinsParam(rev);
+      if (decoded.length > 0) setReviewPins(decoded);
+    }
+    if (pid) {
+      const match = allProjects.find((p) => p.id === pid);
+      if (match) setActiveModalProject(match);
+    }
+  }, [allProjects, setReviewPins]);
+
   // Filtered projects
   const filteredProjects = useMemo(() => {
-    return GALLERY_PROJECTS.filter((proj) => {
+    return allProjects.filter((proj) => {
       const matchDiscipline = selectedDiscipline === "All" || proj.discipline === selectedDiscipline;
       const matchType = selectedComparisonType === "All" || proj.comparisonType === selectedComparisonType;
       const q = searchQuery.trim().toLowerCase();
@@ -70,7 +123,7 @@ export function GalleryPage() {
         proj.materialsUsed.some((m) => m.toLowerCase().includes(q));
       return matchDiscipline && matchType && matchQuery;
     });
-  }, [selectedDiscipline, selectedComparisonType, searchQuery]);
+  }, [allProjects, selectedDiscipline, selectedComparisonType, searchQuery]);
 
   function setProjectMode(projectId: string, mode: "slider" | "before" | "after" | "side") {
     setProjectDisplayModes((prev) => ({ ...prev, [projectId]: mode }));
@@ -145,9 +198,9 @@ export function GalleryPage() {
           </div>
 
           {/* Search & Filter Toolbar */}
-          <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
             {/* Search Input */}
-            <div className="relative w-full md:max-w-xs">
+            <div className="relative w-full lg:max-w-xs">
               <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-faint" />
               <input
                 type="text"
@@ -159,7 +212,7 @@ export function GalleryPage() {
             </div>
 
             {/* Discipline Filter Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="shrink-0 text-xs text-faint">Discipline:</span>
               {(["All", "Exterior", "Interior", "Renovation", "Cultural"] as const).map((disc) => (
                 <button
@@ -179,7 +232,7 @@ export function GalleryPage() {
             </div>
 
             {/* Comparison Type Filter Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="shrink-0 text-xs text-faint">Study Type:</span>
               {(
                 [
@@ -427,6 +480,19 @@ export function GalleryPage() {
                       </button>
 
                       <div className="flex items-center gap-2">
+                        {(project as GalleryProject & { isUserPublished?: boolean }).isUserPublished ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              removePublishedProject(project.id);
+                              toast.message("Removed published render from Gallery");
+                            }}
+                            className="grid size-8 place-items-center rounded-full border border-line bg-raised text-muted hover:text-red-600"
+                            title="Remove published render"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => handleSendToStudio(project)}
@@ -555,25 +621,60 @@ export function GalleryPage() {
           onClose={() => setActiveModalProject(null)}
           onSendToBuilder={() => handleSendToBuilder(activeModalProject)}
           onSendToStudio={() => handleSendToStudio(activeModalProject)}
+          onSendPinToInpaint={(pin) => {
+            const c = document.createElement("canvas");
+            c.width = 1280;
+            c.height = 720;
+            const ctx = c.getContext("2d");
+            if (ctx) {
+              ctx.fillStyle = "rgba(212, 176, 106, 0.85)";
+              ctx.beginPath();
+              ctx.arc(pin.xNorm * 1280, pin.yNorm * 720, 86, 0, Math.PI * 2);
+              ctx.fill();
+              setMaskDataUrl(c.toDataURL("image/png"));
+            }
+            setUpload(activeModalProject.afterImage);
+            setIdea(pin.note);
+            setActiveModalProject(null);
+            toast.success(`Review Pin #${pin.number} mask sent to Studio Inpaint`);
+            void navigate({ to: "/", search: { pinInpaint: "1" } as never });
+          }}
         />
       )}
     </main>
   );
 }
 
-// Modal Component for Deep Project Inspection
+// Modal Component for Deep Project Inspection (#17 360° Tour + #19 Review Pins)
 function ProjectInspectorModal({
   project,
   onClose,
   onSendToBuilder,
   onSendToStudio,
+  onSendPinToInpaint,
 }: {
   project: GalleryProject;
   onClose: () => void;
   onSendToBuilder: () => void;
   onSendToStudio: () => void;
+  onSendPinToInpaint: (pin: ReviewPin) => void;
 }) {
+  const reviewPins = useOriel((state) => state.reviewPins);
+  const addReviewPin = useOriel((state) => state.addReviewPin);
+  const toggleReviewPinStatus = useOriel((state) => state.toggleReviewPinStatus);
+  const removeReviewPin = useOriel((state) => state.removeReviewPin);
+
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [viewerMode, setViewerMode] = useState<"compare" | "360" | "review">("compare");
+  const [pendingPt, setPendingPt] = useState<{ xNorm: number; yNorm: number } | null>(null);
+  const [pinAuthor, setPinAuthor] = useState("Principal Architect");
+  const [pinNote, setPinNote] = useState("");
+  const reviewSurfaceRef = useRef<HTMLDivElement>(null);
+
+  const projectPins = useMemo(
+    () => reviewPins.filter((p) => p.projectId === project.id),
+    [reviewPins, project.id],
+  );
 
   async function handleCopyPrompt() {
     try {
@@ -586,11 +687,46 @@ function ProjectInspectorModal({
     }
   }
 
+  async function handleCopyReviewLink() {
+    try {
+      const encoded = encodeReviewPinsParam(projectPins);
+      const url = `${window.location.origin}/gallery?project=${encodeURIComponent(project.id)}${encoded ? `&review=${encoded}` : ""}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Shareable Client Review link copied!");
+    } catch {
+      toast.error("Could not copy review link.");
+    }
+  }
+
+  function handleReviewSurfaceClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!reviewSurfaceRef.current) return;
+    const rect = reviewSurfaceRef.current.getBoundingClientRect();
+    const xNorm = Math.max(0.03, Math.min(0.97, (e.clientX - rect.left) / Math.max(1, rect.width)));
+    const yNorm = Math.max(0.03, Math.min(0.97, (e.clientY - rect.top) / Math.max(1, rect.height)));
+    setPendingPt({ xNorm, yNorm });
+  }
+
+  function submitReviewPin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pendingPt || !pinNote.trim()) return;
+    addReviewPin({
+      projectId: project.id,
+      xNorm: pendingPt.xNorm,
+      yNorm: pendingPt.yNorm,
+      author: pinAuthor.trim() || "Client Reviewer",
+      note: pinNote.trim(),
+      status: "open",
+    });
+    setPendingPt(null);
+    setPinNote("");
+    toast.success("Added review annotation pin");
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm sm:p-6">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-2xl">
         {/* Modal Top Bar */}
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line px-6 py-4">
           <div>
             <div className="flex items-center gap-2 text-xs text-muted">
               <span className="font-semibold text-[#b08a45]">{project.discipline}</span>
@@ -602,34 +738,186 @@ function ProjectInspectorModal({
             <h2 className="font-serif text-2xl font-bold text-fg">{project.title}</h2>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid size-9 place-items-center rounded-full text-muted transition hover:bg-raised hover:text-fg"
-          >
-            <X className="size-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 rounded-full bg-raised p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setViewerMode("compare")}
+                className={cn("h-7 rounded-full px-3 font-medium", viewerMode === "compare" ? "gold-fill text-[#2a1c0c]" : "text-muted")}
+              >
+                Split Compare
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewerMode("review")}
+                className={cn("inline-flex h-7 items-center gap-1 rounded-full px-3 font-medium", viewerMode === "review" ? "gold-fill text-[#2a1c0c]" : "text-muted")}
+              >
+                <MessageSquarePlus className="size-3" /> Review Pins ({projectPins.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewerMode("360")}
+                className={cn("inline-flex h-7 items-center gap-1 rounded-full px-3 font-medium", viewerMode === "360" ? "gold-fill text-[#2a1c0c]" : "text-muted")}
+              >
+                <Compass className="size-3" /> 360° Tour
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid size-9 place-items-center rounded-full text-muted transition hover:bg-raised hover:text-fg"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
         <div className="flex-1 space-y-6 overflow-y-auto p-6">
-          {/* Main Interactive Compare Slider */}
+          {/* Main Interactive Viewer */}
           <div className="overflow-hidden rounded-2xl border border-line bg-[#1c1915] shadow-inner">
-            <Compare
-              before={project.beforeImage}
-              after={project.afterImage}
-              beforeLabel={project.beforeLabel}
-              afterLabel={project.afterLabel}
-              beforeAlt={project.beforeAlt}
-              afterAlt={project.afterAlt}
-              embedded
-              aspect={project.aspect}
-            />
+            {viewerMode === "360" ? (
+              <PanoramaViewer imageUrl={project.afterImage} aspect={project.aspect} />
+            ) : viewerMode === "review" ? (
+              <div
+                ref={reviewSurfaceRef}
+                onClick={handleReviewSurfaceClick}
+                className="relative cursor-crosshair select-none"
+                style={{ aspectRatio: project.aspect }}
+              >
+                <img src={project.afterImage} alt={project.afterAlt} className="h-full w-full object-contain" />
+                {projectPins.map((pin) => (
+                  <span
+                    key={pin.id}
+                    style={{ left: `${pin.xNorm * 100}%`, top: `${pin.yNorm * 100}%` }}
+                    title={`${pin.author}: ${pin.note}`}
+                    className={cn(
+                      "absolute grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 text-xs font-bold shadow-lg",
+                      pin.status === "resolved"
+                        ? "border-emerald-200 bg-emerald-600 text-white"
+                        : "border-[#2a1c0c] bg-[#e7c27a] text-[#2a1c0c]",
+                    )}
+                  >
+                    {pin.number}
+                  </span>
+                ))}
+                {pendingPt ? (
+                  <span
+                    style={{ left: `${pendingPt.xNorm * 100}%`, top: `${pendingPt.yNorm * 100}%` }}
+                    className="absolute grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-amber-500 text-xs font-bold text-black shadow-lg"
+                  >
+                    +
+                  </span>
+                ) : null}
+                <div className="pointer-events-none absolute top-3 left-3 rounded-full bg-[#14110f]/90 px-3 py-1 text-[11px] text-[#e7c27a]">
+                  Click anywhere on the plate to drop a numbered client review pin
+                </div>
+              </div>
+            ) : (
+              <Compare
+                before={project.beforeImage}
+                after={project.afterImage}
+                beforeLabel={project.beforeLabel}
+                afterLabel={project.afterLabel}
+                beforeAlt={project.beforeAlt}
+                afterAlt={project.afterAlt}
+                embedded
+                aspect={project.aspect}
+              />
+            )}
           </div>
+
+          {/* Client Review Pin Creation & List (#19) */}
+          {viewerMode === "review" ? (
+            <div className="space-y-3 rounded-2xl border border-line bg-raised p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-serif text-base font-semibold text-fg">Client Review Annotations</h3>
+                <button
+                  type="button"
+                  onClick={handleCopyReviewLink}
+                  className="hover-chip inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-xs font-medium text-fg"
+                >
+                  <Share2 className="size-3.5 text-[#b08a45]" /> Copy Shareable Review Link
+                </button>
+              </div>
+
+              {pendingPt ? (
+                <form onSubmit={submitReviewPin} className="flex flex-wrap items-center gap-2 rounded-xl border border-[#d4b06a] bg-surface p-2.5 text-xs">
+                  <input
+                    type="text"
+                    value={pinAuthor}
+                    onChange={(e) => setPinAuthor(e.target.value)}
+                    placeholder="Reviewer"
+                    className="h-8 w-36 rounded-lg border border-line bg-raised px-2.5 text-fg outline-none focus:border-[#d4b06a]"
+                  />
+                  <input
+                    type="text"
+                    value={pinNote}
+                    onChange={(e) => setPinNote(e.target.value)}
+                    placeholder="Markup note (e.g. Change cladding to charred cedar)"
+                    className="h-8 min-w-[200px] flex-1 rounded-lg border border-line bg-raised px-2.5 text-fg outline-none focus:border-[#d4b06a]"
+                    autoFocus
+                  />
+                  <button type="submit" className="gold-fill h-8 rounded-full px-3.5 font-semibold text-[#2a1c0c]">
+                    Save Pin
+                  </button>
+                  <button type="button" onClick={() => setPendingPt(null)} className="h-8 rounded-full border border-line px-3 text-muted">
+                    Cancel
+                  </button>
+                </form>
+              ) : null}
+
+              {projectPins.length === 0 ? (
+                <p className="text-xs text-muted">No pins yet. Click anywhere on the render above to place pin #1.</p>
+              ) : (
+                <div className="space-y-2">
+                  {projectPins.map((pin) => (
+                    <div key={pin.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#e7c27a] font-bold text-[#2a1c0c]">
+                          {pin.number}
+                        </span>
+                        <div>
+                          <p className="font-medium text-fg">{pin.note}</p>
+                          <p className="text-[10px] text-faint">
+                            {pin.author} · {pin.status === "resolved" ? "Resolved" : "Open"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onSendPinToInpaint(pin)}
+                          className="gold-fill inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-[#2a1c0c]"
+                        >
+                          <Paintbrush className="size-3" /> Send Pin → Inpaint
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleReviewPinStatus(pin.id)}
+                          className="h-7 rounded-full border border-line px-2.5 text-[11px] text-muted hover:text-fg"
+                        >
+                          {pin.status === "open" ? "Mark Resolved" : "Reopen"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeReviewPin(pin.id)}
+                          className="grid size-7 place-items-center rounded-full text-faint hover:text-rose-600"
+                          aria-label="Delete pin"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {/* Architectural Intent */}
           <div>
-            <h3 className="font-serif text-lg font-semibold text-fg">Architectural Intent & Directives</h3>
+            <h3 className="font-serif text-lg font-semibold text-fg">Architectural Intent &amp; Directives</h3>
             <p className="mt-2 text-sm leading-relaxed text-muted">{project.architecturalIntent}</p>
           </div>
 
@@ -648,7 +936,7 @@ function ProjectInspectorModal({
             </div>
 
             <div className="rounded-2xl border border-line bg-raised p-4">
-              <h4 className="text-xs font-semibold text-fg uppercase tracking-wider">Lighting & Material Science</h4>
+              <h4 className="text-xs font-semibold text-fg uppercase tracking-wider">Lighting &amp; Material Science</h4>
               <p className="mt-2 text-xs leading-relaxed text-muted">
                 <strong className="text-fg">Illumination:</strong> {project.lightingTechnique}
               </p>

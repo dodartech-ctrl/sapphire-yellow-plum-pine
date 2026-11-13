@@ -8,7 +8,7 @@ export const VERTICALS = [
 ] as const;
 
 export type VerticalId = (typeof VERTICALS)[number]["id"];
-export type PanelTab = "design" | "camera" | "light" | "human" | "mood" | "advanced";
+export type PanelTab = "design" | "camera" | "light" | "human" | "mood" | "engine" | "advanced";
 
 export const RANGES = ["Basic", "Standard", "Premium", "Luxury", "Ultra Luxury"] as const;
 export const CAMERAS = ["Eye level", "Elevated", "Close detail", "Wide"] as const;
@@ -194,7 +194,7 @@ export function sanitizeDesign(input: Partial<DesignState> | undefined): DesignS
     strength: oneOf(input?.strength, STRENGTHS, DEFAULT_DESIGN.strength),
     tags,
     target,
-    panel: oneOf(input?.panel, ["design", "camera", "light", "human", "mood", "advanced"] as const, "design"),
+    panel: oneOf(input?.panel, ["design", "camera", "light", "human", "mood", "engine", "advanced"] as const, "design"),
     picks,
     rooms: cleanRooms(input?.rooms),
     advanced: sanitizeAdvanced(input?.advanced),

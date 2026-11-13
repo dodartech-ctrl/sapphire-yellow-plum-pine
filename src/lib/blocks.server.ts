@@ -1,21 +1,5 @@
 import type { Advanced } from "@/lib/dictionary";
-import blocks from "@/lib/prompt-blocks.json";
-
-type Block = { id: string; section: string; text: string; conflicts: string[] };
-
-const ORDER = [
-  "GOAL",
-  "SOURCE / INPUT",
-  "MUST PRESERVE",
-  "ALLOWED CHANGES",
-  "MATERIAL / SUBJECT",
-  "LIGHT / ATMOSPHERE",
-  "CAMERA / PHOTOGRAPHY",
-  "RESTRICTIONS",
-  "QC",
-];
-
-const BY_ID = new Map((blocks as Block[]).map((block) => [block.id, block]));
+import { composeDictionarySelection, getDictionaryBlock } from "@/lib/archviz-dictionary";
 
 const EXPAND: Record<string, string[]> = {
   "hero-photo-clean": ["hero-photo-clean-positive", "hero-photo-clean-negative"],
@@ -24,15 +8,21 @@ const EXPAND: Record<string, string[]> = {
   "hdri-realism": ["hdri-realism-positive", "hdri-realism-negative"],
 };
 
-export function dictionaryBrief(vertical: string, advanced: Advanced): string {
-  const chosen = [
+export function dictionaryBrief(
+  vertical: string,
+  advanced: Advanced,
+  extraBlocks: string[] = [],
+  paramOverrides: Record<string, Record<string, string>> = {},
+): string {
+  const rawIds = [
     vertical === "interior" ? "interior" : "goal",
     "source",
     "geometry",
     "windows",
+    ...extraBlocks,
     advanced.change,
     advanced.light,
-    ...(advanced.light === "night" ? ["night-windows", "night-street-sources"] : []),
+    ...(advanced.light === "night" ? ["night-windows", "night-street-sources", "night-headlights"] : []),
     advanced.air,
     advanced.season,
     ...(EXPAND[advanced.grade] ?? [advanced.grade]),
@@ -40,27 +30,16 @@ export function dictionaryBrief(vertical: string, advanced: Advanced): string {
     "exclude",
     "qc",
   ];
+
+  // Filter conflicting picks deterministically on the server before rendering
   const kept: string[] = [];
   const blocked = new Set<string>();
-  for (const id of chosen) {
-    const block = BY_ID.get(id);
+  for (const id of rawIds) {
+    const block = getDictionaryBlock(id);
     if (!block || id === "none" || blocked.has(id) || kept.includes(id)) continue;
     kept.push(id);
     for (const other of block.conflicts) blocked.add(other);
   }
-  const groups = new Map<string, string[]>();
-  for (const id of kept) {
-    const block = BY_ID.get(id);
-    if (!block) continue;
-    const lines = groups.get(block.section) ?? [];
-    lines.push(block.text);
-    groups.set(block.section, lines);
-  }
-  const parts: string[] = [];
-  for (const section of ORDER) {
-    const lines = groups.get(section);
-    if (!lines?.length) continue;
-    parts.push(section, ...lines, "");
-  }
-  return parts.join("\n").trim().slice(0, 6000);
+
+  return composeDictionarySelection(kept, paramOverrides).text.slice(0, 6000);
 }

@@ -39,7 +39,7 @@ function StudiesPage() {
               <p className="mt-3 text-sm text-muted">{wall.observation}</p>
               <p className="mt-3 text-sm text-muted">{wall.metrics}</p>
               <p className="mt-3 text-sm text-fg">{wall.revision.note}</p>
-              <Link to="/studio" search={{ study: "t09" }} className="mt-4 inline-flex h-11 items-center rounded-full bg-lime px-4 text-sm font-semibold text-ink">
+              <Link to="/studio" search={{ study: "t09" }} className="gold-fill mt-4 inline-flex h-11 items-center rounded-full px-5 text-sm font-semibold text-[#2a1c0c]">
                 Open the revision brief
               </Link>
             </div>

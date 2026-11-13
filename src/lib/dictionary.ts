@@ -75,16 +75,27 @@ export const ADVANCED_GROUPS: { key: keyof Omit<Advanced, "extras">; label: stri
       { id: "hdri-realism", label: "HDRI" },
       { id: "cinema-malick", label: "Natural epic" },
       { id: "cinema-villeneuve", label: "Monumental" },
+      { id: "cinema-anderson", label: "Graphic pastel" },
+      { id: "cinema-nolan", label: "Epic daylight" },
+      { id: "cinema-fincher", label: "Precision shadow" },
+      { id: "cinema-scott", label: "Layered night" },
     ],
   },
 ];
 
 export const EXTRA_PILLS = [
   { id: "microdetail", label: "Microdetail" },
+  { id: "roughness-variation", label: "Roughness" },
   { id: "glass-realism", label: "Glass" },
   { id: "stone-detail", label: "Stone" },
   { id: "concrete-detail", label: "Concrete" },
   { id: "subtle-weathering", label: "Weathering" },
+  { id: "edge-wear", label: "Edge wear" },
+  { id: "photorealism-recovery", label: "De-CGI" },
+  { id: "upscale-safety", label: "Upscale lock" },
+  { id: "heritage-protection", label: "Heritage" },
+  { id: "developer-story", label: "Developer" },
+  { id: "multiview-consistency", label: "Multi-view" },
   { id: "final-cleanup", label: "Cleanup" },
   { id: "natural-greenery-detail", label: "Planting" },
   { id: "match-source-lighting", label: "Match source" },
@@ -107,7 +118,7 @@ export function sanitizeAdvanced(input: Partial<Advanced> | undefined): Advanced
   }
   const allowed = new Set(EXTRA_PILLS.map((item) => item.id));
   next.extras = Array.isArray(input?.extras)
-    ? input.extras.filter((id): id is string => typeof id === "string" && allowed.has(id as (typeof EXTRA_PILLS)[number]["id"])).slice(0, 8)
+    ? input.extras.filter((id): id is string => typeof id === "string" && allowed.has(id as (typeof EXTRA_PILLS)[number]["id"])).slice(0, 12)
     : [...DEFAULT_ADVANCED.extras];
   if (next.light === "night") next.extras = next.extras.filter((id) => id !== "match-source-lighting");
   return next;

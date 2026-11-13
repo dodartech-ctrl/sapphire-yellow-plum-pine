@@ -32,8 +32,12 @@ function Mark() {
 export function Shell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [open, setOpen] = useState(false);
+  const [noticesOpen, setNoticesOpen] = useState(false);
   const design = useOriel((state) => state.design);
   const credits = useOriel((state) => state.credits);
+  const log = useOriel((state) => state.log);
+  const clearLog = useOriel((state) => state.clearLog);
+  const queue = useOriel((state) => state.queue);
   const setCredits = useOriel((state) => state.setCredits);
   const setVertical = useOriel((state) => state.setVertical);
   const navigate = useNavigate();
@@ -62,6 +66,8 @@ export function Shell() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  const hasNotices = log.length > 0 || queue.length > 0;
 
   return (
     <div className="flex h-dvh bg-bg text-fg">
@@ -127,7 +133,7 @@ export function Shell() {
         </Link>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="z-30 flex shrink-0 items-center gap-3 px-4 py-3 md:px-6">
+        <header className="relative z-30 flex shrink-0 items-center gap-3 px-4 py-3 md:px-6">
           <Link to="/" className="flex items-center gap-2 lg:hidden">
             <Mark />
             <span className="font-serif text-lg text-fg">Oriel</span>
@@ -165,10 +171,69 @@ export function Shell() {
           <button type="button" className="ml-auto grid size-11 shrink-0 place-items-center rounded-full bg-surface shadow-sm" aria-label="Search the library" onClick={() => setOpen(true)}>
             <Search className="size-4" />
           </button>
-          <button type="button" className="relative grid size-11 shrink-0 place-items-center rounded-full bg-surface shadow-sm" aria-label="Notices">
-            <Bell className="size-4" />
-            <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-[#e07a2f]" />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setNoticesOpen((v) => !v)}
+              className="relative grid size-11 shrink-0 place-items-center rounded-full bg-surface shadow-sm hover:border hover:border-[#d4b06a]"
+              aria-label="Notices"
+              aria-expanded={noticesOpen}
+            >
+              <Bell className="size-4" />
+              {hasNotices ? <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-[#e07a2f]" /> : null}
+            </button>
+            {noticesOpen ? (
+              <div
+                data-testid="notices-popover"
+                className="absolute top-13 right-0 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-surface p-3 shadow-2xl"
+              >
+                <div className="flex items-center justify-between border-b border-line pb-2">
+                  <span className="font-serif text-sm font-semibold text-fg">Studio Render Activity</span>
+                  <div className="flex items-center gap-2">
+                    {log.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => clearLog()}
+                        className="text-[11px] font-medium text-[#b08a45] hover:underline"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setNoticesOpen(false)}
+                      className="grid size-6 place-items-center rounded-full text-faint hover:bg-raised"
+                      aria-label="Close activity"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+                  {log.length === 0 && queue.length === 0 ? (
+                    <p className="py-4 text-center text-xs text-muted">No render activity yet. Generate a plate or run a batch pass.</p>
+                  ) : (
+                    <>
+                      {queue.slice(0, 3).map((q) => (
+                        <div key={q.id} className="rounded-xl border border-line bg-raised/60 px-2.5 py-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate font-medium text-fg">{q.label}</span>
+                            <span className="font-mono text-[10px] uppercase text-[#b08a45]">{q.status}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {log.slice(0, 8).map((entry) => (
+                        <div key={entry.id} className="rounded-xl border border-line/70 bg-raised/40 px-2.5 py-2 text-xs">
+                          <p className="font-medium text-fg">{entry.title}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted">{entry.text}</p>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
           <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#efe4d4] text-fg" aria-hidden="true">
             <User className="size-4" />
           </span>
@@ -176,7 +241,7 @@ export function Shell() {
         <div className="min-h-0 flex-1 overflow-hidden">
           <Outlet />
         </div>
-        {pathname === "/" ? null : <Composer />}
+        {pathname === "/" || pathname === "/builder" || pathname === "/gallery" ? null : <Composer />}
       </div>
       <SearchDialog open={open} onOpenChange={setOpen} />
       {hydrated ? <Toaster theme="light" position="bottom-center" /> : null}

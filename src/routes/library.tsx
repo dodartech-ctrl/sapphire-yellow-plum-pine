@@ -57,8 +57,8 @@ function LibraryPage() {
             type="button"
             onClick={() => setSavedOnly((value) => !value)}
             className={cn(
-              "h-11 rounded-full border px-4 text-sm",
-              savedOnly ? "border-lime bg-lime text-ink" : "border-line text-fg",
+              "h-11 rounded-full border px-4 text-sm font-medium",
+              savedOnly ? "gold-fill border-transparent text-[#2a1c0c]" : "border-line text-fg",
             )}
           >
             Saved only
@@ -123,7 +123,7 @@ function LibraryPage() {
                   <Link
                     to="/studio"
                     search={{ template: template.id }}
-                    className="mt-4 inline-flex h-11 items-center rounded-full bg-lime px-4 text-sm font-semibold text-ink"
+                    className="gold-fill mt-4 inline-flex h-11 items-center rounded-full px-5 text-sm font-semibold text-[#2a1c0c]"
                   >
                     Compose
                   </Link>

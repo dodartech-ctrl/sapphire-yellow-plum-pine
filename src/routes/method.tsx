@@ -49,7 +49,7 @@ function MethodPage() {
         <Link
           to="/studio"
           search={{ template: "core-master" }}
-          className="mt-6 inline-flex h-12 items-center rounded-full bg-lime px-5 text-sm font-semibold text-ink"
+          className="gold-fill mt-6 inline-flex h-12 items-center rounded-full px-6 text-sm font-semibold text-[#2a1c0c]"
         >
           Compose the master brief
         </Link>

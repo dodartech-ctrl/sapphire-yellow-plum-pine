@@ -114,7 +114,7 @@ function PlansPage() {
           />
           {error ? <p className="mt-3 text-sm text-lime">{error}</p> : null}
           {saved ? <p className="mt-3 text-sm text-lime">Request kept on this device. Nothing was sent or charged.</p> : null}
-          <button type="submit" className="mt-4 h-12 rounded-full bg-lime px-5 text-sm font-semibold text-ink">
+          <button type="submit" className="gold-fill mt-4 h-12 rounded-full px-6 text-sm font-semibold text-[#2a1c0c]">
             Keep this request
           </button>
         </form>
