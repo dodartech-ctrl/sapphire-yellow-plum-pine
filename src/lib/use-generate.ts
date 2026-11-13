@@ -1,3 +1,4 @@
+import type { Workflow } from "@/lib/archviz-workflows";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { TEMPLATES } from "@/lib/catalog";
@@ -21,7 +22,7 @@ export function useGenerate() {
   const setBusy = useOriel((state) => state.setBusy);
   const pushChat = useOriel((state) => state.pushChat);
 
-  async function generate(mode: "plate" | "variation" = "plate") {
+  async function generate(mode: "plate" | "variation" = "plate", workflow: Workflow = "concept") {
     if (busy) return;
     if (credits < PLATE_COST) {
       toast.error("Not enough credits.");
@@ -43,7 +44,7 @@ export function useGenerate() {
     pushChat("you", note || `${design.vertical} plate`);
     try {
       const result = await generatePlate({
-        data: { templateId, studyId, idea: note, image: upload ?? undefined, design, frame },
+        data: { templateId, studyId, workflow, idea: note, image: upload ?? undefined, design, frame },
       });
       setCredits(result.credits);
       setPlate({ url: result.url, upload: upload ?? undefined, templateId: sourceId, idea: idea.trim() });
