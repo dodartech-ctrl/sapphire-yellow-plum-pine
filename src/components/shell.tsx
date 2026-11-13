@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Bell, BookOpen, Building2, Compass, Crown, Folder, Layers, Library, Search, Sofa, Trees, User, Waves, X } from "lucide-react";
+import { Bell, BookOpen, Building2, Compass, Crown, Folder, Images, Layers, Library, Search, Sofa, Trees, User, Wand2, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Composer } from "@/components/composer";
 import { DISCIPLINES, SCOPE_LABEL, TEMPLATES } from "@/lib/catalog";
@@ -92,6 +92,12 @@ export function Shell() {
               </button>
             );
           })}
+          <Link to="/builder" className={cn("flex h-11 items-center gap-2.5 rounded-full px-3 text-sm", pathname === "/builder" ? "gold-glow" : "hover-rail text-[#cbbba6]")}>
+            <Wand2 className="size-4" /> Brief Builder
+          </Link>
+          <Link to="/gallery" className={cn("flex h-11 items-center gap-2.5 rounded-full px-3 text-sm", pathname === "/gallery" ? "gold-glow" : "hover-rail text-[#cbbba6]")}>
+            <Images className="size-4" /> Gallery
+          </Link>
           <Link to="/studies" className={cn("flex h-11 items-center gap-2.5 rounded-full px-3 text-sm", pathname === "/studies" ? "gold-glow" : "hover-rail text-[#cbbba6]")}>
             <BookOpen className="size-4" /> Studies
           </Link>
@@ -143,6 +149,12 @@ export function Shell() {
                 </button>
               );
             })}
+            <Link to="/builder" className={cn("inline-flex h-10 items-center rounded-full px-4 text-sm font-medium", pathname === "/builder" ? "gold-fill" : "text-fg/80")}>
+              Builder
+            </Link>
+            <Link to="/gallery" className={cn("inline-flex h-10 items-center rounded-full px-4 text-sm font-medium", pathname === "/gallery" ? "gold-fill" : "text-fg/80")}>
+              Gallery
+            </Link>
             <Link to="/studies" className={cn("inline-flex h-10 items-center rounded-full px-4 text-sm", pathname === "/studies" ? "gold-fill" : "text-fg/80")}>
               Studies
             </Link>

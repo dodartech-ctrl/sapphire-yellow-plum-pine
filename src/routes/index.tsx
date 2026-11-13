@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Circle, ImagePlus, Layers, MousePointer2, Pencil, Square } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Circle, ImagePlus, Images, Layers, MousePointer2, Pencil, Square, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Compare } from "@/components/compare";
@@ -133,9 +133,29 @@ function WorkspacePage() {
             </button>
           ))}
         </div>
-        <p className="relative text-[11px] font-medium tracking-[0.22em] text-[#b08a45] uppercase">Architectural assistant</p>
-        <h1 className="relative mt-1 font-serif text-4xl tracking-tight text-fg md:text-5xl">{label} Studio</h1>
-        <p className="relative mt-2 max-w-xl text-sm text-muted">{COPY[design.vertical]}</p>
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-medium tracking-[0.22em] text-[#b08a45] uppercase">Architectural assistant</p>
+            <h1 className="mt-1 font-serif text-4xl tracking-tight text-fg md:text-5xl">{label} Studio</h1>
+            <p className="mt-2 max-w-xl text-sm text-muted">{COPY[design.vertical]}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/builder"
+              className="hover-chip inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-xs font-medium text-fg shadow-xs"
+            >
+              <Wand2 className="size-3.5 text-[#b08a45]" />
+              Brief Builder
+            </Link>
+            <Link
+              to="/gallery"
+              className="hover-chip inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-xs font-medium text-fg shadow-xs"
+            >
+              <Images className="size-3.5 text-[#b08a45]" />
+              Project Gallery
+            </Link>
+          </div>
+        </div>
         <div className="relative mt-5 overflow-hidden rounded-[28px] bg-[#1c1915] shadow-[0_24px_50px_rgba(70,48,16,0.08)]">
           {view === "compare" && upload && plate?.url ? (
             <Compare before={upload} after={plate.url} beforeLabel="Source" afterLabel="Result" beforeAlt="Source" afterAlt="Result" embedded aspect={aspect} />
