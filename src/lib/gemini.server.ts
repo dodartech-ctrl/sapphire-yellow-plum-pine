@@ -1,21 +1,61 @@
-import { GoogleGenAI, type Part } from "@google/genai";
+import { GoogleGenAI, Type, type Part } from "@google/genai";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { Frame, Ratio } from "@/lib/frame";
 
-const GEMINI_TEXT_MODEL = "gemini-4-hydrogen";
-const GEMINI_IMAGE_FAST_MODEL = "gemini-3.1-flash-lite-image";
-const GEMINI_IMAGE_HQ_MODEL = "gemini-nano-banana-2.1";
+export const GEMINI_TEXT_MODEL = "gemini-4-hydrogen";
+export const GEMINI_IMAGE_FAST_MODEL = "gemini-3.1-flash-lite-image";
+export const GEMINI_IMAGE_HQ_MODEL = "gemini-nano-banana-2.1";
 
 type GeminiRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
 
-export function hasGeminiKey(): boolean {
-  return Boolean(process.env.GEMINI_API_KEY?.trim());
+export type DetectedSamBox = {
+  label: string;
+  box_2d: [number, number, number, number];
+  confidence: number;
+};
+
+const ENV_KEY_ORDER = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "API_KEY", "update", "UPDATE"] as const;
+const PLACEHOLDER_KEY_RE = /^(placeholder|undefined|null|changeme|your[_-]?api[_-]?key|test|demo)$/i;
+
+export function resolveGeminiApiKeys(): string[] {
+  const keys: string[] = [];
+  for (const source of ENV_KEY_ORDER) {
+    const raw = process.env[source]?.trim();
+    if (!raw) continue;
+    const cleaned = raw.replace(/^["']+|["']+$/g, "").trim();
+    if (cleaned.length >= 12 && !PLACEHOLDER_KEY_RE.test(cleaned) && !keys.includes(cleaned)) {
+      keys.push(cleaned);
+    }
+  }
+  return keys;
 }
 
-function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured on the server.");
-  }
+function resolveGeminiApiKey(): string {
+  return resolveGeminiApiKeys()[0] ?? "";
+}
+
+export function hasGeminiKey(): boolean {
+  return Boolean(resolveGeminiApiKey());
+}
+
+export function isGeminiAuthError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? "");
+  return /rejected the API key|permission denied|API_KEY_INVALID|API key not valid|PERMISSION_DENIED|\b400\b|\b403\b|not configured/i.test(
+    msg,
+  );
+}
+
+export function getGeminiStatus() {
+  return {
+    configured: hasGeminiKey(),
+    textModel: GEMINI_TEXT_MODEL,
+    fastImageModel: GEMINI_IMAGE_FAST_MODEL,
+    hqImageModel: GEMINI_IMAGE_HQ_MODEL,
+  };
+}
+
+function createGeminiClient(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
     httpOptions: {
@@ -26,7 +66,28 @@ function getGeminiClient(): GoogleGenAI {
   });
 }
 
-function toGeminiAspectRatio(ratio: Ratio): GeminiRatio {
+async function withGeminiClient<T>(fn: (ai: GoogleGenAI) => Promise<T>): Promise<T> {
+  const keys = resolveGeminiApiKeys();
+  if (keys.length === 0) {
+    throw new Error("GEMINI_API_KEY is not configured on the server.");
+  }
+  let lastErr: unknown;
+  for (let i = 0; i < keys.length; i++) {
+    try {
+      return await fn(createGeminiClient(keys[i]));
+    } catch (error) {
+      lastErr = error;
+      const cleaned = cleanGeminiError(error);
+      if (i < keys.length - 1 && isGeminiAuthError(cleaned)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastErr;
+}
+
+export function toGeminiAspectRatio(ratio: Ratio): GeminiRatio {
   switch (ratio) {
     case "1:1":
     case "4:3":
@@ -38,16 +99,19 @@ function toGeminiAspectRatio(ratio: Ratio): GeminiRatio {
   }
 }
 
-function parseDataUrl(url?: string): { mimeType: string; data: string } | null {
+export function parseDataUrl(url?: string): { mimeType: string; data: string } | null {
   if (!url || !url.startsWith("data:image/")) return null;
   const match = url.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!match) return null;
   return { mimeType: match[1], data: match[2] };
 }
 
-function cleanGeminiError(error: unknown): Error {
+export function cleanGeminiError(error: unknown): Error {
   const raw = error instanceof Error ? error.message : String(error ?? "Gemini request failed.");
-  const sanitized = raw.replace(/AIza[0-9A-Za-z_-]+/g, "").trim();
+  const sanitized = raw
+    .replace(/AIza[0-9A-Za-z_-]+/g, "")
+    .replace(/AQ\.[0-9A-Za-z._-]+/g, "")
+    .trim();
   if (/PERMISSION_DENIED|\b403\b/i.test(sanitized)) {
     return new Error("Gemini permission denied (403). Check or select a Gemini API key in Settings > Secrets.");
   }
@@ -65,20 +129,97 @@ function cleanGeminiError(error: unknown): Error {
 
 export async function enhanceIdeaWithGemini(facts: string): Promise<string> {
   try {
-    const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
-      model: GEMINI_TEXT_MODEL,
-      contents: facts,
-      config: {
-        systemInstruction:
-          "Rewrite this architectural visualization request as one sentence a designer would type. Name the space, the materials, and the light. Keep the camera and layout. No labels, no bullet list, under 40 words.",
-      },
-    });
+    const response = await withGeminiClient((ai) =>
+      ai.models.generateContent({
+        model: GEMINI_TEXT_MODEL,
+        contents: facts,
+        config: {
+          systemInstruction:
+            "Rewrite this architectural visualization request as one sentence a designer would type. Name the space, the materials, and the light. Keep the camera and layout. No labels, no bullet list, under 40 words.",
+        },
+      }),
+    );
     const text = response.text?.replace(/\s+/g, " ").trim();
     if (!text) {
       throw new Error("Gemini returned an empty prompt enhancement.");
     }
     return text.slice(0, 400);
+  } catch (error) {
+    throw cleanGeminiError(error);
+  }
+}
+
+export async function detectGroundedSam2BoxesWithGemini(
+  sourceImage: string,
+  targetPrompt: string,
+  clickPoint?: { xNorm: number; yNorm: number },
+): Promise<DetectedSamBox[]> {
+  const parsed = parseDataUrl(sourceImage);
+  if (!parsed) {
+    throw new Error("Source image must be a valid image data URL for Grounded-SAM 2 detection.");
+  }
+  try {
+    const cleanPrompt = targetPrompt.trim().slice(0, 120) || "architectural element";
+    const clickPrompt = clickPoint
+      ? `The user clicked at normalized coordinate (y=${Math.round(clickPoint.yNorm * 1000)}, x=${Math.round(clickPoint.xNorm * 1000)}) in 0..1000 space. Identify the exact architectural element or furniture item at that point (e.g. window glazing, facade panel, sofa, dining table, floor rug, ceiling) and return its tight 2D bounding box [ymin, xmin, ymax, xmax] with concise label and confidence score.`
+      : `Locate every "${cleanPrompt}" instance in this architectural scene. Return tight 2D bounding boxes in normalized 0..1000 coordinates [ymin, xmin, ymax, xmax] with concise label and confidence score.`;
+    const response = await withGeminiClient((ai) =>
+      ai.models.generateContent({
+        model: GEMINI_TEXT_MODEL,
+        contents: {
+          parts: [
+            { inlineData: parsed },
+            {
+              text: clickPrompt,
+            },
+          ],
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              boxes: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    label: { type: Type.STRING },
+                    box_2d: {
+                      type: Type.ARRAY,
+                      items: { type: Type.NUMBER },
+                    },
+                    confidence: { type: Type.NUMBER },
+                  },
+                  required: ["label", "box_2d", "confidence"],
+                },
+              },
+            },
+            required: ["boxes"],
+          },
+        },
+      }),
+    );
+
+    const rawText = response.text?.trim();
+    if (!rawText) return [];
+    const parsedJson = JSON.parse(rawText) as { boxes?: unknown[] };
+    const list = Array.isArray(parsedJson?.boxes) ? parsedJson.boxes : [];
+    const normalized: DetectedSamBox[] = [];
+    for (const item of list.slice(0, 8)) {
+      if (!item || typeof item !== "object") continue;
+      const rec = item as { label?: unknown; box_2d?: unknown; confidence?: unknown };
+      if (!Array.isArray(rec.box_2d) || rec.box_2d.length !== 4) continue;
+      const coords = rec.box_2d.map((n) => Math.max(0, Math.min(1000, Number(n) || 0)));
+      const [ymin, xmin, ymax, xmax] = coords;
+      if (ymax <= ymin + 8 || xmax <= xmin + 8) continue;
+      normalized.push({
+        label: typeof rec.label === "string" && rec.label.trim() ? rec.label.trim().slice(0, 32) : cleanPrompt,
+        box_2d: [ymin, xmin, ymax, xmax],
+        confidence: Math.max(0.1, Math.min(1, Number(rec.confidence) || 0.85)),
+      });
+    }
+    return normalized;
   } catch (error) {
     throw cleanGeminiError(error);
   }
@@ -103,7 +244,6 @@ export async function generateImageWithGemini(
   },
 ): Promise<string> {
   try {
-    const ai = getGeminiClient();
     const useHq = frame.resolution === "2k";
     const model = useHq ? GEMINI_IMAGE_HQ_MODEL : GEMINI_IMAGE_FAST_MODEL;
 
@@ -111,7 +251,7 @@ export async function generateImageWithGemini(
     const attachments: Array<[string, string | undefined]> = [
       ["Architectural base scene to preserve and render", options?.sourceImage],
       ["Line sketch / perspective structural contour guide", options?.sketchImage !== options?.sourceImage ? options?.sketchImage : undefined],
-      ["White-on-black mask defining the ONLY editable region", options?.maskImage],
+      ["Mask overlay highlighting the ONLY editable target region", options?.maskImage],
       ["True 3D WebGL Z-depth buffer map for spatial distance lock", options?.depthImage],
       ["Surface normal XYZ orientation map for plane alignment", options?.normalImage],
       ["Untextured clay AO massing geometry reference", options?.clayImage],
@@ -133,20 +273,26 @@ export async function generateImageWithGemini(
       }
     }
 
+    const maskConstraint = options?.maskImage
+      ? "CRITICAL INPAINTING CONSTRAINT: Keep all unmasked pixels in Image #1 pixel-identical. Apply edits strictly inside the highlighted region of the mask image with seamless contact shadows and matching lighting."
+      : "";
+
     parts.push({
-      text: notes.length > 0 ? `${notes.join(" ")}\n\n${prompt}` : prompt,
+      text: [notes.length > 0 ? notes.join(" ") : "", maskConstraint, prompt].filter(Boolean).join("\n\n"),
     });
 
-    const response = await ai.models.generateContent({
-      model,
-      contents: { parts },
-      config: {
-        imageConfig: {
-          aspectRatio: options?.aspectOverride ?? toGeminiAspectRatio(frame.ratio),
-          ...(useHq ? { imageSize: "2K" } : {}),
+    const response = await withGeminiClient((ai) =>
+      ai.models.generateContent({
+        model,
+        contents: { parts },
+        config: {
+          imageConfig: {
+            aspectRatio: options?.aspectOverride ?? toGeminiAspectRatio(frame.ratio),
+            ...(useHq ? { imageSize: "2K" } : {}),
+          },
         },
-      },
-    });
+      }),
+    );
 
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
       if (part.inlineData?.data) {
@@ -160,3 +306,198 @@ export async function generateImageWithGemini(
     throw cleanGeminiError(error);
   }
 }
+
+export type GeminiVisionClientLike = {
+  models: {
+    generateContent: GoogleGenAI["models"]["generateContent"];
+    generateContentStream: GoogleGenAI["models"]["generateContentStream"];
+  };
+};
+
+async function resolveGeminiVisionImagePart(
+  imageUrl: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<{ inlineData: { mimeType: string; data: string } }> {
+  const inline = parseDataUrl(imageUrl);
+  if (inline) {
+    if (inline.data.length > 8_000_000) {
+      throw new Error("Image payload is too large for Gemini Vision analysis.");
+    }
+    return { inlineData: inline };
+  }
+
+  if (imageUrl.startsWith("/viz/")) {
+    const vizDir = path.resolve(process.cwd(), "public", "viz");
+    const rel = imageUrl.slice("/viz/".length).split("?")[0] ?? "";
+    const resolved = path.resolve(vizDir, rel);
+    if (!resolved.startsWith(`${vizDir}${path.sep}`)) {
+      throw new Error("Invalid local asset path.");
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    const mimeType =
+      ext === ".png"
+        ? "image/png"
+        : ext === ".webp"
+          ? "image/webp"
+          : ext === ".jpg" || ext === ".jpeg"
+            ? "image/jpeg"
+            : "";
+    if (!mimeType) {
+      throw new Error("Unsupported local image extension.");
+    }
+    const buf = await readFile(resolved);
+    if (buf.byteLength === 0 || buf.byteLength > 6_000_000) {
+      throw new Error("Local image size must be between 1 byte and 6 MB.");
+    }
+    return {
+      inlineData: {
+        mimeType,
+        data: buf.toString("base64"),
+      },
+    };
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(imageUrl);
+  } catch {
+    throw new Error("imageUrl must be a valid https:// URL, /viz/ asset, or base64 image data URL.");
+  }
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error("Remote imageUrl must use https:// protocol.");
+  }
+
+  const res = await fetchFn(parsedUrl.toString(), { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) {
+    throw new Error(`Could not fetch imageUrl (HTTP ${res.status}).`);
+  }
+  const contentType = res.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
+  if (!contentType.startsWith("image/")) {
+    throw new Error("Remote URL did not return an image content type.");
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength === 0 || buf.byteLength > 6_000_000) {
+    throw new Error("Remote image size must be between 1 byte and 6 MB.");
+  }
+  return {
+    inlineData: {
+      mimeType: contentType,
+      data: buf.toString("base64"),
+    },
+  };
+}
+
+export async function handleGeminiVisionRequest(
+  request: Request,
+  deps?: { client?: GeminiVisionClientLike; fetchFn?: typeof fetch },
+): Promise<Response> {
+  if (!deps?.client && !hasGeminiKey()) {
+    return Response.json(
+      {
+        error: "GEMINI_API_KEY is not configured. Select or add a Gemini API key in Settings > Secrets.",
+        configured: false,
+      },
+      { status: 503 },
+    );
+  }
+
+  let body: { prompt?: unknown; imageUrl?: unknown; stream?: unknown; seed?: unknown };
+  try {
+    body = (await request.json()) as { prompt?: unknown; imageUrl?: unknown; stream?: unknown; seed?: unknown };
+  } catch {
+    return Response.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
+
+  const prompt = typeof body.prompt === "string" && body.prompt.trim() ? body.prompt.trim().slice(0, 2000) : "What is in this architectural image?";
+  const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
+  const stream = body.stream !== false;
+  const seed = typeof body.seed === "number" && Number.isFinite(body.seed) ? Math.floor(body.seed) : undefined;
+
+  if (!imageUrl) {
+    return Response.json({ error: "imageUrl is required." }, { status: 400 });
+  }
+
+  let imagePart: { inlineData: { mimeType: string; data: string } };
+  try {
+    imagePart = await resolveGeminiVisionImagePart(imageUrl, deps?.fetchFn);
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Invalid imageUrl." },
+      { status: 400 },
+    );
+  }
+
+  const runWithClient = <T,>(fn: (client: GeminiVisionClientLike) => Promise<T>): Promise<T> =>
+    deps?.client ? fn(deps.client) : withGeminiClient(fn);
+
+  if (!stream) {
+    try {
+      const response = await runWithClient((ai) =>
+        ai.models.generateContent({
+          model: GEMINI_TEXT_MODEL,
+          contents: {
+            parts: [imagePart, { text: prompt }],
+          },
+          config: {
+            systemInstruction:
+              "You are an architectural visualization specialist. Analyze geometry, materials, daylighting, optics, and furnishings clearly and concisely.",
+            ...(seed !== undefined ? { seed } : {}),
+          },
+        }),
+      );
+      const text = response.text ?? "";
+      return Response.json({
+        model: GEMINI_TEXT_MODEL,
+        choices: [{ message: { content: text } }],
+      });
+    } catch (error) {
+      const cleaned = cleanGeminiError(error);
+      return Response.json({ error: cleaned.message }, { status: 502 });
+    }
+  }
+
+  const encoder = new TextEncoder();
+  const sseStream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        const streamRes = await runWithClient((ai) =>
+          ai.models.generateContentStream({
+            model: GEMINI_TEXT_MODEL,
+            contents: {
+              parts: [imagePart, { text: prompt }],
+            },
+            config: {
+              systemInstruction:
+                "You are an architectural visualization specialist. Analyze geometry, materials, daylighting, optics, and furnishings clearly and concisely.",
+              ...(seed !== undefined ? { seed } : {}),
+            },
+          }),
+        );
+        for await (const chunk of streamRes) {
+          const text = chunk.text;
+          if (text) {
+            const payload = JSON.stringify({ choices: [{ delta: { content: text } }] });
+            controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+          }
+        }
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } catch (error) {
+        const cleaned = cleanGeminiError(error);
+        const errPayload = JSON.stringify({ error: { message: cleaned.message } });
+        controller.enqueue(encoder.encode(`data: ${errPayload}\n\n`));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(sseStream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
+}
+

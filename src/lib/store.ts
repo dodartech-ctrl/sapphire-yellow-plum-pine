@@ -22,6 +22,7 @@ import {
 } from "@/lib/engines";
 import {
   DEFAULT_HOUSE_STYLES,
+  upsertRoleKeyframe,
   type CameraKeyframe,
   type FloorPlanBlueprint,
   type HouseStyleProfile,
@@ -43,7 +44,27 @@ import {
   syncTargetToIdea,
   syncWorkflowPresetToIdea,
 } from "@/lib/prompt-sync";
+import {
+  WORKFLOW_TEMPLATES,
+  cloneWorkflow,
+  type ExecutionMode,
+  type NodeWorkflow,
+  type WorkflowRevision,
+} from "@/lib/node-studio";
+import {
+  removeMaterialAssignment,
+  updateMaterialAssignmentProps,
+  upsertMaterialAssignment,
+  type MeshMaterialAssignment,
+} from "@/lib/solar-and-materials";
 import type { ModelId } from "@/lib/types";
+import { buildTemplateCompiledNotes, type BriefTemplate } from "@/lib/brief-templates";
+import type { SharedBriefSnapshot } from "@/lib/brief-collab";
+import {
+  applyMarketSuggestionBatch as applySuggestionBatchPure,
+  applyMarketSuggestionPatch as applySuggestionPatchPure,
+  type MarketSuggestion,
+} from "@/lib/market-suggestions";
 
 export type SavedBrief = {
   id: string;
@@ -122,6 +143,8 @@ type State = {
   upload: string | null;
   sketchDataUrl: string | null;
   maskDataUrl: string | null;
+  binaryMaskDataUrl: string | null;
+  binaryMaskStats: { width: number; height: number; activePixels: number; coveragePct: number } | null;
   conditioningChannels: ConditioningChannels;
   floorPlanBlueprint: FloorPlanBlueprint | null;
   houseStyles: HouseStyleProfile[];
@@ -134,6 +157,7 @@ type State = {
   publishedGallery: PublishedGalleryProject[];
   engine: EngineState;
   scene3d: Scene3DState;
+  meshMaterialOverrides: MeshMaterialAssignment[];
   midLayerPreset: string | null;
   dictionaryBlocks: string[];
   dictionaryParams: Record<string, Record<string, string>>;
@@ -148,6 +172,14 @@ type State = {
   history: string[];
   projects: Project[];
   chat: ChatLine[];
+  nodeWorkflows: NodeWorkflow[];
+  activeNodeWorkflowId: string;
+  nodeExecutionMode: ExecutionMode;
+  nodeRevisions: WorkflowRevision[];
+  autoApproveMode: boolean;
+  approvedSuggestionIds: string[];
+  appliedSuggestionIds: string[];
+  beginnerGuideOpen: boolean;
   busy: boolean;
   selecting: boolean;
   past: DesignState[];
@@ -164,12 +196,18 @@ type State = {
   setUpload: (upload: string | null) => void;
   setSketchDataUrl: (url: string | null) => void;
   setMaskDataUrl: (url: string | null) => void;
+  setBinaryMaskData: (
+    binaryUrl: string | null,
+    stats?: { width: number; height: number; activePixels: number; coveragePct: number } | null,
+  ) => void;
   setConditioningChannel: (channel: keyof ConditioningChannels, url?: string) => void;
   clearConditioningChannels: () => void;
   setFloorPlanBlueprint: (blueprint: FloorPlanBlueprint | null) => void;
   addHouseStyle: (profile: HouseStyleProfile) => void;
   removeHouseStyle: (id: string) => void;
   addCameraKeyframe: (kf: CameraKeyframe) => void;
+  upsertCameraKeyframe: (kf: CameraKeyframe) => void;
+  setCameraKeyframes: (kfs: CameraKeyframe[]) => void;
   removeCameraKeyframe: (id: string) => void;
   clearCameraKeyframes: () => void;
   setEntourageItems: (items: PlacedEntourageItem[]) => void;
@@ -186,6 +224,7 @@ type State = {
       cameraPreset?: CameraPreset3D;
       sunHour?: number;
       promptNote?: string;
+      thumbnailUrl?: string;
       status?: RenderQueueItem["status"];
     },
   ) => RenderQueueItem;
@@ -197,9 +236,11 @@ type State = {
       cameraPreset?: CameraPreset3D;
       sunHour?: number;
       promptNote?: string;
+      thumbnailUrl?: string;
     }>,
   ) => RenderQueueItem[];
   updateQueueItem: (id: string, status: RenderQueueItem["status"], url?: string, extra?: { errorMessage?: string }) => void;
+  requeueQueueItem: (id: string) => void;
   removeQueueItem: (id: string) => void;
   clearCompletedQueue: () => void;
   retryFailedQueue: () => void;
@@ -210,10 +251,19 @@ type State = {
   setEngineField: <K extends keyof EngineState>(key: K, value: EngineState[K]) => void;
   applyWorkflowPreset: (preset: WorkflowPreset) => void;
   applyMidLayerPreset: (presetId: string | null) => void;
+  applyBriefTemplateConfig: (template: BriefTemplate, compiledPrompt?: string) => void;
+  applySharedBriefState: (snapshot: SharedBriefSnapshot) => void;
   setDictionarySelection: (blockIds: string[], params?: Record<string, Record<string, string>>) => void;
   setDictionaryParam: (blockId: string, key: string, value: string) => void;
   resetEngine: () => void;
   setScene3DField: <K extends keyof Scene3DState>(key: K, value: Scene3DState[K]) => void;
+  upsertMeshMaterial: (entry: MeshMaterialAssignment) => void;
+  updateMeshMaterial: (
+    objectId: string,
+    patch: Partial<Pick<MeshMaterialAssignment, "roughness" | "metalness" | "clearcoat" | "opacity" | "hex" | "materialId" | "materialLabel" | "transparent">>,
+  ) => void;
+  deleteMeshMaterial: (objectId: string) => void;
+  clearMeshMaterials: () => void;
   setSlotValues: (slotValues: Record<string, string>) => void;
   touchRecent: (id: string) => void;
   setActiveKey: (activeKey: string) => void;
@@ -241,6 +291,19 @@ type State = {
   undo: () => void;
   redo: () => void;
   addRequest: (request: Omit<SeatRequest, "id" | "at">) => void;
+  setActiveNodeWorkflowId: (id: string) => void;
+  upsertNodeWorkflow: (workflow: NodeWorkflow) => void;
+  createNodeWorkflowFromTemplate: (templateId?: string, name?: string) => NodeWorkflow;
+  deleteNodeWorkflow: (id: string) => void;
+  setNodeExecutionMode: (mode: ExecutionMode) => void;
+  addNodeRevision: (rev: Omit<WorkflowRevision, "id" | "createdAt">) => void;
+  restoreNodeRevision: (revId: string) => void;
+  setAutoApproveMode: (enabled: boolean) => void;
+  setBeginnerGuideOpen: (open: boolean) => void;
+  approveMarketSuggestion: (id: string) => void;
+  applyMarketSuggestion: (suggestion: MarketSuggestion) => void;
+  applyMarketSuggestionBatch: (suggestions: MarketSuggestion[], autoApprove?: boolean) => void;
+  resetAppliedMarketSuggestions: () => void;
 };
 
 function remember(state: { design: DesignState; past: DesignState[] }, design: DesignState) {
@@ -261,6 +324,8 @@ export const useOriel = create<State>()(
       upload: null,
       sketchDataUrl: null,
       maskDataUrl: null,
+      binaryMaskDataUrl: null,
+      binaryMaskStats: null,
       conditioningChannels: {},
       floorPlanBlueprint: null,
       houseStyles: DEFAULT_HOUSE_STYLES,
@@ -273,6 +338,7 @@ export const useOriel = create<State>()(
       publishedGallery: [],
       engine: DEFAULT_ENGINE,
       scene3d: DEFAULT_SCENE3D,
+      meshMaterialOverrides: [],
       midLayerPreset: null,
       dictionaryBlocks: [],
       dictionaryParams: {},
@@ -287,6 +353,14 @@ export const useOriel = create<State>()(
       history: [],
       projects: [],
       chat: [],
+      nodeWorkflows: WORKFLOW_TEMPLATES.map(cloneWorkflow),
+      activeNodeWorkflowId: WORKFLOW_TEMPLATES[0].id,
+      nodeExecutionMode: "hybrid",
+      nodeRevisions: [],
+      autoApproveMode: true,
+      approvedSuggestionIds: [],
+      appliedSuggestionIds: [],
+      beginnerGuideOpen: false,
       busy: false,
       selecting: false,
       past: [],
@@ -332,6 +406,8 @@ export const useOriel = create<State>()(
       setUpload: (upload) => set({ upload }),
       setSketchDataUrl: (sketchDataUrl) => set({ sketchDataUrl }),
       setMaskDataUrl: (maskDataUrl) => set({ maskDataUrl }),
+      setBinaryMaskData: (binaryMaskDataUrl, binaryMaskStats = null) =>
+        set({ binaryMaskDataUrl, binaryMaskStats }),
       setConditioningChannel: (channel, url) =>
         set((state) => ({
           conditioningChannels: { ...state.conditioningChannels, [channel]: url },
@@ -355,6 +431,12 @@ export const useOriel = create<State>()(
         set((state) => ({
           cameraKeyframes: [...state.cameraKeyframes, kf].slice(0, 6),
         })),
+      upsertCameraKeyframe: (kf) =>
+        set((state) => ({
+          cameraKeyframes: upsertRoleKeyframe(state.cameraKeyframes, kf),
+        })),
+      setCameraKeyframes: (cameraKeyframes) =>
+        set({ cameraKeyframes: cameraKeyframes.slice(0, 6) }),
       removeCameraKeyframe: (id) =>
         set((state) => ({
           cameraKeyframes: state.cameraKeyframes.filter((kf) => kf.id !== id),
@@ -401,6 +483,7 @@ export const useOriel = create<State>()(
             cameraPreset: spec.cameraPreset,
             sunHour: spec.sunHour,
             promptNote: spec.promptNote,
+            thumbnailUrl: spec.thumbnailUrl,
             status: "pending",
           }),
         );
@@ -409,6 +492,14 @@ export const useOriel = create<State>()(
       },
       updateQueueItem: (id, status, url, extra) =>
         set((state) => ({ queue: updateQueueListStatus(state.queue, id, status, url, extra) })),
+      requeueQueueItem: (id) =>
+        set((state) => ({
+          queue: state.queue.map((item) =>
+            item.id === id
+              ? { ...item, status: "pending", errorMessage: undefined, finishedAt: undefined, durationMs: undefined }
+              : item,
+          ),
+        })),
       removeQueueItem: (id) => set((state) => ({ queue: state.queue.filter((item) => item.id !== id) })),
       clearCompletedQueue: () =>
         set((state) => ({
@@ -488,6 +579,54 @@ export const useOriel = create<State>()(
             scene3d: nextScene3D,
           };
         }),
+      applyBriefTemplateConfig: (template, compiledPrompt) =>
+        set((state) => {
+          const vertical = template.designPatch.vertical ?? state.design.vertical;
+          const basePicks = Object.fromEntries(
+            GROUPS[vertical].map((g) => [g.id, template.designPatch.picks?.[g.id] ?? g.options[0]]),
+          );
+          const nextDesign = sanitizeDesign({
+            ...state.design,
+            ...template.designPatch,
+            vertical,
+            picks: {
+              ...basePicks,
+              ...(template.designPatch.picks ?? {}),
+            },
+          });
+          const nextEngine = sanitizeEngineState({
+            ...state.engine,
+            ...template.enginePatch,
+          });
+          const nextScene3D = sanitizeScene3DState({
+            ...state.scene3d,
+            ...template.scene3dPatch,
+          });
+          const nextFrame = sanitizeFrame({
+            ...state.frame,
+            ratio: template.frameRatio,
+            resolution: template.frameResolution,
+          });
+          return {
+            design: nextDesign,
+            engine: nextEngine,
+            scene3d: nextScene3D,
+            frame: nextFrame,
+            dictionaryBlocks: [...template.dictionaryBlocks].slice(0, 64),
+            midLayerPreset: null,
+            idea: compiledPrompt?.trim() || buildTemplateCompiledNotes(template),
+          };
+        }),
+      applySharedBriefState: (snapshot) =>
+        set(() => ({
+          design: sanitizeDesign(snapshot.design),
+          engine: sanitizeEngineState(snapshot.engine),
+          scene3d: sanitizeScene3DState(snapshot.scene3d),
+          frame: sanitizeFrame(snapshot.frame),
+          dictionaryBlocks: [...(snapshot.dictionaryBlocks ?? [])].slice(0, 64),
+          dictionaryParams: snapshot.dictionaryParams ?? {},
+          idea: snapshot.synthesizedPrompt || snapshot.customNotes || "",
+        })),
       setDictionarySelection: (dictionaryBlocks, params) =>
         set((state) => ({
           dictionaryBlocks: [...dictionaryBlocks].slice(0, 64),
@@ -508,6 +647,19 @@ export const useOriel = create<State>()(
         set((state) => ({
           scene3d: sanitizeScene3DState({ ...state.scene3d, [key]: value }),
         })),
+      upsertMeshMaterial: (entry) =>
+        set((state) => ({
+          meshMaterialOverrides: upsertMaterialAssignment(state.meshMaterialOverrides, entry),
+        })),
+      updateMeshMaterial: (objectId, patch) =>
+        set((state) => ({
+          meshMaterialOverrides: updateMaterialAssignmentProps(state.meshMaterialOverrides, objectId, patch),
+        })),
+      deleteMeshMaterial: (objectId) =>
+        set((state) => ({
+          meshMaterialOverrides: removeMaterialAssignment(state.meshMaterialOverrides, objectId),
+        })),
+      clearMeshMaterials: () => set({ meshMaterialOverrides: [] }),
       setSlotValues: (slotValues) => set({ slotValues }),
       touchRecent: (id) =>
         set((state) => ({ recent: [id, ...state.recent.filter((item) => item !== id)].slice(0, 6) })),
@@ -616,6 +768,135 @@ export const useOriel = create<State>()(
         set((state) => ({
           requests: [{ ...request, id: `r-${Date.now()}`, at: Date.now() }, ...state.requests].slice(0, 12),
         })),
+      setActiveNodeWorkflowId: (activeNodeWorkflowId) => set({ activeNodeWorkflowId }),
+      upsertNodeWorkflow: (workflow) =>
+        set((state) => {
+          const exists = state.nodeWorkflows.some((w) => w.id === workflow.id);
+          const updated = { ...workflow, updatedAt: Date.now() };
+          return {
+            nodeWorkflows: exists
+              ? state.nodeWorkflows.map((w) => (w.id === workflow.id ? updated : w))
+              : [updated, ...state.nodeWorkflows].slice(0, 20),
+          };
+        }),
+      createNodeWorkflowFromTemplate: (templateId, name) => {
+        const tpl =
+          WORKFLOW_TEMPLATES.find((t) => t.id === templateId) ?? WORKFLOW_TEMPLATES[0];
+        const cloned = cloneWorkflow(tpl);
+        const created: NodeWorkflow = {
+          ...cloned,
+          id: `wf-${Date.now().toString(36)}`,
+          name: name?.trim() || `${tpl.name} Copy`,
+          updatedAt: Date.now(),
+        };
+        set((state) => ({
+          nodeWorkflows: [created, ...state.nodeWorkflows].slice(0, 20),
+          activeNodeWorkflowId: created.id,
+        }));
+        return created;
+      },
+      deleteNodeWorkflow: (id) =>
+        set((state) => {
+          const remaining = state.nodeWorkflows.filter((w) => w.id !== id);
+          const nextList = remaining.length > 0 ? remaining : WORKFLOW_TEMPLATES.map(cloneWorkflow);
+          return {
+            nodeWorkflows: nextList,
+            activeNodeWorkflowId:
+              state.activeNodeWorkflowId === id ? nextList[0].id : state.activeNodeWorkflowId,
+          };
+        }),
+      setNodeExecutionMode: (nodeExecutionMode) => set({ nodeExecutionMode }),
+      addNodeRevision: (rev) =>
+        set((state) => ({
+          nodeRevisions: [
+            {
+              ...rev,
+              id: `nrev-${Date.now().toString(36)}`,
+              createdAt: Date.now(),
+              outputPreviewUrl:
+                rev.outputPreviewUrl && rev.outputPreviewUrl.length > 65000
+                  ? undefined
+                  : rev.outputPreviewUrl,
+            },
+            ...state.nodeRevisions,
+          ].slice(0, 20),
+        })),
+      restoreNodeRevision: (revId) =>
+        set((state) => {
+          const found = state.nodeRevisions.find((r) => r.id === revId);
+          if (!found) return state;
+          const restored = cloneWorkflow(found.snapshot);
+          return {
+            activeNodeWorkflowId: restored.id,
+            nodeWorkflows: state.nodeWorkflows.some((w) => w.id === restored.id)
+              ? state.nodeWorkflows.map((w) => (w.id === restored.id ? restored : w))
+              : [restored, ...state.nodeWorkflows].slice(0, 20),
+          };
+        }),
+      setAutoApproveMode: (autoApproveMode) => set({ autoApproveMode }),
+      setBeginnerGuideOpen: (beginnerGuideOpen) => set({ beginnerGuideOpen }),
+      approveMarketSuggestion: (id) =>
+        set((state) => ({
+          approvedSuggestionIds: state.approvedSuggestionIds.includes(id)
+            ? state.approvedSuggestionIds
+            : [...state.approvedSuggestionIds, id].slice(-200),
+        })),
+      applyMarketSuggestion: (suggestion) =>
+        set((state) => {
+          const patched = applySuggestionPatchPure(
+            {
+              idea: state.idea,
+              design: state.design,
+              engine: state.engine,
+              scene3d: state.scene3d,
+              frame: state.frame,
+            },
+            suggestion,
+          );
+          return {
+            ...remember(state, patched.design),
+            idea: patched.idea,
+            engine: patched.engine,
+            scene3d: patched.scene3d,
+            frame: patched.frame,
+            approvedSuggestionIds: state.approvedSuggestionIds.includes(suggestion.id)
+              ? state.approvedSuggestionIds
+              : [...state.approvedSuggestionIds, suggestion.id].slice(-200),
+            appliedSuggestionIds: state.appliedSuggestionIds.includes(suggestion.id)
+              ? state.appliedSuggestionIds
+              : [...state.appliedSuggestionIds, suggestion.id].slice(-200),
+          };
+        }),
+      applyMarketSuggestionBatch: (suggestions, autoApprove = true) =>
+        set((state) => {
+          if (suggestions.length === 0) return state;
+          const patched = applySuggestionBatchPure(
+            {
+              idea: state.idea,
+              design: state.design,
+              engine: state.engine,
+              scene3d: state.scene3d,
+              frame: state.frame,
+            },
+            suggestions,
+          );
+          const nextApplied = new Set(state.appliedSuggestionIds);
+          const nextApproved = new Set(state.approvedSuggestionIds);
+          for (const item of suggestions) {
+            nextApplied.add(item.id);
+            if (autoApprove) nextApproved.add(item.id);
+          }
+          return {
+            ...remember(state, patched.design),
+            idea: patched.idea,
+            engine: patched.engine,
+            scene3d: patched.scene3d,
+            frame: patched.frame,
+            approvedSuggestionIds: [...nextApproved].slice(-200),
+            appliedSuggestionIds: [...nextApplied].slice(-200),
+          };
+        }),
+      resetAppliedMarketSuggestions: () => set({ approvedSuggestionIds: [], appliedSuggestionIds: [] }),
     }),
     {
       name: "oriel-studio",
@@ -633,6 +914,7 @@ export const useOriel = create<State>()(
         design: state.design,
         engine: state.engine,
         scene3d: state.scene3d,
+        meshMaterialOverrides: state.meshMaterialOverrides.slice(0, 48),
         houseStyles: state.houseStyles,
         reviewPins: state.reviewPins,
         midLayerPreset: state.midLayerPreset,
@@ -640,18 +922,33 @@ export const useOriel = create<State>()(
         dictionaryParams: state.dictionaryParams,
         publishedGallery: state.publishedGallery.slice(0, 8),
         projects: state.projects,
+        nodeWorkflows: state.nodeWorkflows.slice(0, 12),
+        activeNodeWorkflowId: state.activeNodeWorkflowId,
+        nodeExecutionMode: state.nodeExecutionMode,
+        nodeRevisions: state.nodeRevisions.slice(0, 10),
+        autoApproveMode: state.autoApproveMode,
+        approvedSuggestionIds: state.approvedSuggestionIds.slice(-200),
+        appliedSuggestionIds: state.appliedSuggestionIds.slice(-200),
+        beginnerGuideOpen: state.beginnerGuideOpen,
         idea: state.idea,
         frame: state.frame,
         credits: state.credits,
       }),
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<State>;
+        const persistedWorkflows =
+          Array.isArray(saved.nodeWorkflows) && saved.nodeWorkflows.length > 0
+            ? saved.nodeWorkflows.slice(0, 12)
+            : WORKFLOW_TEMPLATES.map(cloneWorkflow);
         return {
           ...current,
           ...saved,
           design: sanitizeDesign(saved.design),
           engine: sanitizeEngineState(saved.engine),
           scene3d: sanitizeScene3DState(saved.scene3d),
+          meshMaterialOverrides: Array.isArray(saved.meshMaterialOverrides)
+            ? saved.meshMaterialOverrides.slice(0, 48)
+            : [],
           houseStyles: Array.isArray(saved.houseStyles) && saved.houseStyles.length ? saved.houseStyles.slice(0, 12) : DEFAULT_HOUSE_STYLES,
           reviewPins: Array.isArray(saved.reviewPins) ? saved.reviewPins.slice(-60) : [],
           midLayerPreset: typeof saved.midLayerPreset === "string" ? saved.midLayerPreset : null,
@@ -663,6 +960,27 @@ export const useOriel = create<State>()(
             : [],
           publishedGallery: Array.isArray(saved.publishedGallery) ? saved.publishedGallery.slice(0, 12) : [],
           projects: Array.isArray(saved.projects) ? saved.projects.slice(0, 24) : [],
+          nodeWorkflows: persistedWorkflows,
+          activeNodeWorkflowId:
+            typeof saved.activeNodeWorkflowId === "string" &&
+            persistedWorkflows.some((w) => w.id === saved.activeNodeWorkflowId)
+              ? saved.activeNodeWorkflowId
+              : persistedWorkflows[0].id,
+          nodeExecutionMode:
+            saved.nodeExecutionMode === "local" ||
+            saved.nodeExecutionMode === "cloud" ||
+            saved.nodeExecutionMode === "hybrid"
+              ? saved.nodeExecutionMode
+              : "hybrid",
+          nodeRevisions: Array.isArray(saved.nodeRevisions) ? saved.nodeRevisions.slice(0, 10) : [],
+          autoApproveMode: typeof saved.autoApproveMode === "boolean" ? saved.autoApproveMode : true,
+          approvedSuggestionIds: Array.isArray(saved.approvedSuggestionIds)
+            ? saved.approvedSuggestionIds.filter((s): s is string => typeof s === "string").slice(-200)
+            : [],
+          appliedSuggestionIds: Array.isArray(saved.appliedSuggestionIds)
+            ? saved.appliedSuggestionIds.filter((s): s is string => typeof s === "string").slice(-200)
+            : [],
+          beginnerGuideOpen: typeof saved.beginnerGuideOpen === "boolean" ? saved.beginnerGuideOpen : false,
           idea: typeof saved.idea === "string" ? saved.idea : "",
           frame: sanitizeFrame(saved.frame),
           credits: typeof saved.credits === "number" ? Math.max(0, Math.min(5000, saved.credits)) : 4500,

@@ -1,0 +1,502 @@
+# **Product Requirements Document (PRD)**
+
+## **AI ArchViz Studio — Node-Based Architectural AI Creation Platform**
+
+Product Blueprint · Version 1.0
+
+**Product vision:** Build a professional, node-based AI architectural visualization studio that combines image generation, intelligent image editing, segmentation, annotation, reference-image control, architectural design presets, climate and mood simulation, and image-to-video generation.
+
+The product will combine the workflow flexibility of ComfyUI with a visual editing canvas, architecture-specific AI controls, and a professional real-time preview experience.
+
+The goal is to let architects, interior designers, visualization artists, and real estate developers create, modify, and animate architectural designs without rebuilding scenes from scratch.
+
+TARGET PRODUCT EXPERIENCE
+
+[Griptape | Unlocking Even More Creative AI Workflows: Introducing RunwayML Integration in Griptape Nodes](https://images.openai.com/static-rsc-4/8t9Na49oxVmb699XCcP4EV_Rq_LXHGNEcf2WHIBK2G0KdUp4f-RwGIGmF2OoJl8O8WQoTqSgw_TBnKo9BY83wDoTKlwgl9E4mM18zQNIOKE6GyPPjtpJjMk0kTHdr-M_qffH7Ewxjm42WJgYs7BVf3Ieqo7xWqt2dhPJadUtHSQ?purpose=inline)
+
+[AI修图建筑：把歪楼扶正、把灰天换成蓝天的建筑摄影后期全流程 - FlowPix](https://images.openai.com/static-rsc-4/40vrIdgDrWcn9u09UaDUxd6PDoBKdeCVzvvJeKEOYM-ZrBz5L72ZQwYXU4lvb-qDBPaT__rS2KTuK3e5Y6pOSTFB2CR8etnZd7dFZ4aHw_Qx3HI_LRFY8LGUUrqqcPyWVgE5yBkhbfW_0YcaVI2mrWMHvmDx3oyBZlFFS-X6nVA?purpose=inline)
+
+[Gami Arquitetura — Arquitetura de Alto Padrão em Brasília](https://images.openai.com/static-rsc-4/Ef1p78yAF379dHi7golzC00M31t4PVasoeX1XibVRGnRUqSoNaquKSHzO4F6g3IJs7cep3EB_gXZY30BCLWP6a-7BzpL4alzQeNE7PZcsF7HI-YNjlTWAIe-k5Ql2zHaVpGpximWU3sMd2bSvHy2thvJOyMti-eGE2Ox9yhG9kM?purpose=inline)
+
+14
+
+Visual references for the proposed workflow editor, architectural editing canvas, and rendering output. These are inspiration references, not screenshots of a completed product.
+
+# **12**
+
+Core modules
+
+# **40+**
+
+Planned node types
+
+# **3**
+
+Execution modes
+
+## **1. Product architecture**
+
+The studio should have two connected workspaces: a **Node Workflow Editor** for configuring generation pipelines and an **AI Image Canvas** for direct visual editing. Both share the same assets, model settings, history, and generation jobs.
+
+**AI ArchViz Studio**
+
+Web/Desktop UI · Projects · Assets · Presets
+
+**Node Editor**
+
+Graph pipelines and execution
+
+**AI Canvas**
+
+Masks, annotations, references
+
+Shared workflow orchestration
+
+**AI Processing Layer**
+
+ComfyUI · Model routing · Segmentation · ControlNet · Video
+
+Local GPU
+
+Cloud GPU
+
+Hybrid
+
+## **2. Complete feature modules**
+
+| Module                      | Product requirements                                                        | Priority |
+| --------------------------- | --------------------------------------------------------------------------- | -------- |
+| 1. Node Workflow Studio     | Drag-and-drop nodes, typed ports, connections, templates, execution history | P0       |
+| 2. AI Image Generator       | Text-to-image, image-to-image, batch generation, upscale                    | P0       |
+| 3. AI Editing Canvas        | Layers, selection tools, masks, undo/redo, zoom, pan                        | P0       |
+| 4. AI Segmentation          | Automatic object masks, click selection, SAM-assisted refinement            | P0       |
+| 5. Annotation & Context     | Draw areas, arrows, text instructions, object labels                        | P0       |
+| 6. Reference Image System   | Multiple references for materials, style, structure, lighting               | P0       |
+| 7. Architecture Presets     | Interior/exterior, room type, building type, camera, material               | P0       |
+| 8. Mood & Climate Engine    | Time of day, weather, seasons, geographical lighting                        | P1       |
+| 9. Image-to-Video Studio    | Camera movements, animation prompts, frame controls                         | P1       |
+| 10. 3D Integration          | Blender, GLB, depth, normal maps, camera matching                           | P1       |
+| 11. Asset & Project Library | Versions, materials, prompts, model presets, reusable graphs                | P1       |
+| 12. Production & Export     | Queues, GPU monitoring, comparisons, exports, API                           | P1       |
+
+P0 is required for the initial production-ready editing workflow. P1 is the next release scope.
+
+## **3. Interactive node workflow prototype**
+
+The following is a functional workflow-planning prototype. Select a node to inspect its role, or switch templates to explore different AI pipelines.
+
+**Workflow Designer**
+
+Concept demo
+
+Image generation and editing
+
+Inspect a workflow node:
+
+Input ImageAI SegmentationReference + ContextMasked AI EditFinal Render
+
+Masked AI Edit
+
+Controlled inpainting
+
+Node ID: edit · Execution: queued after dependencies
+
+## **4. AI Canvas — image editing requirements**
+
+[Using the Edit Tool | Gendo](https://images.openai.com/static-rsc-4/ehbs4rK7tXnaSFYJIX_1b7N_G9UHIZHDiCgs4er8wO5zMLmylqShyKomeYigvKM_SwgqavV0pfRoGRelQ7BcNL46PcYgyQ_moZzkvn3ftZeVeIvgLRolcrCf9LYm_0cHUYhUFuh-TFsdLS34kG6dsPNp5HI5WQfMNKywZUsCKko?purpose=inline)
+
+[gendo.ai](https://www.gendo.ai/resources/learn/edit-tool?utm_source=chatgpt.com)
+
+The Canvas is the main user-facing workspace. Users should be able to upload an existing render, select an architectural element, describe a modification, attach reference images, and generate a revised version while preserving the remaining design.
+
+### **Canvas editing workflow**
+
+1. **Upload or generate an image.** Accept PNG, JPEG, WebP, rendered 3D views, and compatible depth/normal maps.
+2. **Select the edit area.** Use brush, polygon, bounding box, click-to-segment, or text-based object selection.
+3. **Refine the mask.** Add/subtract selections, feather edges, expand/shrink masks, and protect objects.
+4. **Annotate the required change.** Draw arrows, sketch outlines, pin notes, and assign specific instructions to regions.
+5. **Attach reference images.** Specify which reference controls the material, architectural style, furniture, lighting, or composition.
+6. **Generate the edited region.** Apply inpainting with context from the surrounding image, structural controls, and reference weights.
+7. **Compare and approve.** Show before/after, side-by-side, overlay, version history, and send the approved result to the video workflow.
+
+### **AI editing tools**
+
+| Tool             | Expected behavior                                                 |
+| ---------------- | ----------------------------------------------------------------- |
+| Smart Select     | Click a window, wall, roof, tree, floor, or furniture item        |
+| Semantic Select  | Enter “select all glass windows”                                  |
+| Annotation Brush | Paint an area and assign a text instruction                       |
+| Reference Pin    | Attach a specific reference to a selected region                  |
+| Material Replace | Change marble, wood, paint, tiles, or glass                       |
+| Object Replace   | Replace furniture, vegetation, vehicles, decor                    |
+| Add Object       | Insert objects with perspective and scale awareness               |
+| Remove Object    | Remove an object and reconstruct the background                   |
+| Geometry Lock    | Minimize changes to protected walls, openings, and rooflines      |
+| Relight          | Change sun direction, artificial lighting, exposure, and ambience |
+| Outpaint         | Extend the canvas beyond the original image boundaries            |
+
+**Important technical requirement:** Geometry preservation is a constraint, not a guarantee. The system must provide a structural-difference preview and flag unintended architectural changes.
+
+## **5. Reference-image and context engine**
+
+A single generation should support multiple references with separate purposes.
+
+**Reference Influence Controls**
+
+Example settings
+
+Architectural geometry
+
+90%
+
+Building shape, perspective, window placement
+
+Material reference
+
+70%
+
+Facade, wood, stone, glass, paint
+
+Style reference
+
+65%
+
+Minimalist, contemporary, tropical, luxury
+
+Lighting reference
+
+50%
+
+Mood, exposure, color temperature
+
+&#x20;Copy reference configurationThese percentages are product-level control targets. Each AI adapter must map them to supported model parameters; they are not universal ComfyUI weights.
+
+Each reference must store its asset ID, purpose, target region, influence setting, crop, preprocessing settings, and provenance. The workflow must support missing references, conflicting instructions, and reusable reference sets.
+
+## **6. Mood, climate, and architectural experience presets**
+
+The environment engine should be more than a prompt dropdown. It should generate structured environmental instructions and, where geometry and location are available, connect to physically based lighting and weather simulation.
+
+**Architecture Preset Builder**
+
+Scene typeExterior architecture
+
+Visual moodCinematic
+
+Climate / weatherRainy
+
+Time of dayBlue hour / dusk
+
+Experience / atmosphereLuxury hospitality
+
+Additional architectural context
+
+Preserve the exact building geometry, facade proportions and window positions.
+
+**Generated prompt**
+
+Live preview
+
+Create a photorealistic Exterior architecture architectural visualization. Mood: Cinematic. Climate/weather: Rainy. Time of day: Blue hour / dusk. Desired experience: Luxury hospitality. Preserve the exact building geometry, facade proportions and window positions. Maintain believable architectural materials, perspective, and lighting. Avoid unwanted geometry changes.
+
+&#x20;Copy prompt
+
+### **Extended environmental parameters**
+
+The production version should also support:
+
+- **Climate:** geographic location, season, humidity, temperature, rainfall, snow, wind, cloud coverage, haze, and atmospheric visibility.
+- **Lighting:** sun position, geographic orientation, exposure, white balance, color temperature, shadow softness, and artificial lighting.
+- **Mood:** calm, luxury, dramatic, futuristic, heritage, tropical, minimalist, editorial, and cinematic.
+- **Experience:** cozy, welcoming, premium hospitality, biophilic, commercial, wellness, and lively urban atmosphere.
+- **Camera:** focal length, field of view, height, tilt, two-point perspective, depth of field, and composition.
+- **Scene activity:** people, vehicles, vegetation movement, water, clouds, rain, and ambient animation.
+
+For physically accurate sun studies, the product must require location, date, time, orientation, and 3D scene data. An image-only AI approximation must be clearly labeled as illustrative.
+
+## **7. Image-to-video module**
+
+[3D-Visualisierung für Immobilien & Häuser: Der komplette Leitfaden](https://images.openai.com/static-rsc-4/t2-vClBNIhSc4_H7gAl_TqtNx5uD0AtRmu3oJX4hgGlAqP0gGaL2lz-hvjqe4lF7P4W4J9kx4COBr8SdSV2nXwbyHbb1XKB0i80YYmv2uDmyGkrse7WrRk-R0QignTWpLQ13FmRddfoAq-p0AbZ9skkRs1pM5Ozbo-TvD8PrYIg?purpose=inline)
+
+[Sensory Design: How Lighting, Textures, and Sound Elevate Spaces  — designbar](https://images.openai.com/static-rsc-4/LX5NX9Y-Cm9H4UEUVIWCP3YgTqLJZVr9nHaisBF58yRqCQ5c5VBL3N7Tg64D0ksS7Vj2PjgsgCXWwJvzUQQ6N0Ff8OquN_ndAcfFkRMgDcCAU6r02erfTPuvJvJBt6AxTyHLLLY_YGqgdgOvdt7TnklikMiRyYPqSSk1BovX2Nk?purpose=inline)
+
+[Midjourney prompt: modern house design, photorealistic, w...](https://images.openai.com/static-rsc-4/7FT4psg9TvOMrTRextBXj-wdwh7yLB91HuhzqJ0xKt4w2DXxppKdbTqykgvGyj-08_ddQL2QytD2YXSqM-JK_4_t5fTuItXKpTKGONhBUDhIVxca4tZLPBVfAzL3WbduPIk-0CSEwBsfrcexVRgcU0hN6l25-9wx61ozy8thLRM?purpose=inline)
+
+18
+
+The Video Studio converts approved still renders into architectural motion clips.
+
+| Feature         | Requirements                                                 |
+| --------------- | ------------------------------------------------------------ |
+| Input           | Single image, first/last frames, reference frames            |
+| Camera movement | Dolly in/out, pan, tilt, orbit, crane, push-in               |
+| Motion regions  | Trees, people, vehicles, water, curtains, clouds             |
+| Duration        | 5–10-second clips initially; longer videos through stitching |
+| Output          | MP4, WebM, configurable FPS and resolution                   |
+| Consistency     | Architecture-lock mask, reference conditioning, frame checks |
+| Timeline        | Clip ordering, transitions, trim, speed, keyframes           |
+| Audio           | Optional ambience and licensed soundtrack integration        |
+
+**Video generation acceptance criterion:** A user can take an approved still render, specify a slow camera movement, render a short clip, review temporal consistency, and export the result. Exact camera-path fidelity cannot be promised from single-image generative video; deterministic camera control requires a 3D scene or depth-aware rendering pipeline.
+
+## **8. Open-source reference repositories**
+
+These are the recommended foundations to reuse rather than developing every component from zero.
+
+| Project                                                                                          | Role in product                                      | License / notes                                     |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------- | --------------------------------------------------- |
+| [ComfyUI](https://github.com/Comfy-Org/ComfyUI?utm_source=chatgpt.com)                           | AI inference, graph execution, image/video workflows | GPL-3.0; keep backend licensing obligations in view |
+| [React Flow](https://github.com/xyflow/xyflow?utm_source=chatgpt.com)                            | Node editor frontend                                 | MIT                                                 |
+| [React Konva](https://github.com/konvajs/react-konva?utm_source=chatgpt.com)                     | Image canvas, selection overlays, annotations        | MIT                                                 |
+| [Segment Anything 2](https://github.com/facebookresearch/sam2?utm_source=chatgpt.com)            | Interactive segmentation                             | Check model/checkpoint terms separately             |
+| [ComfyUI SAM2 Nodes](https://github.com/kijai/ComfyUI-segment-anything-2?utm_source=chatgpt.com) | Connect segmentation to ComfyUI                      | Verify repository and dependency terms              |
+| [ControlNet Aux](https://github.com/Fannovel16/comfyui_controlnet_aux?utm_source=chatgpt.com)    | Depth, edges, line art, pose preprocessing           | Check individual preprocessors                      |
+| [IPAdapter Plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus?utm_source=chatgpt.com)         | Reference-image conditioning                         | Check model-specific support                        |
+| [ControlNet](https://github.com/lllyasviel/ControlNet?utm_source=chatgpt.com)                    | Structural conditioning                              | Model weights have separate terms                   |
+| [Diffusers](https://github.com/huggingface/diffusers?utm_source=chatgpt.com)                     | Alternative inference adapters                       | Apache-2.0 code; model licenses vary                |
+| [Blender](https://github.com/blender/blender?utm_source=chatgpt.com)                             | 3D import, rendering, geometry passes                | GPL                                                 |
+| [Three.js](https://github.com/mrdoob/three.js?utm_source=chatgpt.com)                            | Web-based 3D preview                                 | MIT                                                 |
+| [Kandinsky](https://github.com/ai-forever/Kandinsky-3?utm_source=chatgpt.com)                    | Additional image-model research                      | Verify model and code terms                         |
+
+ComfyUI is a suitable core engine because it already provides modular workflows, API integration, local execution, model offloading, and reusable graph pipelines.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+&#x20;React Flow and React Konva are MIT-licensed options for the two primary frontend workspaces.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+The ComfyUI ecosystem also has SAM2 segmentation nodes and native Wan 2.2 video workflows, which reduce the amount of custom AI integration needed.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+**Licensing requirement:** Before commercial distribution, verify the exact versions, checkpoints, LoRAs, custom nodes, and hosted-model terms. A permissive frontend license does not automatically make the complete AI product permissively licensed.
+
+## **9. Recommended technology stack**
+
+| Layer            | Technology                | Responsibility                 |
+| ---------------- | ------------------------- | ------------------------------ |
+| Frontend         | React + TypeScript + Vite | Studio UI                      |
+| Node Editor      | React Flow                | Graph interactions             |
+| Canvas           | React Konva               | Masks and annotation           |
+| 3D Viewport      | Three.js                  | GLB, cameras, 3D preview       |
+| State            | Zustand + TanStack Query  | Editor and server state        |
+| API              | FastAPI                   | Model orchestration            |
+| Workflow Engine  | ComfyUI                   | AI graph execution             |
+| Backend Services | Node.js / NestJS          | Projects, users, billing       |
+| Database         | PostgreSQL                | Projects, jobs, metadata       |
+| Queue            | Redis + workers           | Generation scheduling          |
+| Storage          | S3-compatible / MinIO     | Images, videos, masks          |
+| Local/Desktop    | Tauri                     | Windows desktop packaging      |
+| Rendering        | Blender                   | Geometry, depth, normal passes |
+| Deployment       | Docker + GPU workers      | Local/cloud execution          |
+
+### **High-level backend workflow**
+
+\#chatgpt-mermaid-\_r_1ta\_{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;fill:rgb(13, 13, 13);}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#chatgpt-mermaid-\_r_1ta\_ .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_1ta\_ .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_1ta\_ .error-icon{fill:rgb(243, 243, 243);}#chatgpt-mermaid-\_r_1ta\_ .error-text{fill:rgb(13, 13, 13);stroke:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ .edge-thickness-normal{stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ .edge-thickness-thick{stroke-width:3.5px;}#chatgpt-mermaid-\_r_1ta\_ .edge-pattern-solid{stroke-dasharray:0;}#chatgpt-mermaid-\_r_1ta\_ .edge-thickness-invisible{stroke-width:0;fill:none;}#chatgpt-mermaid-\_r_1ta\_ .edge-pattern-dashed{stroke-dasharray:3;}#chatgpt-mermaid-\_r_1ta\_ .edge-pattern-dotted{stroke-dasharray:2;}#chatgpt-mermaid-\_r_1ta\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1ta\_ .marker.cross{stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1ta\_ svg{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;}#chatgpt-mermaid-\_r_1ta\_ p{margin:0;}#chatgpt-mermaid-\_r_1ta\_ .label{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ .cluster-label text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ .cluster-label span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ .cluster-label span p{background-color:transparent;}#chatgpt-mermaid-\_r_1ta\_ .label text,#chatgpt-mermaid-\_r_1ta\_ span{fill:rgb(13, 13, 13);color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ .node rect,#chatgpt-mermaid-\_r_1ta\_ .node circle,#chatgpt-mermaid-\_r_1ta\_ .node ellipse,#chatgpt-mermaid-\_r_1ta\_ .node polygon,#chatgpt-mermaid-\_r_1ta\_ .node path{fill:rgb(222, 234, 251);stroke:rgb(83, 154, 248);stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ .rough-node .label text,#chatgpt-mermaid-\_r_1ta\_ .node .label text,#chatgpt-mermaid-\_r_1ta\_ .image-shape .label,#chatgpt-mermaid-\_r_1ta\_ .icon-shape .label{text-anchor:middle;}#chatgpt-mermaid-\_r_1ta\_ .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ .rough-node .label,#chatgpt-mermaid-\_r_1ta\_ .node .label,#chatgpt-mermaid-\_r_1ta\_ .image-shape .label,#chatgpt-mermaid-\_r_1ta\_ .icon-shape .label{text-align:center;}#chatgpt-mermaid-\_r_1ta\_ .node.clickable{cursor:pointer;}#chatgpt-mermaid-\_r_1ta\_ .root .anchor path{fill:rgb(143, 143, 143)!important;stroke-width:0;stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1ta\_ .arrowheadPath{fill:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1ta\_ .edgePath .path{stroke:rgb(143, 143, 143);stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ .flowchart-link{stroke:rgb(143, 143, 143);fill:none;}#chatgpt-mermaid-\_r_1ta\_ .edgeLabel{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_1ta\_ .edgeLabel p{background-color:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1ta\_ .edgeLabel rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1ta\_ .labelBkg{background-color:rgba(252, 252, 252, 0.5);}#chatgpt-mermaid-\_r_1ta\_ .cluster rect{fill:rgb(243, 243, 243);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ .cluster text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ .cluster span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:12px;background:rgb(243, 243, 243);border:1px solid rgba(0, 0, 0, 0.1);border-radius:2px;pointer-events:none;z-index:100;}#chatgpt-mermaid-\_r_1ta\_ .flowchartTitleText{text-anchor:middle;font-size:18px;fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1ta\_ rect.text{fill:none;stroke-width:0;}#chatgpt-mermaid-\_r_1ta\_ .icon-shape,#chatgpt-mermaid-\_r_1ta\_ .image-shape{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_1ta\_ .icon-shape p,#chatgpt-mermaid-\_r_1ta\_ .image-shape p{background-color:rgb(252, 252, 252);padding:2px;}#chatgpt-mermaid-\_r_1ta\_ .icon-shape .label rect,#chatgpt-mermaid-\_r_1ta\_ .image-shape .label rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1ta\_ .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#chatgpt-mermaid-\_r_1ta\_ .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#chatgpt-mermaid-\_r_1ta\_ .node .neo-node{stroke:rgb(83, 154, 248);}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].node rect,#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].cluster rect,#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].node polygon{stroke:url(#chatgpt-mermaid-\_r_1ta\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].swimlane.cluster rect{filter:none;}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].node path{stroke:url(#chatgpt-mermaid-\_r_1ta\_-gradient);stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].node .neo-line path{stroke:rgb(83, 154, 248);filter:none;}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].node circle{stroke:url(#chatgpt-mermaid-\_r_1ta\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].node circle .state-start{fill:#000000;}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].icon-shape .icon{fill:url(#chatgpt-mermaid-\_r_1ta\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1ta\_ [data-look="neo"].icon-shape .icon-neo path{stroke:url(#chatgpt-mermaid-\_r_1ta\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1ta\_ .node text{font-size:14px;font-weight:600;letter-spacing:normal;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_1ta\_ .edgeLabels text{font-size:13px;font-weight:600;letter-spacing:-0.08px;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_1ta\_ .node tspan[font-weight="normal"],#chatgpt-mermaid-\_r_1ta\_ .edgeLabels tspan[font-weight="normal"]{font-weight:600;}#chatgpt-mermaid-\_r_1ta\_ .edgeLabel .label rect{opacity:1;rx:13px;ry:13px;fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ .node rect,#chatgpt-mermaid-\_r_1ta\_ .node circle,#chatgpt-mermaid-\_r_1ta\_ .node ellipse,#chatgpt-mermaid-\_r_1ta\_ .node polygon,#chatgpt-mermaid-\_r_1ta\_ .node path{fill:rgb(229, 243, 255);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_1ta\_ .node rect{rx:16px;ry:16px;}#chatgpt-mermaid-\_r_1ta\_ .mermaid-decision .label-container{fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-dasharray:2,2;}#chatgpt-mermaid-\_r_1ta\_ .edgePaths .flowchart-link{stroke:rgb(143, 143, 143);stroke-width:1px;stroke-linecap:round;stroke-linejoin:round;}#chatgpt-mermaid-\_r_1ta\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1ta\_ :root{--mermaid-font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";}React StudioWorkflow APIAsset APIValidate graphJob QueueGPU RouterLocal ComfyUICloud ComfyUIResult ProcessorObject StorageVersion DatabaseValidInvalid
+
+The frontend graph should be independent of ComfyUI's internal graph format. A compiler/adapter converts validated product nodes into a pinned ComfyUI workflow, making it possible to support alternative backends later.
+
+## **10. Node library specification**
+
+The first release should define these 45 nodes, grouped into nine categories.
+
+| Category         | Nodes                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| Input (5)        | Load Image, Load Video, Text Prompt, Reference Image, Load 3D Scene                  |
+| Segmentation (5) | Auto Segment, Point Segment, Box Segment, Text Select, Mask Refine                   |
+| Editing (6)      | Inpaint, Outpaint, Object Remove, Object Insert, Material Replace, Relight           |
+| Conditioning (6) | Depth Map, Canny Edge, Line Art, Normal Map, IPAdapter, Geometry Lock                |
+| Architecture (6) | Building Type, Room Type, Material Palette, Camera Settings, Style Preset, Landscape |
+| Environment (5)  | Weather, Climate, Sun Position, Mood, Atmosphere                                     |
+| Generation (5)   | Text-to-Image, Image-to-Image, Upscale, Detail Enhance, Batch Variations             |
+| Video (4)        | Image-to-Video, Camera Motion, Frame Interpolation, Video Export                     |
+| Output (3)       | Image Preview, Compare Versions, Save Asset                                          |
+
+### **Node execution contract**
+
+Every node must have a stable identifier, version, typed input/output ports, parameter schema, validation rules, execution adapter, resource estimate, and error state.
+
+Example architecture-specific edit node:
+
+```
+
+{
+  "id": "edit_facade_01",
+  "type": "archviz.masked_edit",
+  "version": "1.0",
+  "inputs": {
+    "image": "asset://render_001",
+    "mask": "asset://facade_mask",
+    "reference": "asset://stone_reference"
+  },
+  "parameters": {
+    "instruction": "Replace selected facade with travertine",
+    "preserveGeometry": true,
+    "referenceStrength": 0.75,
+    "maskFeatherPx": 8,
+    "seed": 12345
+  },
+  "outputs": {
+    "image": "image",
+    "differenceMap": "image"
+  }
+}
+
+```
+
+`preserveGeometry` is a requested constraint. The backend must translate it into available structural conditioning and quality checks rather than treating it as an absolute guarantee.
+
+## **11. Core user stories and acceptance criteria**
+
+| ID    | User story                                    | Acceptance criteria                                               |
+| ----- | --------------------------------------------- | ----------------------------------------------------------------- |
+| US-01 | Generate an architectural image from a prompt | User receives an image and reproducible generation metadata       |
+| US-02 | Edit one facade without changing the rest     | Masked generation, before/after review, geometry-change warning   |
+| US-03 | Select windows automatically                  | Click/text selection returns an editable mask                     |
+| US-04 | Apply a material reference                    | Reference is bound to a target region and recorded in history     |
+| US-05 | Change sunny daytime to rainy dusk            | Weather and lighting settings are reflected in the output         |
+| US-06 | Generate a camera-motion video                | Video job can be queued, previewed, and exported                  |
+| US-07 | Reuse a successful workflow                   | Save, reopen, duplicate, and rerun a versioned graph              |
+| US-08 | Run on local or cloud hardware                | Job routing reflects supported model and GPU requirements         |
+| US-09 | Recover a failed generation                   | Failure reason is visible; retry does not corrupt project history |
+| US-10 | Preserve approved design versions             | Original images remain immutable and revisions are traceable      |
+
+## **12. Project data and API requirements**
+
+The initial database entities should be `users`, `projects`, `assets`, `asset_versions`, `workflows`, `workflow_versions`, `nodes`, `edges`, `masks`, `annotations`, `reference_sets`, `presets`, `generation_jobs`, `model_registry`, and `audit_events`.
+
+Core endpoints:
+
+```
+
+POST /api/v1/projects
+POST /api/v1/assets
+POST /api/v1/segmentation
+POST /api/v1/workflows/validate
+POST /api/v1/workflows/compile
+POST /api/v1/jobs
+GET  /api/v1/jobs/{job_id}
+POST /api/v1/jobs/{job_id}/cancel
+GET  /api/v1/projects/{id}/versions
+GET  /api/v1/models/capabilities
+POST /api/v1/videos/render
+
+```
+
+Use WebSockets or server-sent events for queue progress and preview updates. Store original assets and approved revisions immutably. Mask coordinates must remain correctly aligned across image resizing and cropping.
+
+Security requirements include authenticated project access, signed asset URLs, upload validation, model isolation, per-user GPU quotas, audit logs, and explicit consent controls for cloud processing.
+
+## **13. Development roadmap**
+
+1. **Phase 1 — Studio foundation**
+
+   Weeks 1–3
+
+   Build the React application, node editor, project management, image upload, graph validation, and ComfyUI connection.
+
+   **Deliverable:** User can generate an architectural image through a saved node workflow.
+2. **Phase 2 — AI Canvas and segmentation**
+
+   Weeks 4–7
+
+   Add canvas layers, SAM2 integration, brush masks, annotations, reference-image inputs, masked inpainting, and version comparison.
+
+   **Deliverable:** User can select and modify a facade or interior element.
+3. **Phase 3 — Architecture intelligence**
+
+   Weeks 8–10
+
+   Add architecture presets, material library, ControlNet conditioning, mood, climate, lighting, camera presets, and geometry-difference checks.
+
+   **Deliverable:** User can create controlled architectural variations with reusable presets.
+4. **Phase 4 — Image-to-video**
+
+   Weeks 11–13
+
+   Integrate video models, camera-motion controls, generation queue, preview player, and MP4 export.
+
+   **Deliverable:** Approved still renders can be animated and exported.
+5. **Phase 5 — Production hardening**
+
+   Weeks 14–16
+
+   Add hybrid GPU routing, authentication, resource limits, testing, telemetry, backups, recovery, packaging, and licensing review.
+
+   **Deliverable:** Deployable beta for Windows and cloud.
+
+Indicative 16-week schedule for a small experienced engineering team, assuming reusable open-source components. It is not a fixed delivery commitment.
+
+## **14. Local GPU and cloud deployment**
+
+For your Windows 11 development environment with an RTX 3060 6 GB VRAM and 16 GB RAM, use the local machine primarily for frontend development, segmentation, lightweight image models, and reduced-resolution previews.
+
+| Workload                                | Recommended execution                    |
+| --------------------------------------- | ---------------------------------------- |
+| Node editor and Canvas                  | Local                                    |
+| SAM segmentation                        | Local, with memory optimization          |
+| Lightweight image generation            | Local, model-dependent                   |
+| SDXL / larger image models              | Cloud preferred for speed and resolution |
+| High-resolution architectural rendering | Cloud GPU                                |
+| Advanced image-to-video                 | Cloud GPU                                |
+| Blender geometry processing             | Local or cloud                           |
+| Production batch generation             | Cloud GPU workers                        |
+
+Wan 2.2's documented 5B workflow targets approximately 8 GB VRAM with offloading, already above the 6 GB available on your GPU. Treat local video inference as experimental and route production video jobs to cloud hardware.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub
+
+
+
+## **15. Nonfunctional requirements and product KPIs**
+
+| **Requirement**        | **Proposed beta target**                                          |
+| ---------------------- | ----------------------------------------------------------------- |
+| Graph validation       | Under 500 ms for a typical 50-node graph                          |
+| Canvas interaction     | Target 60 FPS on supported desktops                               |
+| Generation reliability | At least 95% infrastructure job success, excluding invalid inputs |
+| Version recovery       | Restore any saved approved revision                               |
+| Graph reproducibility  | Pin model, workflow, seed, and parameters                         |
+| Editing precision      | Report unintended changes outside the mask                        |
+| Export                 | PNG, JPEG, WebP, JSON workflow, MP4                               |
+
+Engineering targets to validate through performance and usability testing, not measured results.
+
+## **16. MVP scope and release decision**
+
+## **Recommended first release**
+
+MVP
+
+**AI ArchViz Studio — Generate, Select, Edit, Reference, Render**
+
+The first production milestone should prove the complete architectural editing loop:
+
+Upload Image → Segment Area → Annotate → Add Reference → Generate Edit → Compare → Export
+
+Include the node editor and image canvas from the beginning. Add mood and climate controls as structured presets, then expand into video generation and 3D-aware rendering.
+
+**Release gate:** A designer must be able to change one architectural material using a reference image, inspect unintended changes, undo or revise the edit, and save the complete reproducible workflow.
+
+### **Critical product decisions**
+
+The PRD establishes React Flow for node editing, React Konva for image editing, ComfyUI for AI orchestration, and Blender/Three.js for geometry-aware workflows.
+
+The main differentiator should be **architecture-aware editing with region-specific references and preservation controls**, rather than a generic AI image generator.
+
+The major risks are inconsistent geometry, VRAM constraints, incompatible model adapters, custom-node maintenance, and commercial licensing. These need dedicated tests before beta release.
+
+This is the proposed product specification, not an implementation claim. The next engineering artifact should be a repository-ready technical design containing the folder structure, node registry, workflow JSON schemas, API contracts, database migrations, and a runnable first editing pipeline.

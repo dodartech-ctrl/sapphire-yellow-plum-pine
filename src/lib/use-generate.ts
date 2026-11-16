@@ -10,10 +10,12 @@ import {
   runLocalAnyText,
   runLocalLamaErasePass,
   runLocalPaintByExample,
+  runLocalTextureReplacePass,
   runRelightWeatherPass,
   runRemoveBgPlugin,
   runRestoreFacesPlugin,
   runTiledUpscalePass,
+  toCompactDataUrlForSegmentation,
 } from "@/lib/cv-pipeline";
 import {
   normalizeQueueStatus,
@@ -23,34 +25,65 @@ import {
   type UpscaleFactor,
 } from "@/lib/engines";
 import { pickServerFallbackPlate, synthesizeFallbackComposite } from "@/lib/fallback-render";
-import { enhancePlate, generatePlate, generateVariations, inpaintPlate, outpaintPlate, relightPlate } from "@/lib/generate";
+import {
+  enhancePlate,
+  generatePlate,
+  generateVariations,
+  inpaintPlate,
+  outpaintPlate,
+  relightPlate,
+  segmentObjectWithSam2,
+} from "@/lib/generate";
 import { useOriel } from "@/lib/store";
 
 let queueStopRequested = false;
+let renderSequence = 0;
+
+async function compactPayloadDataUrl(value: string | null | undefined, maxLength = 2_200_000): Promise<string | undefined> {
+  if (!value || !value.startsWith("data:image/")) return undefined;
+  if (value.length <= maxLength || typeof document === "undefined") return value;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("decode failed"));
+      el.src = value;
+    });
+    const maxEdge = 1600;
+    const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round((img.naturalWidth || 1280) * scale));
+    canvas.height = Math.max(1, Math.round((img.naturalHeight || 720) * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return value;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const compacted = canvas.toDataURL("image/jpeg", 0.84);
+    return compacted.length < value.length ? compacted : value;
+  } catch {
+    return value;
+  }
+}
 
 export function useGenerate() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const setPlate = useOriel((state) => state.setPlate);
-  const setVariations = useOriel((state) => state.setVariations);
   const upload = useOriel((state) => state.upload);
   const sketchDataUrl = useOriel((state) => state.sketchDataUrl);
   const maskDataUrl = useOriel((state) => state.maskDataUrl);
   const setMaskDataUrl = useOriel((state) => state.setMaskDataUrl);
+  const binaryMaskDataUrl = useOriel((state) => state.binaryMaskDataUrl);
+  const setBinaryMaskData = useOriel((state) => state.setBinaryMaskData);
   const conditioningChannels = useOriel((state) => state.conditioningChannels);
   const houseStyles = useOriel((state) => state.houseStyles);
   const plate = useOriel((state) => state.plate);
-  const touchRecent = useOriel((state) => state.touchRecent);
-  const activeKey = useOriel((state) => state.activeKey);
   const design = useOriel((state) => state.design);
   const engine = useOriel((state) => state.engine);
   const scene3d = useOriel((state) => state.scene3d);
-  const midLayerPreset = useOriel((state) => state.midLayerPreset);
   const dictionaryBlocks = useOriel((state) => state.dictionaryBlocks);
   const dictionaryParams = useOriel((state) => state.dictionaryParams);
   const idea = useOriel((state) => state.idea);
   const frame = useOriel((state) => state.frame);
-  const credits = useOriel((state) => state.credits);
   const setCredits = useOriel((state) => state.setCredits);
   const busy = useOriel((state) => state.busy);
   const setBusy = useOriel((state) => state.setBusy);
@@ -63,98 +96,121 @@ export function useGenerate() {
   const setEngineField = useOriel((state) => state.setEngineField);
 
   function resolveRefs() {
-    const studyId = activeKey.startsWith("study:") ? activeKey.slice(6) : undefined;
-    const templateId = activeKey.startsWith("template:")
-      ? activeKey.slice(9)
+    const st = useOriel.getState();
+    const studyId = st.activeKey.startsWith("study:") ? st.activeKey.slice(6) : undefined;
+    const templateId = st.activeKey.startsWith("template:")
+      ? st.activeKey.slice(9)
       : studyId
         ? undefined
-        : (TEMPLATES.find((item) => item.scope === design.vertical) ?? TEMPLATES[0])?.id;
-    const sourceId = studyId ?? templateId ?? design.vertical;
+        : (TEMPLATES.find((item) => item.scope === st.design.vertical) ?? TEMPLATES[0])?.id;
+    const sourceId = studyId ?? templateId ?? st.design.vertical;
     return { studyId, templateId, sourceId };
   }
 
-  function buildConditioningPayload() {
+  async function buildConditioningPayload() {
     const st = useOriel.getState();
     const activeStyle = st.houseStyles.find((h) => h.id === st.engine.houseStyleId);
-    const toDataOnly = (v: string | null | undefined) => (v && v.startsWith("data:image/") ? v : undefined);
+    const [depthImage, normalImage, clayImage, annotatorImage, styleRefImage, materialRefImage, lightingRefImage] =
+      await Promise.all([
+        compactPayloadDataUrl(st.conditioningChannels.depth),
+        compactPayloadDataUrl(st.conditioningChannels.normal),
+        compactPayloadDataUrl(st.conditioningChannels.clay),
+        compactPayloadDataUrl(st.conditioningChannels.annotator),
+        compactPayloadDataUrl(st.engine.refMatrix.massing.url ?? st.engine.ipAdapterRefUrl),
+        compactPayloadDataUrl(st.engine.refMatrix.material.url),
+        compactPayloadDataUrl(st.engine.refMatrix.lighting.url),
+      ]);
     return {
-      depthImage: toDataOnly(st.conditioningChannels.depth),
-      normalImage: toDataOnly(st.conditioningChannels.normal),
-      clayImage: toDataOnly(st.conditioningChannels.clay),
-      annotatorImage: toDataOnly(st.conditioningChannels.annotator),
-      styleRefImage: toDataOnly(st.engine.refMatrix.massing.url ?? st.engine.ipAdapterRefUrl),
-      materialRefImage: toDataOnly(st.engine.refMatrix.material.url),
-      lightingRefImage: toDataOnly(st.engine.refMatrix.lighting.url),
+      depthImage,
+      normalImage,
+      clayImage,
+      annotatorImage,
+      styleRefImage,
+      materialRefImage,
+      lightingRefImage,
       houseStyleDirective: activeStyle?.promptDirective,
     };
   }
 
   async function generate(mode: "plate" | "variation" = "plate") {
-    if (busy) return;
-    if (mode === "plate" && engine.outputMode === "grid-4") {
+    const st = useOriel.getState();
+    if (st.busy) return;
+    if (mode === "plate" && st.engine.outputMode === "grid-4") {
       await generateGrid();
       return;
     }
-    if (credits < PLATE_COST) {
+    if (st.credits < PLATE_COST) {
       toast.error("Not enough credits.");
       return;
     }
     const { studyId, templateId, sourceId } = resolveRefs();
     const note =
       mode === "variation"
-        ? `${idea} Offer one distinct alternative. Keep the same brief.`.trim()
-        : idea;
-    setBusy(true);
-    pushChat("you", note || `${design.vertical} plate`);
+        ? `${st.idea} Offer one distinct alternative. Keep the same brief.`.trim()
+        : st.idea;
+    st.setBusy(true);
+    st.pushChat("you", note || `${st.design.vertical} plate`);
     try {
+      const [compactImage, compactSketch, compactMask, conditioning] = await Promise.all([
+        compactPayloadDataUrl(st.upload),
+        compactPayloadDataUrl(st.sketchDataUrl),
+        compactPayloadDataUrl(st.maskDataUrl),
+        buildConditioningPayload(),
+      ]);
       const result = await generatePlate({
         data: {
           templateId,
           studyId,
           idea: note,
-          image: upload ?? undefined,
-          sketchImage: sketchDataUrl ?? undefined,
-          maskImage: maskDataUrl ?? undefined,
-          ...buildConditioningPayload(),
-          dictionaryBlocks,
-          dictionaryParams,
-          design,
-          frame,
-          engine,
-          scene3d,
+          image: compactImage,
+          sketchImage: compactSketch,
+          maskImage: compactMask,
+          ...conditioning,
+          dictionaryBlocks: st.dictionaryBlocks,
+          dictionaryParams: st.dictionaryParams,
+          design: st.design,
+          frame: st.frame,
+          engine: st.engine,
+          scene3d: st.scene3d,
         },
       });
-      setCredits(result.credits);
+      st.setCredits(result.credits);
+      if (!st.engine.seedLocked && typeof result.seed === "number") {
+        st.setEngineField("seed", result.seed);
+      }
+      const iteration = renderSequence++;
       let finalUrl = result.url;
-      if (result.fallback && (upload || sketchDataUrl)) {
+      if (result.fallback) {
         finalUrl = await synthesizeFallbackComposite({
-          baseImage: upload ?? undefined,
-          sketchImage: sketchDataUrl ?? undefined,
-          maskImage: maskDataUrl ?? undefined,
+          baseImage: st.upload ?? st.sketchDataUrl ?? undefined,
+          sketchImage: st.sketchDataUrl ?? undefined,
+          maskImage: st.maskDataUrl ?? undefined,
           serverFallbackUrl: result.url,
-          design,
-          engine,
-          scene3d,
+          design: st.design,
+          engine: st.engine,
+          scene3d: st.scene3d,
+          idea: note,
           variantIndex: mode === "variation" ? 1 : 0,
+          renderIteration: iteration,
         });
       }
-      setPlate({
+      st.setPlate({
         url: finalUrl,
-        upload: upload ?? undefined,
+        upload: st.upload ?? undefined,
         templateId: sourceId,
-        idea: idea.trim(),
+        idea: st.idea.trim(),
         fallback: result.fallback,
         seed: result.seed,
         summary: result.summary,
       });
-      touchRecent(sourceId);
-      pushLog({
-        title: `${design.look} · ${design.vertical}${midLayerPreset ? ` (${midLayerPreset})` : ""}`,
+      st.touchRecent(sourceId);
+      st.pushLog({
+        title: `${st.design.look} · ${st.design.vertical}${st.midLayerPreset ? ` (${st.midLayerPreset})` : ""}`,
         model: "flux",
         text: result.summary ?? (note || "Rendered architectural plate"),
       });
       window.dispatchEvent(new CustomEvent("oriel-view", { detail: "result" }));
-      pushChat(
+      st.pushChat(
         "studio",
         result.fallback
           ? `Studio preview plate ready (Seed #${result.seed}).`
@@ -162,15 +218,17 @@ export function useGenerate() {
       );
       if ("warning" in result && typeof result.warning === "string" && result.warning) {
         toast.message(result.warning);
+      } else {
+        toast.success(result.fallback ? "Studio preview plate rendered" : "Plate rendered");
       }
       if (pathname !== "/") void navigate({ to: "/" });
     } catch (error) {
       const wallet = await getStudioCredits().catch(() => null);
-      setCredits(wallet?.credits ?? credits);
+      st.setCredits(wallet?.credits ?? st.credits);
       toast.error(error instanceof Error ? error.message : "Generation failed.");
-      pushChat("studio", "That plate did not come back. The credits were returned.");
+      st.pushChat("studio", "That plate did not come back. The credits were returned.");
     } finally {
-      setBusy(false);
+      useOriel.getState().setBusy(false);
     }
   }
 
@@ -178,7 +236,7 @@ export function useGenerate() {
     const st = useOriel.getState();
     const base = draftSource ?? st.sketchDataUrl ?? st.upload ?? st.plate?.url;
     if (!base || st.busy) return;
-    const fallbackUrl = pickServerFallbackPlate(st.design, st.engine, st.engine.seed);
+    const fallbackUrl = pickServerFallbackPlate(st.design, st.engine, st.engine.seed, 0, st.idea);
     const draftUrl = await synthesizeFallbackComposite({
       baseImage: base,
       sketchImage: st.sketchDataUrl ?? undefined,
@@ -186,7 +244,9 @@ export function useGenerate() {
       design: st.design,
       engine: st.engine,
       scene3d: st.scene3d,
+      idea: st.idea,
       variantIndex: 0,
+      renderIteration: renderSequence,
     });
     st.setPlate({
       url: draftUrl,
@@ -200,62 +260,71 @@ export function useGenerate() {
   }
 
   async function generateGrid() {
-    if (busy) return;
+    const st = useOriel.getState();
+    if (st.busy) return;
     const { studyId, templateId, sourceId } = resolveRefs();
-    setBusy(true);
-    pushChat("you", `4-Up Concept Grid · ${idea || design.look}`);
+    st.setBusy(true);
+    st.pushChat("you", `4-Up Concept Grid · ${st.idea || st.design.look}`);
     try {
+      const [compactImage, compactSketch, conditioning] = await Promise.all([
+        compactPayloadDataUrl(st.upload),
+        compactPayloadDataUrl(st.sketchDataUrl),
+        buildConditioningPayload(),
+      ]);
       const result = await generateVariations({
         data: {
           templateId,
           studyId,
-          idea,
-          image: upload ?? undefined,
-          sketchImage: sketchDataUrl ?? undefined,
-          ...buildConditioningPayload(),
-          dictionaryBlocks,
-          dictionaryParams,
-          design,
-          frame,
-          engine,
-          scene3d,
+          idea: st.idea,
+          image: compactImage,
+          sketchImage: compactSketch,
+          ...conditioning,
+          dictionaryBlocks: st.dictionaryBlocks,
+          dictionaryParams: st.dictionaryParams,
+          design: st.design,
+          frame: st.frame,
+          engine: st.engine,
+          scene3d: st.scene3d,
         },
       });
-      setCredits(result.credits);
+      st.setCredits(result.credits);
+      const iteration = renderSequence++;
       let urls = result.urls;
-      if (result.fallback && (upload || sketchDataUrl)) {
+      if (result.fallback) {
         urls = await Promise.all(
           result.urls.map((serverUrl, idx) =>
             synthesizeFallbackComposite({
-              baseImage: upload ?? undefined,
-              sketchImage: sketchDataUrl ?? undefined,
+              baseImage: st.upload ?? st.sketchDataUrl ?? undefined,
+              sketchImage: st.sketchDataUrl ?? undefined,
               serverFallbackUrl: serverUrl,
-              design,
-              engine,
-              scene3d,
+              design: st.design,
+              engine: st.engine,
+              scene3d: st.scene3d,
+              idea: st.idea,
               variantIndex: idx,
+              renderIteration: iteration,
             }),
           ),
         );
       }
-      setVariations(urls);
+      st.setVariations(urls);
       if (urls[0]) {
-        setPlate({
+        st.setPlate({
           url: urls[0],
-          upload: upload ?? undefined,
+          upload: st.upload ?? undefined,
           templateId: sourceId,
-          idea: idea.trim(),
+          idea: st.idea.trim(),
           fallback: result.fallback,
           seed: result.seed,
         });
       }
-      pushLog({
-        title: `4-Up Concept Grid · ${design.look}`,
+      st.pushLog({
+        title: `4-Up Concept Grid · ${st.design.look}`,
         model: "midjourney",
-        text: idea.trim() || "4-quadrant architectural exploration",
+        text: st.idea.trim() || "4-quadrant architectural exploration",
       });
       window.dispatchEvent(new CustomEvent("oriel-view", { detail: "grid" }));
-      pushChat("studio", "4-up architectural concept grid ready. Click any quadrant to promote.");
+      st.pushChat("studio", "4-up architectural concept grid ready. Click any quadrant to promote.");
       if ("warning" in result && typeof result.warning === "string" && result.warning) {
         toast.message(result.warning);
       } else {
@@ -264,7 +333,7 @@ export function useGenerate() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Variation grid failed.");
     } finally {
-      setBusy(false);
+      useOriel.getState().setBusy(false);
     }
   }
 
@@ -275,7 +344,8 @@ export function useGenerate() {
       toast.message("Load a source image, 3D snapshot, or generated plate first.");
       return;
     }
-    if (!maskDataUrl) {
+    const activeMask = maskDataUrl ?? binaryMaskDataUrl;
+    if (!activeMask) {
       toast.message("Paint a region mask or use SAM click-mask first.");
       return;
     }
@@ -291,7 +361,7 @@ export function useGenerate() {
             : `IOPaint ${engine.iopaintModel}`;
     pushChat("you", `${taskLabel}: ${inpaintNote || engine.iopaintAnyText || idea || "Localized edit"}`);
     try {
-      const effectiveMask = await refineMaskBuffer(maskDataUrl, {
+      const effectiveMask = await refineMaskBuffer(activeMask, {
         dilatePx: engine.iopaintMaskDilate,
         invert: engine.iopaintInvertMask,
       });
@@ -306,13 +376,14 @@ export function useGenerate() {
           ? engine.iopaintAnyText || inpaintNote
           : inpaintNote || (engine.iopaintTask === "erase" ? "Clean object removal" : idea);
 
+      const conditioning = await buildConditioningPayload();
       const result = await inpaintPlate({
         data: {
           idea: effectiveNote,
-          image: targetBase,
-          maskImage: effectiveMask,
-          exampleRefImage: exampleRef,
-          ...buildConditioningPayload(),
+          image: await compactPayloadDataUrl(targetBase),
+          maskImage: await compactPayloadDataUrl(binaryMaskDataUrl ?? effectiveMask),
+          exampleRefImage: await compactPayloadDataUrl(exampleRef),
+          ...conditioning,
           dictionaryBlocks,
           dictionaryParams,
           design,
@@ -334,6 +405,13 @@ export function useGenerate() {
             targetBase,
             effectiveMask,
             engine.iopaintExampleUrl,
+            engine.inpaintStrength,
+          );
+        } else if (engine.iopaintTask === "replace") {
+          finalUrl = await runLocalTextureReplacePass(
+            targetBase,
+            effectiveMask,
+            effectiveNote || "Honed Travertine",
             engine.inpaintStrength,
           );
         } else {
@@ -358,25 +436,39 @@ export function useGenerate() {
         seed: result.seed,
       });
       pushLog({
-        title: `${taskLabel} · ${engine.samPrompt || design.target}`,
+        title: `${taskLabel} · ${result.modelUsed ?? engine.iopaintModel}`,
         model: "gpt",
-        text: effectiveNote || "Localized mask edit applied",
+        text: `${engine.samPrompt || design.target}: ${effectiveNote || "Localized edit"}`,
       });
-      if (engine.iopaintTask !== "erase") {
-        window.dispatchEvent(new CustomEvent("oriel-view", { detail: "result" }));
-      } else {
-        setMaskDataUrl(null);
-      }
+      setMaskDataUrl(null);
+      setBinaryMaskData(null, null);
       if ("warning" in result && typeof result.warning === "string" && result.warning) {
         toast.message(result.warning);
       } else {
-        toast.success(`${taskLabel} applied cleanly`);
+        toast.success(`${taskLabel} applied (${result.fallback ? "IOPaint local engine" : "Server model"})`);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "IOPaint inpaint failed.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function segmentGroundedSam2(
+    targetPrompt: string,
+    srcOverride?: string,
+    clickPoint?: { xNorm: number; yNorm: number },
+  ) {
+    const baseSrc = srcOverride ?? plate?.url ?? upload ?? "/viz/t03-compact-living-room.jpg";
+    setEngineField("samPrompt", targetPrompt);
+    const compactDataUrl = await toCompactDataUrlForSegmentation(baseSrc);
+    return segmentObjectWithSam2({
+      data: {
+        image: compactDataUrl,
+        prompt: targetPrompt,
+        clickPoint,
+      },
+    });
   }
 
   async function applyDirectionalOutpaint(padOverride?: IopaintOutpaintPad) {
@@ -397,12 +489,13 @@ export function useGenerate() {
     setBusy(true);
     try {
       const { paddedUrl, maskDataUrl: borderMask } = await runDirectionalOutpaintPad(targetBase, pad);
+      const conditioning = await buildConditioningPayload();
       const result = await inpaintPlate({
         data: {
           idea: `Outpaint directional border T:${pad.top} R:${pad.right} B:${pad.bottom} L:${pad.left}px. ${idea}`.trim(),
-          image: paddedUrl,
-          maskImage: borderMask,
-          ...buildConditioningPayload(),
+          image: await compactPayloadDataUrl(paddedUrl),
+          maskImage: await compactPayloadDataUrl(borderMask),
+          ...conditioning,
           dictionaryBlocks,
           dictionaryParams,
           design,
@@ -454,7 +547,7 @@ export function useGenerate() {
         setMaskDataUrl(bgMask);
         pushLog({
           title: `IOPaint RemoveBG → Mask (${engine.iopaintRemoveBgModel})`,
-          model: "sam",
+          model: "gemini",
           text: "Generated inverse background replacement mask",
         });
         window.dispatchEvent(new CustomEvent("oriel-view", { detail: "mask" }));
@@ -469,7 +562,7 @@ export function useGenerate() {
         });
         pushLog({
           title: `IOPaint RemoveBG Cutout (${engine.iopaintRemoveBgModel})`,
-          model: "sam",
+          model: "gemini",
           text: "Isolated primary foreground subject with alpha channel",
         });
         window.dispatchEvent(new CustomEvent("oriel-view", { detail: "result" }));
@@ -529,7 +622,7 @@ export function useGenerate() {
       const result = await enhancePlate({
         data: {
           idea,
-          image: targetBase,
+          image: await compactPayloadDataUrl(targetBase),
           dictionaryBlocks,
           dictionaryParams,
           design,
@@ -579,11 +672,12 @@ export function useGenerate() {
     const { sourceId } = resolveRefs();
     setBusy(true);
     try {
+      const conditioning = await buildConditioningPayload();
       const result = await relightPlate({
         data: {
           idea,
-          image: targetBase,
-          ...buildConditioningPayload(),
+          image: await compactPayloadDataUrl(targetBase),
+          ...conditioning,
           dictionaryBlocks,
           dictionaryParams,
           design,
@@ -631,7 +725,7 @@ export function useGenerate() {
       const result = await outpaintPlate({
         data: {
           idea,
-          image: targetBase,
+          image: await compactPayloadDataUrl(targetBase),
           dictionaryBlocks,
           dictionaryParams,
           design,
@@ -669,23 +763,26 @@ export function useGenerate() {
     const job = st.queue.find((q) => q.id === jobId);
     if (!job) return;
     st.updateQueueItem(job.id, "processing");
+    const stepStart = performance.now();
     try {
       const nextDesign = job.light ? { ...st.design, light: job.light as typeof st.design.light } : st.design;
       const nextScene3D = {
         ...st.scene3d,
         ...(job.cameraPreset ? { cameraPreset: job.cameraPreset } : {}),
+        ...(typeof job.sunHour === "number" ? { geoEnabled: true, geoHour: job.sunHour } : {}),
       };
       const nextEngine = {
         ...st.engine,
         workflowPreset: job.preset,
       };
       const promptLine = [st.idea, job.promptNote, job.label].filter(Boolean).join(" · ").slice(0, 1100);
+      const conditioning = await buildConditioningPayload();
       const result = await generatePlate({
         data: {
           idea: promptLine,
-          image: st.upload ?? undefined,
-          sketchImage: st.sketchDataUrl ?? undefined,
-          ...buildConditioningPayload(),
+          image: await compactPayloadDataUrl(st.upload),
+          sketchImage: await compactPayloadDataUrl(st.sketchDataUrl),
+          ...conditioning,
           dictionaryBlocks: st.dictionaryBlocks,
           dictionaryParams: st.dictionaryParams,
           design: nextDesign,
@@ -696,23 +793,29 @@ export function useGenerate() {
       });
       st.setCredits(result.credits);
       const variantIndex = job.light === "Evening" ? 2 : job.light === "Golden hour" ? 1 : 0;
-      const finalUrl =
-        result.fallback && (st.upload || st.sketchDataUrl)
-          ? await synthesizeFallbackComposite({
-              baseImage: st.upload ?? undefined,
-              sketchImage: st.sketchDataUrl ?? undefined,
-              serverFallbackUrl: result.url,
-              design: nextDesign,
-              engine: nextEngine,
-              scene3d: nextScene3D,
-              variantIndex,
-            })
-          : result.url;
+      const finalUrl = result.fallback
+        ? await synthesizeFallbackComposite({
+            baseImage: st.upload ?? st.sketchDataUrl ?? undefined,
+            sketchImage: st.sketchDataUrl ?? undefined,
+            serverFallbackUrl: result.url,
+            design: nextDesign,
+            engine: nextEngine,
+            scene3d: nextScene3D,
+            idea: promptLine,
+            variantIndex,
+            renderIteration: renderSequence++,
+          })
+        : result.url;
+      // Ensure local fallback renders remain observable as Processing for at least 220ms
+      const elapsed = performance.now() - stepStart;
+      if (elapsed < 220) {
+        await new Promise((resolve) => window.setTimeout(resolve, 220 - elapsed));
+      }
       useOriel.getState().updateQueueItem(job.id, "completed", finalUrl);
       useOriel.getState().pushLog({
         title: `Batch Pass · ${job.label}`,
         model: "flux",
-        text: `${job.light}${job.cameraPreset ? ` · Cam: ${job.cameraPreset}` : ""}`,
+        text: `${job.light}${job.cameraPreset ? ` · Cam: ${job.cameraPreset}` : ""}${typeof job.sunHour === "number" ? ` · ${job.sunHour.toFixed(1)}h` : ""}`,
       });
     } catch (error) {
       useOriel.getState().updateQueueItem(job.id, "error", undefined, {
@@ -749,25 +852,28 @@ export function useGenerate() {
   }
 
   async function queueAndRunBatch(label: string, lightOverride?: string) {
-    enqueueRender(label, engine.workflowPreset, lightOverride ?? design.light, { status: "pending" });
+    const thumb = plate?.url ?? upload ?? sketchDataUrl ?? undefined;
+    enqueueRender(label, engine.workflowPreset, lightOverride ?? design.light, { status: "pending", thumbnailUrl: thumb });
     await runSequentialQueue();
   }
 
   async function runThreeLightBatch() {
+    const thumb = plate?.url ?? upload ?? sketchDataUrl ?? undefined;
     enqueueBatchMatrix([
-      { label: `${design.look} · Daylight`, preset: engine.workflowPreset, light: "Daylight" },
-      { label: `${design.look} · Golden Hour`, preset: engine.workflowPreset, light: "Golden hour" },
-      { label: `${design.look} · Dusk / Evening`, preset: engine.workflowPreset, light: "Evening" },
+      { label: `${design.look} · Daylight`, preset: engine.workflowPreset, light: "Daylight", thumbnailUrl: thumb },
+      { label: `${design.look} · Golden Hour`, preset: engine.workflowPreset, light: "Golden hour", thumbnailUrl: thumb },
+      { label: `${design.look} · Dusk / Evening`, preset: engine.workflowPreset, light: "Evening", thumbnailUrl: thumb },
     ]);
     await runSequentialQueue();
   }
 
   async function queueBatchMatrix(mode: "sun-study" | "camera-matrix", autoStart = true) {
+    const thumb = plate?.url ?? upload ?? sketchDataUrl ?? undefined;
     const specs = buildBatchMatrixSpecs({
       mode,
       preset: engine.workflowPreset,
       look: design.look,
-    });
+    }).map((spec) => ({ ...spec, thumbnailUrl: thumb }));
     enqueueBatchMatrix(specs);
     if (autoStart) {
       await runSequentialQueue();
@@ -784,6 +890,7 @@ export function useGenerate() {
     generate,
     generateGrid,
     applyInpaint,
+    segmentGroundedSam2,
     applyDirectionalOutpaint,
     applyRemoveBgPlugin,
     applyRestoreFacesPlugin,

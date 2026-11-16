@@ -1,22 +1,23 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   Box,
-  Circle,
   Compass,
+  Crosshair,
+  Download,
   Expand,
   Grid2X2,
   ImagePlus,
-  Images,
-  Layers,
   Loader2,
+  Lock,
   MousePointer2,
-  Paintbrush,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
+  ScanEye,
   Sparkles,
-  Square,
   SunMoon,
+  Unlock,
   Upload,
-  Wand2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -24,37 +25,55 @@ import { toast } from "sonner";
 import { Compare } from "@/components/compare";
 import { Composer } from "@/components/composer";
 import { CvPreprocessorStage } from "@/components/cv-preprocessor-stage";
+import { GroundedSAM2Tool } from "@/components/grounded-sam2-tool";
+import { IOPaintWorkspace } from "@/components/iopaint-workspace";
+import { NodeEditorCanvas } from "@/components/node-editor-canvas";
+import { NodeStudioEmbedded } from "@/components/node-studio-embedded";
+import { NvidiaVisionDialog } from "@/components/nvidia-vision-dialog";
 import { PanoramaViewer } from "@/components/panorama-viewer";
 import { PropertiesPanel } from "@/components/properties-panel";
 import { SketchMaskCanvas } from "@/components/sketch-mask-canvas";
 import { Viewport3D } from "@/components/viewport-3d";
-import { appendSuggestionToIdea } from "@/lib/archviz-dictionary";
+import { ATELIER_VERTICAL_HERO, buildAtelierIterationCards } from "@/lib/atelier-studio";
 import type { PublishedGalleryProject } from "@/lib/engines";
-import { frameAspect, frameEdge } from "@/lib/frame";
+import { frameAspect, frameAspectNumber, frameEdge } from "@/lib/frame";
 import { GROUPS, VERTICALS } from "@/lib/properties";
 import { readImage } from "@/lib/read-image";
 import { useOriel } from "@/lib/store";
 import { useGenerate } from "@/lib/use-generate";
 import { registerStudioTools } from "@/lib/webmcp";
+import {
+  ENHANCE_ENVIRONMENTS,
+  ENHANCE_SCOPES,
+  WORKFLOW_INTENTS,
+  buildEnhanceDirective,
+  defaultEnhanceEnvironmentForVertical,
+  resolveIntentFromStage,
+  setPending3DFile,
+  type EnhanceEnvironment,
+  type EnhanceScope,
+  type WorkflowIntentId,
+} from "@/lib/workflow-journey";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   component: WorkspacePage,
 });
 
-type StudioStage = "source" | "3d" | "sketch" | "cv" | "mask" | "result" | "grid" | "compare" | "360";
+type StudioStage = "source" | "3d" | "sketch" | "cv" | "sam2" | "mask" | "result" | "grid" | "compare" | "360" | "nodes";
 
 const COPY: Record<string, string> = {
-  interior: "Redesign, restyle, and visualize interior spaces with AI.",
-  exterior: "Block out 3D massing, sketch facades, and render without losing the building.",
-  amenities: "Stage pools, lounges, and shared rooms with the same camera.",
-  landscape: "Shape gardens, paths, and planting around the architecture.",
+  interior: "Redesign, restyle, and visualize interior spaces with precision lighting.",
+  exterior: "Block out 3D massing, sketch facades, and render without losing architecture.",
+  amenities: "Stage pools, lounges, and shared rooms with locked perspective.",
+  landscape: "Shape courtyards, hardscapes, and specimen planting around architecture.",
 };
 
 function WorkspacePage() {
   const design = useOriel((state) => state.design);
   const engine = useOriel((state) => state.engine);
   const setVertical = useOriel((state) => state.setVertical);
+  const setDesignField = useOriel((state) => state.setDesignField);
   const idea = useOriel((state) => state.idea);
   const setIdea = useOriel((state) => state.setIdea);
   const frame = useOriel((state) => state.frame);
@@ -72,14 +91,15 @@ function WorkspacePage() {
   const setSelecting = useOriel((state) => state.setSelecting);
   const selecting = useOriel((state) => state.selecting);
   const applyWorkflowPreset = useOriel((state) => state.applyWorkflowPreset);
+  const setEngineField = useOriel((state) => state.setEngineField);
   const publishToGallery = useOriel((state) => state.publishToGallery);
-  const chat = useOriel((state) => state.chat);
   const scene3d = useOriel((state) => state.scene3d);
   const {
     busy,
     generate,
     generateGrid,
     applyInpaint,
+    segmentGroundedSam2,
     applyDirectionalOutpaint,
     applyRemoveBgPlugin,
     applyRestoreFacesPlugin,
@@ -90,8 +110,16 @@ function WorkspacePage() {
   } = useGenerate();
 
   const [view, setView] = useState<StudioStage>("source");
-  const [tool, setTool] = useState<"select" | "compare" | "draw" | "spot" | "layers">("select");
+  const [samInitialMode, setSamInitialMode] = useState<"off" | "pos" | "neg">("off");
+  const [nodeEditorMode, setNodeEditorMode] = useState<"canvas" | "studio">("canvas");
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [enhanceBarOpen, setEnhanceBarOpen] = useState(false);
+  const [enhanceScope, setEnhanceScope] = useState<EnhanceScope>("image");
+  const [enhanceEnv, setEnhanceEnv] = useState<EnhanceEnvironment>(() =>
+    defaultEnhanceEnvironmentForVertical(design.vertical),
+  );
   const [publishOpen, setPublishOpen] = useState(false);
+  const [visionOpen, setVisionOpen] = useState(false);
   const [pubTitle, setPubTitle] = useState("");
   const [pubLocation, setPubLocation] = useState("Studio Commission");
   const [pubDiscipline, setPubDiscipline] = useState<PublishedGalleryProject["discipline"]>("Exterior");
@@ -103,6 +131,10 @@ function WorkspacePage() {
   const room = design.picks.room || design.picks.facade || design.picks.water || "Whole";
   const canCompare = Boolean((upload || sketchDataUrl) && plate?.url);
   const aspect = frameAspect(frame.ratio);
+  const aspectNumber = frameAspectNumber(frame.ratio);
+  const activeIntent = resolveIntentFromStage(view, enhanceBarOpen);
+  const heroSample = ATELIER_VERTICAL_HERO[design.vertical];
+  const plateIterationCards = buildAtelierIterationCards(history, plate?.url);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -111,6 +143,13 @@ function WorkspacePage() {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("pinInpaint") === "1") {
         setView("mask");
+      } else if (sp.get("stage") === "nodes") {
+        setView("nodes");
+      } else if (sp.get("stage") === "3d") {
+        setView("3d");
+      } else if (sp.get("sam") === "1") {
+        setSamInitialMode("pos");
+        setView("sam2");
       }
     }
     function onView(event: Event) {
@@ -120,11 +159,13 @@ function WorkspacePage() {
         next === "3d" ||
         next === "sketch" ||
         next === "cv" ||
+        next === "sam2" ||
         next === "mask" ||
         next === "result" ||
         next === "grid" ||
         next === "compare" ||
-        next === "360"
+        next === "360" ||
+        next === "nodes"
       ) {
         setView(next);
       }
@@ -136,7 +177,7 @@ function WorkspacePage() {
     };
   }, []);
 
-  // #10 Debounced Krea-style low-latency live draft stream when liveStreamEnabled is ON
+  // Debounced low-latency live draft stream when liveStreamEnabled is ON
   useEffect(() => {
     if (!engine.liveStreamEnabled) return;
     if (!sketchDataUrl && !upload) return;
@@ -158,7 +199,6 @@ function WorkspacePage() {
   function showCompare() {
     if (view === "compare") {
       setView(plate?.url ? "result" : "source");
-      setTool("select");
       return;
     }
     if (!canCompare) {
@@ -170,40 +210,114 @@ function WorkspacePage() {
       return;
     }
     setView("compare");
-    setTool("compare");
   }
 
-  function handleTool(next: typeof tool) {
-    if (next === "compare") {
-      showCompare();
-      return;
-    }
-    setTool(next);
-    if (next === "select") setSelecting(!selecting);
-    if (next === "draw") {
-      setView("sketch");
-      toast.message("Sketch pad active — trace or draw architectural lines.");
-    }
-    if (next === "spot") {
-      const order = ["whole", ...pins.map((group) => group.id)];
-      const nextTarget = order[(Math.max(order.indexOf(design.target), 0) + 1) % order.length];
-      setTarget(nextTarget);
-      const name = nextTarget === "whole" ? "the whole frame" : (pins.find((group) => group.id === nextTarget)?.label ?? nextTarget);
-      toast.message(`Editing ${name}`);
-    }
-    if (next === "layers") {
-      toast.message(history.length ? "Earlier plates are under the frame." : "Generated plates will stack here.");
-    }
+  function cycleTargetElement() {
+    const order = ["whole", ...pins.map((group) => group.id)];
+    const nextTarget = order[(Math.max(order.indexOf(design.target), 0) + 1) % order.length];
+    setTarget(nextTarget);
+    const name = nextTarget === "whole" ? "the whole frame" : (pins.find((group) => group.id === nextTarget)?.label ?? nextTarget);
+    toast.message(`Editing ${name}`);
   }
+
+  useEffect(() => {
+    setEnhanceEnv(defaultEnhanceEnvironmentForVertical(design.vertical));
+  }, [design.vertical]);
+
+  // Ctrl+V / Cmd+V clipboard image paste into Source canvas
+  useEffect(() => {
+    function handlePaste(event: ClipboardEvent) {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          const pastedFile = item.getAsFile();
+          if (pastedFile) {
+            event.preventDefault();
+            void onFile(pastedFile);
+            toast.success("Image pasted from clipboard");
+            return;
+          }
+        }
+      }
+    }
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame.resolution]);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (["glb", "gltf", "obj", "fbx"].includes(ext)) {
+      setPending3DFile(file);
+      setEnhanceBarOpen(false);
+      setView("3d");
+      toast.success(`Opening 3D Viewport with ${file.name}`);
+      return;
+    }
     try {
       setUpload(await readImage(file, frameEdge(frame.resolution)));
+      setEnhanceBarOpen(false);
       setView("source");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not read that image.");
     }
+  }
+
+  function selectWorkflowIntent(intentId: WorkflowIntentId) {
+    if (intentId === "render") {
+      setEnhanceBarOpen(false);
+      setView(plate?.url ? "result" : "source");
+    } else if (intentId === "3d") {
+      setEnhanceBarOpen(false);
+      setView("3d");
+    } else if (intentId === "edit") {
+      setEnhanceBarOpen(false);
+      setView("sam2");
+    } else if (intentId === "enhance") {
+      setEnhanceBarOpen(true);
+      setView(plate?.url ? "result" : "source");
+      if (!plate?.url && !upload) {
+        toast.message("Upload or generate a render first, then pick Whole Image, Region, or People at 2× or 4×.");
+      }
+    } else if (intentId === "spatial") {
+      setEnhanceBarOpen(false);
+      setView("nodes");
+    }
+  }
+
+  function exportLayeredBundle() {
+    const activeUrl = plate?.url ?? upload;
+    if (!activeUrl) {
+      toast.message("Upload a source or generate a plate before exporting.");
+      return;
+    }
+    const manifest = {
+      exportedAt: new Date().toISOString(),
+      layers: {
+        baseSource: upload ?? null,
+        enhancedPlate: plate?.url ?? null,
+        inpaintMask: maskDataUrl ?? null,
+      },
+      enhanceSettings: {
+        scope: enhanceScope,
+        environment: enhanceEnv,
+        upscaleFactor: engine.upscaleFactor,
+        directive: buildEnhanceDirective(enhanceScope, enhanceEnv, engine.upscaleFactor === 4 ? 4 : 2),
+      },
+      design,
+      engine,
+      frame,
+    };
+    const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `oriel-archviz-layered-bundle-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported multi-layer Studio bundle (Source + Result + Settings)");
   }
 
   function handlePublishSubmit(event: React.FormEvent) {
@@ -235,127 +349,332 @@ function WorkspacePage() {
     toast.success("Published to Project Gallery!");
   }
 
-  const stageTabs: { id: StudioStage; label: string; action: () => void }[] = [
-    { id: "source", label: "Source", action: () => setView("source") },
-    { id: "3d", label: "3D Viewport", action: () => setView("3d") },
-    { id: "sketch", label: "Sketch", action: () => setView("sketch") },
-    { id: "cv", label: "Preprocess & SAM", action: () => setView("cv") },
-    { id: "mask", label: "Inpaint", action: () => setView("mask") },
-    { id: "result", label: "Result", action: () => setView("result") },
-    { id: "grid", label: "4-Up Grid", action: () => setView("grid") },
-    { id: "compare", label: "Compare", action: showCompare },
-    { id: "360", label: "360° Tour", action: () => setView("360") },
+  const stagePhases: {
+    phase: string;
+    tabs: { id: StudioStage; label: string; action: () => void }[];
+  }[] = [
+    {
+      phase: "1. Input",
+      tabs: [
+        { id: "source", label: "Source", action: () => setView("source") },
+        { id: "3d", label: "3D Viewport", action: () => setView("3d") },
+        { id: "sketch", label: "Sketch", action: () => setView("sketch") },
+        { id: "cv", label: "Preprocess & SAM", action: () => setView("cv") },
+      ],
+    },
+    {
+      phase: "2. Edit",
+      tabs: [
+        { id: "sam2", label: "SAM-2 Seg", action: () => setView("sam2") },
+        { id: "mask", label: "Inpaint", action: () => setView("mask") },
+      ],
+    },
+    {
+      phase: "3. Output",
+      tabs: [
+        { id: "result", label: "Result", action: () => setView("result") },
+        { id: "grid", label: "4-Up Grid", action: () => setView("grid") },
+        { id: "compare", label: "Compare", action: showCompare },
+      ],
+    },
+    {
+      phase: "4. Spatial",
+      tabs: [
+        { id: "360", label: "360° Tour", action: () => setView("360") },
+        { id: "nodes", label: "Node Editor", action: () => setView("nodes") },
+      ],
+    },
   ];
 
   return (
-    <main className="flex h-full flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-      <section className="relative min-w-0 shrink-0 px-4 pb-6 md:px-8 lg:flex-1 lg:overflow-y-auto">
-        <img src="/viz/t07-cultural-campus.jpg" alt="" className="pointer-events-none absolute top-0 right-0 h-56 w-[46%] object-cover opacity-30 mask-[linear-gradient(90deg,transparent,black)]" />
-        <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto lg:hidden">
+    <main className="flex flex-1 min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+      <section className="relative flex min-w-0 flex-1 flex-col gap-3 px-3 pt-3 pb-6 md:px-6 lg:h-full lg:overflow-y-auto">
+        {/* Mobile Space Switcher */}
+        <div className="no-scrollbar flex shrink-0 gap-1.5 overflow-x-auto md:hidden">
           {VERTICALS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setVertical(item.id)}
-              className={cn("h-10 shrink-0 whitespace-nowrap rounded-full px-3 text-sm", design.vertical === item.id ? "gold-fill" : "bg-surface text-muted")}
+              className={cn(
+                "h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium",
+                design.vertical === item.id ? "bg-[#c5a880] text-[#281800] shadow-xs" : "bg-white/80 text-[#4d463c]",
+              )}
             >
               {item.label}
             </button>
           ))}
         </div>
 
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-medium tracking-[0.22em] text-[#b08a45] uppercase">Architectural pipeline</p>
-            <h1 className="mt-1 font-serif text-4xl tracking-tight text-fg md:text-5xl">{label} Studio</h1>
-            <p className="mt-2 max-w-xl text-sm text-muted">{COPY[design.vertical]}</p>
+        {/* Clean Atelier Studio Action Bar + 5-Intent Journey Stepper */}
+        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div>
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-[#725b38]">
+                Active Pipeline · {label}
+              </span>
+              <h1 title={COPY[design.vertical]} className="font-serif text-xl font-normal tracking-tight text-[#1b1c1a] sm:text-2xl">
+                {label} Studio
+              </h1>
+            </div>
+            <nav
+              aria-label="Architectural Workflow Stepper"
+              data-testid="workflow-intent-bar"
+              className="flex max-w-full flex-wrap items-center gap-0.5 rounded-2xl border border-[#d1c5b8]/45 bg-white/75 p-1 backdrop-blur-xl shadow-xs sm:flex-nowrap"
+            >
+              {WORKFLOW_INTENTS.map((item) => {
+                const isActive = activeIntent === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-testid={`intent-tab-${item.id}`}
+                    aria-pressed={isActive}
+                    title={item.hint}
+                    onClick={() => selectWorkflowIntent(item.id)}
+                    className={cn(
+                      "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl px-2.5 text-[11px] font-medium transition",
+                      isActive ? "bg-[#c5a880] font-semibold text-[#281800] shadow-xs" : "text-[#4d463c] hover:bg-[#efeeea] hover:text-[#1b1c1a]",
+                    )}
+                  >
+                    <span className="font-mono text-[10px] opacity-75">{item.step}.</span>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-1.5">
             {plate?.url ? (
               <>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void applyRelight("day-to-dusk")}
-                  className="hover-chip inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3 text-xs font-medium text-fg shadow-xs disabled:opacity-60"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#d1c5b8]/55 bg-white/85 px-2.5 text-xs font-medium text-[#1b1c1a] transition hover:border-[#725b38] disabled:opacity-60"
                 >
-                  <SunMoon className="size-3.5 text-[#b08a45]" />
+                  <SunMoon className="size-3.5 text-[#725b38]" />
                   Relight Dusk
                 </button>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void applyOutpaint("21:9")}
-                  className="hover-chip inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3 text-xs font-medium text-fg shadow-xs disabled:opacity-60"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#d1c5b8]/55 bg-white/85 px-2.5 text-xs font-medium text-[#1b1c1a] transition hover:border-[#725b38] disabled:opacity-60"
                 >
-                  <Expand className="size-3.5 text-[#b08a45]" />
+                  <Expand className="size-3.5 text-[#725b38]" />
                   Outpaint 21:9
                 </button>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void applyEnhance(4)}
-                  className="hover-chip inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3.5 text-xs font-medium text-fg shadow-xs disabled:opacity-60"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#d1c5b8]/55 bg-white/85 px-2.5 text-xs font-medium text-[#1b1c1a] transition hover:border-[#725b38] disabled:opacity-60"
                 >
-                  {busy ? <Loader2 className="size-3.5 animate-spin text-[#b08a45]" /> : <Sparkles className="size-3.5 text-[#b08a45]" />}
+                  {busy ? <Loader2 className="size-3.5 animate-spin text-[#725b38]" /> : <Sparkles className="size-3.5 text-[#725b38]" />}
                   Upscale 4×
                 </button>
                 <button
                   type="button"
                   onClick={() => setPublishOpen(true)}
-                  className="gold-fill inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-xs font-semibold shadow-xs"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-[#c5a880] px-3 text-xs font-semibold text-[#281800] shadow-xs transition hover:bg-[#b8976b]"
                 >
                   <Upload className="size-3.5" />
-                  Publish to Gallery
+                  Publish
                 </button>
               </>
             ) : null}
-            <Link
-              to="/builder"
-              className="hover-chip inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3.5 text-xs font-medium text-fg shadow-xs"
+            <button
+              type="button"
+              data-testid="freeze-mood-seed-btn"
+              aria-pressed={engine.seedLocked}
+              onClick={() => {
+                const nextLocked = !engine.seedLocked;
+                setEngineField("seedLocked", nextLocked);
+                if (nextLocked && engine.geometryLock < 90) {
+                  setEngineField("geometryLock", 92);
+                }
+                toast.success(
+                  nextLocked
+                    ? `Mood & Seed #${engine.seed} locked for consistent revisions`
+                    : "Seed unlocked for exploration",
+                );
+              }}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-2.5 text-xs font-medium transition",
+                engine.seedLocked
+                  ? "border-[#c5a880] bg-[#c5a880]/20 text-[#513d1d]"
+                  : "border-[#d1c5b8]/55 bg-white/80 text-[#1b1c1a] hover:border-[#725b38]",
+              )}
             >
-              <Wand2 className="size-3.5 text-[#b08a45]" />
-              Brief Builder
-            </Link>
-            <Link
-              to="/gallery"
-              className="hover-chip inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3.5 text-xs font-medium text-fg shadow-xs"
+              {engine.seedLocked ? <Lock className="size-3.5 text-[#725b38]" /> : <Unlock className="size-3.5 text-[#4d463c]" />}
+              {engine.seedLocked ? "Mood Frozen" : "Lock Mood"}
+            </button>
+            <button
+              type="button"
+              onClick={() => document.getElementById("studio-properties")?.scrollIntoView({ behavior: "smooth" })}
+              className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl border border-[#d1c5b8]/55 bg-white/85 px-2.5 text-xs font-medium text-[#1b1c1a] lg:hidden"
             >
-              <Images className="size-3.5 text-[#b08a45]" />
-              Project Gallery
-            </Link>
+              Optics ↓
+            </button>
+            <button
+              type="button"
+              data-testid="toggle-inspector-btn"
+              onClick={() => setInspectorCollapsed((v) => !v)}
+              aria-label={inspectorCollapsed ? "Show Scene & Optics panel" : "Hide Scene & Optics panel"}
+              className="hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#d1c5b8]/55 bg-white/85 px-2.5 text-xs font-medium text-[#1b1c1a] transition hover:border-[#725b38] lg:inline-flex"
+            >
+              {inspectorCollapsed ? <PanelRightOpen className="size-3.5 text-[#725b38]" /> : <PanelRightClose className="size-3.5 text-[#4d463c]" />}
+              {inspectorCollapsed ? "Optics Panel" : "Wide Canvas"}
+            </button>
           </div>
         </div>
 
-        {/* Main Unified Interactive Viewport */}
-        <div className="relative mt-5 overflow-hidden rounded-[28px] border border-line bg-[#1c1915] shadow-[0_20px_44px_rgba(70,48,16,0.08)]">
-          {/* Dedicated Top Pipeline Stage Bar */}
-          <div className="no-scrollbar flex items-center gap-1 overflow-x-auto border-b border-white/10 bg-[#14110f] px-3 py-2 text-xs text-ink">
-            {stageTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  tab.action();
-                }}
-                className={cn(
-                  "inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 transition hover:bg-white/15 hover:text-[#f6e7c8]",
-                  view === tab.id ? "gold-fill font-medium text-[#2a1c0c] hover:text-[#2a1c0c]" : "text-[#d5cab9]",
-                )}
-              >
-                {tab.id === "360" ? <Compass className="size-3" /> : null}
-                {tab.label}
-              </button>
+        {/* Large Central Image Visualization Window */}
+        <div className="relative flex min-h-[320px] shrink-0 flex-col overflow-hidden rounded-3xl border border-[#d1c5b8]/45 bg-[#161412] shadow-[0_24px_48px_-12px_rgba(27,28,26,0.10)]">
+          {/* Frosted Atelier Top Stage Switcher Bar */}
+          <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#d1c5b8]/35 bg-white/88 px-3 py-1.5 text-xs text-[#1b1c1a] backdrop-blur-xl">
+            {stagePhases.map((group) => (
+              <div key={group.phase} className="flex flex-wrap items-center gap-1">
+                <span className="mr-0.5 hidden text-[10px] font-semibold uppercase tracking-wider text-[#7f766a] sm:inline">{group.phase}</span>
+                {group.tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      tab.action();
+                    }}
+                    className={cn(
+                      "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-[11px] transition",
+                      view === tab.id
+                        ? "bg-[#c5a880] font-semibold text-[#281800] shadow-xs"
+                        : "bg-[#efeeea]/80 text-[#4d463c] hover:bg-[#e4e2dd] hover:text-[#1b1c1a]",
+                    )}
+                  >
+                    {tab.id === "360" ? <Compass className="size-3" /> : null}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             ))}
             {engine.liveStreamEnabled ? (
-              <span className="ml-auto shrink-0 rounded-full border border-[#d4b06a]/50 bg-[#d4b06a]/15 px-2.5 py-0.5 text-[10px] font-medium text-[#e7c27a]">
+              <span className="ml-auto shrink-0 rounded-lg border border-[#c5a880]/70 bg-[#c5a880]/20 px-2.5 py-0.5 text-[10px] font-semibold text-[#513d1d]">
                 Live Draft Active
               </span>
             ) : null}
           </div>
 
-          <div className="relative">
+          {/* Vaethat-Inspired ArchViz Enhancement Studio Bar */}
+          {enhanceBarOpen ? (
+            <div
+              data-testid="vaethat-enhance-bar"
+              className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#1e1b18] px-3.5 py-2 text-xs text-[#dfd5c6]"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-[#e0c298]">Enhance:</span>
+                <div className="inline-flex items-center gap-0.5 rounded-lg bg-white/5 p-0.5" role="group" aria-label="Enhance scope">
+                  {ENHANCE_SCOPES.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      aria-pressed={enhanceScope === s.id}
+                      onClick={() => setEnhanceScope(s.id)}
+                      className={cn(
+                        "h-6.5 rounded-md px-2 text-[11px] transition",
+                        enhanceScope === s.id ? "bg-[#c5a880] font-semibold text-[#281800]" : "text-[#d5cab9] hover:text-white",
+                      )}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="inline-flex items-center gap-0.5 rounded-lg bg-white/5 p-0.5" role="group" aria-label="Enhance environment">
+                  {ENHANCE_ENVIRONMENTS.map((env) => (
+                    <button
+                      key={env.id}
+                      type="button"
+                      aria-pressed={enhanceEnv === env.id}
+                      onClick={() => setEnhanceEnv(env.id)}
+                      className={cn(
+                        "h-6.5 rounded-md px-2 text-[11px] transition",
+                        enhanceEnv === env.id ? "bg-[#c5a880]/25 font-semibold text-[#e0c298]" : "text-[#b9aa95] hover:text-white",
+                      )}
+                    >
+                      {env.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="inline-flex items-center gap-0.5 rounded-lg bg-white/5 p-0.5" role="group" aria-label="Upscale factor">
+                  {([2, 4] as const).map((factor) => (
+                    <button
+                      key={factor}
+                      type="button"
+                      aria-pressed={engine.upscaleFactor === factor}
+                      onClick={() => setEngineField("upscaleFactor", factor)}
+                      className={cn(
+                        "h-6.5 rounded-md px-2 font-mono text-[11px] transition",
+                        engine.upscaleFactor === factor ? "bg-[#c5a880] font-semibold text-[#281800]" : "text-[#d5cab9] hover:text-white",
+                      )}
+                    >
+                      {factor}×
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex w-full flex-wrap items-center justify-between gap-1.5 sm:w-auto sm:justify-end">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (enhanceScope === "region") {
+                        setView("sam2");
+                        toast.message("Click a region in SAM-2 Seg, or run full-plate enhance.");
+                        return;
+                      }
+                      const nextIdea = idea.trim()
+                        ? idea
+                        : buildEnhanceDirective(enhanceScope, enhanceEnv, engine.upscaleFactor === 4 ? 4 : 2);
+                      if (!idea.trim()) setIdea(nextIdea);
+                      void applyEnhance(engine.upscaleFactor);
+                    }}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#c5a880] px-2.5 text-[11px] font-semibold text-[#281800] disabled:opacity-50"
+                  >
+                    <Sparkles className="size-3" />
+                    Run {engine.upscaleFactor}× Enhance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={showCompare}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-2.5 text-[11px] text-[#f6efe4] hover:border-[#e0c298]"
+                  >
+                    Compare
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportLayeredBundle}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-2.5 text-[11px] text-[#f6efe4] hover:border-[#e0c298]"
+                    title="Download multi-layer studio spec & mask manifest"
+                  >
+                    <Download className="size-3 text-[#e0c298]" /> Layered Export
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEnhanceBarOpen(false)}
+                  className="grid size-7 shrink-0 place-items-center rounded-lg text-[#9b8d7a] hover:bg-white/10 hover:text-white"
+                  aria-label="Close Enhance bar"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="relative flex min-h-[300px] flex-1 flex-col">
             {view === "3d" ? (
               <Viewport3D
                 aspect={aspect}
@@ -385,7 +704,7 @@ function WorkspacePage() {
             ) : view === "cv" ? (
               <CvPreprocessorStage
                 aspect={aspect}
-                sourceUrl={upload || plate?.url || "/viz/t03-compact-living-room.jpg"}
+                sourceUrl={upload || plate?.url || heroSample.src}
                 onSendMapToSketch={(mapUrl) => {
                   setUpload(mapUrl);
                   setView("sketch");
@@ -400,14 +719,36 @@ function WorkspacePage() {
                 onExtrudeFloorPlan={() => setView("3d")}
                 onLockAndRender={() => void generate()}
               />
+            ) : view === "sam2" ? (
+              <GroundedSAM2Tool
+                aspect={aspect}
+                sourceUrl={plate?.url ?? upload}
+                busy={busy}
+                onGroundedSamSegment={segmentGroundedSam2}
+                onSendToInpaint={(task, note) => {
+                  setEngineField("iopaintTask", task);
+                  setView("mask");
+                  void applyInpaint(note ?? "");
+                }}
+                onOpenInpaintWorkspace={() => {
+                  setSamInitialMode("off");
+                  setView("mask");
+                }}
+                onSendToNodeEditor={() => {
+                  setNodeEditorMode("canvas");
+                  setView("nodes");
+                }}
+                onSourceChange={(dataUrl) => setUpload(dataUrl)}
+              />
             ) : view === "mask" ? (
-              <SketchMaskCanvas
-                mode="mask"
+              <IOPaintWorkspace
                 aspect={aspect}
                 backgroundUrl={plate?.url ?? upload}
                 initialBufferUrl={maskDataUrl}
+                initialSamMode={samInitialMode}
                 busy={busy}
                 onSaveBuffer={setMaskDataUrl}
+                onGroundedSamSegment={segmentGroundedSam2}
                 onApplyMaskInpaint={(instruction) => void applyInpaint(instruction)}
                 onApplyDirectionalOutpaint={(pad) => void applyDirectionalOutpaint(pad)}
                 onApplyRemoveBg={(outMode) => void applyRemoveBgPlugin(outMode)}
@@ -415,9 +756,72 @@ function WorkspacePage() {
                 onApplyEsrganPlugin={() => void applyEnhance(engine.upscaleFactor)}
                 onLoadSampleSource={(url) => {
                   setUpload(url);
-                  toast.success("Sample scene loaded into IOPaint stage");
+                  toast.success("Sample scene loaded into IOPaint workspace");
                 }}
               />
+            ) : view === "nodes" ? (
+              <div className="flex flex-col">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#171310] px-3 py-1.5 text-[11px] text-[#d5cab9]">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setNodeEditorMode("canvas")}
+                      className={cn(
+                        "rounded-full px-3 py-1 font-medium transition",
+                        nodeEditorMode === "canvas" ? "bg-[#c5a880] text-[#281800]" : "border border-white/15 bg-white/5 text-[#e6ddd0] hover:bg-white/10",
+                      )}
+                    >
+                      Workflow Canvas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNodeEditorMode("studio")}
+                      className={cn(
+                        "rounded-full px-3 py-1 font-medium transition",
+                        nodeEditorMode === "studio" ? "bg-[#c5a880] text-[#281800]" : "border border-white/15 bg-white/5 text-[#e6ddd0] hover:bg-white/10",
+                      )}
+                    >
+                      Full 45-Node Studio
+                    </button>
+                  </div>
+                  <span className="hidden text-[10px] text-[#9b8d7a] sm:inline">
+                    {nodeEditorMode === "canvas"
+                      ? "Drag nodes & draw SVG connections · Image Input → ControlNet → Render Engine"
+                      : "Full multi-pass DAG orchestrator"}
+                  </span>
+                </div>
+                {nodeEditorMode === "canvas" ? (
+                  <NodeEditorCanvas
+                    onOpenSam2Tool={() => setView("sam2")}
+                    onOpenStage={(stage) => setView(stage)}
+                    onSendResultToStudio={(imageUrl, title) => {
+                      setUpload(imageUrl);
+                      setPlate({
+                        url: imageUrl,
+                        upload: upload ?? undefined,
+                        templateId: engine.workflowPreset,
+                        idea: title ? `Node Canvas: ${title}` : "Node Canvas Render",
+                      });
+                      setView("result");
+                      toast.success("Node Canvas render sent to Studio Plate");
+                    }}
+                  />
+                ) : (
+                  <NodeStudioEmbedded
+                    onPromoteToStudio={(imageUrl, title) => {
+                      setUpload(imageUrl);
+                      setPlate({
+                        url: imageUrl,
+                        upload: upload ?? undefined,
+                        templateId: engine.workflowPreset,
+                        idea: title ? `Node Pipeline: ${title}` : "Node Pipeline Result",
+                      });
+                      setView("result");
+                      toast.success("Node output sent to Studio Plate");
+                    }}
+                  />
+                )}
+              </div>
             ) : view === "360" ? (
               <PanoramaViewer imageUrl={plate?.url || upload || "/viz/p01-pavilion-dusk.jpg"} aspect={aspect} />
             ) : view === "grid" ? (
@@ -435,11 +839,11 @@ function WorkspacePage() {
                         }}
                         className={cn(
                           "group relative overflow-hidden rounded-2xl border transition",
-                          plate?.url === url ? "border-[#e7c27a] ring-2 ring-[#e7c27a]" : "border-white/10 hover:border-[#d4b06a]",
+                          plate?.url === url ? "border-[#e0c298] ring-2 ring-[#e0c298]" : "border-white/10 hover:border-[#c5a880]",
                         )}
                       >
                         <img src={url} alt={`Concept variation ${idx + 1}`} className="aspect-[16/9] w-full object-cover transition group-hover:scale-[1.02]" />
-                        <span className="absolute bottom-2 left-2 rounded-full bg-[#14110f]/85 px-2.5 py-0.5 font-mono text-[10px] text-[#f6efe4]">
+                        <span className="absolute bottom-2 left-2 rounded-full bg-[#161412]/85 px-2.5 py-0.5 font-mono text-[10px] text-[#f6efe4]">
                           V{idx + 1} · Promote
                         </span>
                       </button>
@@ -453,7 +857,7 @@ function WorkspacePage() {
                         type="button"
                         disabled={busy}
                         onClick={() => void generateGrid()}
-                        className="gold-fill inline-flex h-10 items-center gap-2 rounded-full px-5 text-xs font-semibold text-[#2a1c0c]"
+                        className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c5a880] px-5 text-xs font-semibold text-[#281800]"
                       >
                         <Grid2X2 className="size-4" /> Generate 4-Up Grid
                       </button>
@@ -474,52 +878,100 @@ function WorkspacePage() {
               />
             ) : view === "result" ? (
               plate?.url ? (
-                <img src={plate.url} alt="Result" className="mx-auto w-full object-contain" style={{ aspectRatio: aspect, maxHeight: "62vh" }} />
+                <div className="relative flex items-center justify-center bg-[#161412] p-3 sm:p-4">
+                  <div className="relative flex h-[280px] w-full items-center justify-center sm:h-[340px] xl:h-[365px]" style={{ containerType: "size" }}>
+                    <div
+                      data-testid="studio-aspect-frame"
+                      data-ratio={frame.ratio}
+                      className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#120f0c] shadow-[0_18px_48px_rgba(0,0,0,0.45)] transition-[width,height] duration-200"
+                      style={{
+                        width: `min(100cqw, calc(100cqh * ${aspectNumber}))`,
+                        height: `min(100cqh, calc(100cqw / ${aspectNumber}))`,
+                      }}
+                    >
+                      <span className="pointer-events-none absolute top-3 left-3 z-10 rounded-full border border-white/15 bg-[#161412]/80 px-2.5 py-0.5 font-mono text-[10px] text-[#e0c298] backdrop-blur-md">
+                        Result
+                      </span>
+                      <img src={plate.url} alt="Result" className="h-full w-full object-contain" />
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <div className="grid min-h-72 place-items-center px-6 text-center text-sm text-[#f6efe4]" style={{ aspectRatio: aspect }}>
-                  No plate yet. Choose 3D Viewport, Sketch, or Upload, then press Generate.
+                <div className="grid min-h-[300px] flex-1 place-items-center bg-[#161412] p-4 text-center text-sm text-[#f6efe4]">
+                  No plate yet. Choose 3D Viewport, Sketch, or Upload, then press Render Plate.
                 </div>
               )
             ) : upload ? (
-              <img src={upload} alt="Source" className="mx-auto w-full object-contain" style={{ aspectRatio: aspect, maxHeight: "62vh" }} />
+              <div className="relative flex items-center justify-center bg-[#161412] p-3 sm:p-4">
+                <div className="relative flex h-[280px] w-full items-center justify-center sm:h-[340px] xl:h-[365px]" style={{ containerType: "size" }}>
+                  <div
+                    data-testid="studio-aspect-frame"
+                    data-ratio={frame.ratio}
+                    className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#120f0c] shadow-[0_18px_48px_rgba(0,0,0,0.45)] transition-[width,height] duration-200"
+                    style={{
+                      width: `min(100cqw, calc(100cqh * ${aspectNumber}))`,
+                      height: `min(100cqh, calc(100cqw / ${aspectNumber}))`,
+                    }}
+                  >
+                    <span className="pointer-events-none absolute top-3 left-3 z-10 rounded-full border border-white/15 bg-[#161412]/80 px-2.5 py-0.5 font-mono text-[10px] text-[#e0c298] backdrop-blur-md">
+                      Source
+                    </span>
+                    <img src={upload} alt="Source" className="h-full w-full object-contain" />
+                  </div>
+                </div>
+              </div>
             ) : (
-              <div className="relative z-0 block min-h-72 w-full">
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    void onFile(event.dataTransfer.files[0]);
-                  }}
-                  className="block w-full"
-                >
-                  <img src="/viz/t03-compact-living-room.jpg" alt="" className="max-h-[46vh] w-full object-cover opacity-80" />
-                </button>
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-rail/30 p-4 text-ink">
-                  <p className="rounded-full bg-rail/80 px-4 py-1.5 text-sm">Drop a photo, plan, or massing image</p>
-                  <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setView("3d")}
-                      className="gold-fill inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-xs font-semibold text-[#2a1c0c]"
-                    >
-                      <Box className="size-3.5" /> Open 3D Massing
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setView("sketch")}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/25 bg-[#14110f]/85 px-4 text-xs font-medium text-[#f6efe4] hover:border-[#d4b06a]"
-                    >
-                      <Pencil className="size-3.5 text-[#e7c27a]" /> Start Sketch Pad
-                    </button>
+              <div className="relative z-0 flex items-center justify-center bg-[#161412] p-3 sm:p-4">
+                <div className="relative flex h-[280px] w-full items-center justify-center sm:h-[340px] xl:h-[365px]" style={{ containerType: "size" }}>
+                  <div
+                    data-testid="studio-aspect-frame"
+                    data-ratio={frame.ratio}
+                    className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#1c1915] shadow-[0_18px_48px_rgba(0,0,0,0.45)] transition-[width,height] duration-200"
+                    style={{
+                      width: `min(100cqw, calc(100cqh * ${aspectNumber}))`,
+                      height: `min(100cqh, calc(100cqw / ${aspectNumber}))`,
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => fileRef.current?.click()}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/25 bg-[#14110f]/85 px-4 text-xs font-medium text-[#f6efe4] hover:border-[#d4b06a]"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        void onFile(event.dataTransfer.files[0]);
+                      }}
+                      className="relative block h-full w-full"
                     >
-                      <ImagePlus className="size-3.5 text-[#e7c27a]" /> Upload Photo
+                      <img src={heroSample.src} alt={heroSample.caption} className="h-full w-full object-cover opacity-90" />
                     </button>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-end gap-2.5 bg-gradient-to-t from-[#14110f]/90 via-[#14110f]/30 to-transparent p-4 text-[#fbf9f5]">
+                      <p className="rounded-full bg-[#161412]/80 px-3.5 py-1 text-center text-xs backdrop-blur-md sm:text-sm">
+                        Drop photo, sketch, or 3D GLB (Ctrl+V to paste)
+                      </p>
+                      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setView("3d")}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#c5a880] px-3.5 text-[11px] font-semibold text-[#281800] shadow-xs transition hover:bg-[#b8976b] sm:h-9 sm:px-4 sm:text-xs"
+                        >
+                          <Box className="size-3.5" /> 3D Massing
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setView("sketch")}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/25 bg-[#161412]/80 px-3.5 text-[11px] font-medium text-[#fbf9f5] backdrop-blur-md hover:border-[#e0c298] sm:h-9 sm:px-4 sm:text-xs"
+                        >
+                          <Pencil className="size-3.5 text-[#e0c298]" /> Sketch Pad
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/25 bg-[#161412]/80 px-3.5 text-[11px] font-medium text-[#fbf9f5] backdrop-blur-md hover:border-[#e0c298] sm:h-9 sm:px-4 sm:text-xs"
+                        >
+                          <ImagePlus className="size-3.5 text-[#e0c298]" /> Upload Photo / GLB
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -532,7 +984,10 @@ function WorkspacePage() {
                     key={group.id}
                     type="button"
                     onClick={() => setTarget(group.id)}
-                    className={cn("rounded-full px-3 py-1 text-xs shadow-md", design.target === group.id ? "gold-fill text-[#2a1c0c]" : "bg-rail/90 text-ink")}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs shadow-md",
+                      design.target === group.id ? "bg-[#c5a880] font-medium text-[#281800]" : "bg-[#161412]/90 text-[#fbf9f5]",
+                    )}
                   >
                     {group.label}
                   </button>
@@ -541,62 +996,65 @@ function WorkspacePage() {
             ) : null}
           </div>
 
-          {/* Dedicated Bottom Frame Info & Quick Tools Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-[#14110f] px-3 py-2">
-            <span className="inline-flex items-center gap-2 text-xs text-[#dfd5c6]">
-              <ImagePlus className="size-3.5 text-[#e7c27a]" /> {label} · {room} · {frame.ratio} · {frame.resolution.toUpperCase()}
+          {/* Dedicated Bottom Frame Info & Unique Overlay Tools */}
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-[#161412] px-3.5 py-2">
+            <span className="inline-flex items-center gap-2 font-mono text-[11px] text-[#dfd5c6] tabular-nums">
+              {label} · {room} · {frame.ratio} · {frame.resolution.toUpperCase()}
               {view === "3d" ? (
                 <span className="hidden text-[11px] text-[#b9aa95] md:inline">· Drag to orbit · Scroll to zoom</span>
               ) : null}
             </span>
 
             <div
-              className="flex items-center gap-1 rounded-full border border-[#e7c27a]/60 bg-[#1a1612] p-0.5 text-white"
+              className="flex items-center gap-1"
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
-              {(
-                [
-                  ["select", "Select an element", MousePointer2, tool === "select" && selecting],
-                  ["compare", "Compare source and result", Square, view === "compare"],
-                  ["draw", "Open Sketch Pad", Pencil, view === "sketch"],
-                  ["spot", "Cycle the edit target", Circle, tool === "spot"],
-                  ["layers", "Show earlier plates", Layers, tool === "layers"],
-                ] as const
-              ).map(([id, name, Icon, active]) => (
-                <button
-                  key={id}
-                  type="button"
-                  aria-label={name}
-                  aria-pressed={active}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    handleTool(id);
-                  }}
-                  className={cn(
-                    "grid size-8 place-items-center rounded-full text-white/90 transition hover:bg-[#e7c27a]/25 hover:text-[#f6e7c8]",
-                    active && "gold-fill text-[#2a1c0c] hover:text-[#2a1c0c]",
-                  )}
-                >
-                  <Icon className="size-3.5" />
-                </button>
-              ))}
               <button
                 type="button"
-                aria-label="Open Inpaint Mask Brush"
-                aria-pressed={view === "mask"}
+                aria-label="Pin architectural element"
+                aria-pressed={selecting}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  setView("mask");
+                  setSelecting(!selecting);
                 }}
                 className={cn(
-                  "grid size-8 place-items-center rounded-full text-white/90 transition hover:bg-[#e7c27a]/25 hover:text-[#f6e7c8]",
-                  view === "mask" && "gold-fill text-[#2a1c0c] hover:text-[#2a1c0c]",
+                  "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition",
+                  selecting
+                    ? "border-transparent bg-[#c5a880] text-[#281800]"
+                    : "border-white/15 bg-white/5 text-white/90 hover:border-[#e0c298]",
                 )}
               >
-                <Paintbrush className="size-3.5" />
+                <MousePointer2 className="size-3" />
+                Pin Element
+              </button>
+              <button
+                type="button"
+                aria-label="Cycle the edit target"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  cycleTargetElement();
+                }}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 text-[11px] font-medium text-white/90 transition hover:border-[#e0c298]"
+              >
+                <Crosshair className="size-3 text-[#e0c298]" />
+                Target: {design.target}
+              </button>
+              <button
+                type="button"
+                data-testid="open-nvidia-vision-btn"
+                aria-label="Analyze image with Vision AI"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setVisionOpen(true);
+                }}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 text-[11px] font-medium text-white/90 transition hover:border-[#e0c298]"
+              >
+                <ScanEye className="size-3 text-[#e0c298]" />
+                Vision AI
               </button>
             </div>
           </div>
@@ -604,7 +1062,7 @@ function WorkspacePage() {
           <input
             ref={fileRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,.glb,.gltf,.obj,.fbx"
             className="sr-only"
             suppressHydrationWarning
             onChange={(event) => {
@@ -614,93 +1072,111 @@ function WorkspacePage() {
           />
         </div>
 
+        {/* Frosted Studio Prompt Dock & Controls */}
         <Composer />
 
-        {tool === "layers" || history.length > 0 ? (
-          <div className="mt-4 flex gap-2 overflow-x-auto">
-            {history.length === 0 ? <p className="text-sm text-muted">Earlier plates will stack here after you generate.</p> : null}
-            {history.map((url) => (
+        {/* 4-Column Interactive Plate Iteration Grid */}
+        <div data-testid="atelier-plate-strip" className="grid grid-cols-2 gap-3 pb-2 sm:grid-cols-4">
+          {plateIterationCards.map((card) => {
+            const isSelected = Boolean(plate?.url === card.url || (!plate?.url && upload === card.url));
+            return (
               <button
-                key={url}
+                key={card.id}
                 type="button"
                 onClick={() => {
-                  if (plate) setPlate({ ...plate, url });
-                  setView("result");
+                  if (card.isGenerated) {
+                    setPlate({
+                      url: card.url,
+                      upload: upload ?? undefined,
+                      templateId: engine.workflowPreset,
+                      idea: idea.trim() || `${design.look} architectural plate`,
+                    });
+                    setView("result");
+                    toast.success(`Restored ${card.tag}`);
+                  } else {
+                    setUpload(card.url);
+                    setDesignField("light", card.lightPreset);
+                    setView("source");
+                    toast.success(`Loaded ${card.title} (${card.subtitle}) into Source frame`);
+                  }
                 }}
-                className="shrink-0"
+                className={cn(
+                  "group relative overflow-hidden rounded-2xl border bg-white/80 text-left transition-all hover:shadow-md",
+                  isSelected
+                    ? "border-[#c5a880] ring-2 ring-[#c5a880]/70"
+                    : "border-[#d1c5b8]/45 hover:border-[#725b38]/60",
+                )}
               >
-                <img src={url} alt="" className="h-16 w-24 rounded-xl border border-line object-cover" />
+                <div className="relative h-24 w-full overflow-hidden bg-[#161412]">
+                  <img
+                    src={card.url}
+                    alt={card.title}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <span className="absolute top-2 left-2 rounded-full bg-[#161412]/75 px-2 py-0.5 font-mono text-[10px] font-medium text-[#fbf9f5] backdrop-blur-md">
+                    {card.tag}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-[#1b1c1a]">{card.title}</p>
+                    <p className="truncate text-[10px] text-[#7f766a]">{card.subtitle}</p>
+                  </div>
+                </div>
               </button>
-            ))}
-          </div>
-        ) : null}
-
-        {chat.length > 0 ? (
-          <ul className="mt-4 space-y-2">
-            {chat.slice(-3).map((line) => (
-              <li key={line.id} className={cn("max-w-xl rounded-2xl px-3 py-2 text-sm", line.role === "you" ? "bg-surface text-fg" : "text-muted")}>
-                {line.text}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {["Warm the lighting", "Keep the layout, restyle the finishes", "Shift the materials, hold the camera"].map((line) => (
-            <button
-              key={line}
-              type="button"
-              onClick={() => setIdea(appendSuggestionToIdea(idea, line))}
-              className="hover-chip h-9 rounded-full border border-line bg-surface px-3 text-xs text-muted"
-            >
-              {line}
-            </button>
-          ))}
+            );
+          })}
         </div>
       </section>
-      <PropertiesPanel />
+
+      <PropertiesPanel
+        collapsed={inspectorCollapsed}
+        onToggleCollapse={() => setInspectorCollapsed((v) => !v)}
+        onOpenStage={(stage) => setView(stage)}
+        onExportPlate={exportLayeredBundle}
+      />
 
       {/* Publish to Project Gallery Modal */}
       {publishOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
-          <form onSubmit={handlePublishSubmit} className="w-full max-w-md rounded-3xl border border-line bg-surface p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-xs">
+          <form onSubmit={handlePublishSubmit} className="w-full max-w-md rounded-3xl border border-[#d1c5b8]/60 bg-[#fbf9f5] p-6 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h2 className="font-serif text-xl font-bold text-fg">Publish to Project Gallery</h2>
-              <button type="button" onClick={() => setPublishOpen(false)} className="grid size-8 place-items-center rounded-full text-muted hover:bg-raised">
+              <h2 className="font-serif text-xl font-semibold text-[#1b1c1a]">Publish to Project Gallery</h2>
+              <button type="button" onClick={() => setPublishOpen(false)} className="grid size-8 place-items-center rounded-full text-[#4d463c] hover:bg-[#efeeea]">
                 <X className="size-4" />
               </button>
             </div>
-            <p className="mt-1 text-xs text-muted">Save your before/after architectural plate into the Gallery comparison archive.</p>
+            <p className="mt-1 text-xs text-[#4d463c]">Save your before/after architectural plate into the Gallery comparison archive.</p>
 
             <div className="mt-4 space-y-3 text-xs">
               <label className="block">
-                <span className="font-medium text-fg">Project Title</span>
+                <span className="font-medium text-[#1b1c1a]">Project Title</span>
                 <input
                   type="text"
                   value={pubTitle}
                   onChange={(e) => setPubTitle(e.target.value)}
                   placeholder={`${design.look} ${label} Study`}
-                  className="mt-1 h-10 w-full rounded-xl border border-line bg-raised px-3 text-fg outline-none focus:border-[#d4b06a]"
+                  className="mt-1 h-10 w-full rounded-xl border border-[#d1c5b8]/60 bg-white px-3 text-[#1b1c1a] outline-none focus:border-[#725b38]"
                 />
               </label>
 
               <label className="block">
-                <span className="font-medium text-fg">Location / Context</span>
+                <span className="font-medium text-[#1b1c1a]">Location / Context</span>
                 <input
                   type="text"
                   value={pubLocation}
                   onChange={(e) => setPubLocation(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border border-line bg-raised px-3 text-fg outline-none focus:border-[#d4b06a]"
+                  className="mt-1 h-10 w-full rounded-xl border border-[#d1c5b8]/60 bg-white px-3 text-[#1b1c1a] outline-none focus:border-[#725b38]"
                 />
               </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="font-medium text-fg">Discipline</span>
+                  <span className="font-medium text-[#1b1c1a]">Discipline</span>
                   <select
                     value={pubDiscipline}
                     onChange={(e) => setPubDiscipline(e.target.value as PublishedGalleryProject["discipline"])}
-                    className="mt-1 h-10 w-full rounded-xl border border-line bg-raised px-2.5 text-fg outline-none focus:border-[#d4b06a]"
+                    className="mt-1 h-10 w-full rounded-xl border border-[#d1c5b8]/60 bg-white px-2.5 text-[#1b1c1a] outline-none focus:border-[#725b38]"
                   >
                     <option value="Exterior">Exterior</option>
                     <option value="Interior">Interior</option>
@@ -712,11 +1188,11 @@ function WorkspacePage() {
                 </label>
 
                 <label className="block">
-                  <span className="font-medium text-fg">Comparison Study</span>
+                  <span className="font-medium text-[#1b1c1a]">Comparison Study</span>
                   <select
                     value={pubType}
                     onChange={(e) => setPubType(e.target.value as PublishedGalleryProject["comparisonType"])}
-                    className="mt-1 h-10 w-full rounded-xl border border-line bg-raised px-2.5 text-fg outline-none focus:border-[#d4b06a]"
+                    className="mt-1 h-10 w-full rounded-xl border border-[#d1c5b8]/60 bg-white px-2.5 text-[#1b1c1a] outline-none focus:border-[#725b38]"
                   >
                     <option value="Material Restyle">Material Restyle</option>
                     <option value="Lighting / Relighting">Lighting / Relighting</option>
@@ -728,16 +1204,22 @@ function WorkspacePage() {
             </div>
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setPublishOpen(false)} className="h-9 rounded-full border border-line px-4 text-xs text-muted hover:text-fg">
+              <button type="button" onClick={() => setPublishOpen(false)} className="h-9 rounded-full border border-[#d1c5b8]/60 bg-white px-4 text-xs text-[#4d463c] hover:text-[#1b1c1a]">
                 Cancel
               </button>
-              <button type="submit" className="gold-fill h-9 rounded-full px-5 text-xs font-semibold text-[#2a1c0c]">
+              <button type="submit" className="h-9 rounded-full bg-[#c5a880] px-5 text-xs font-semibold text-[#281800]">
                 Save to Gallery
               </button>
             </div>
           </form>
         </div>
       ) : null}
+
+      <NvidiaVisionDialog
+        open={visionOpen}
+        onOpenChange={setVisionOpen}
+        defaultImageUrl={plate?.url ?? upload ?? heroSample.src}
+      />
     </main>
   );
 }

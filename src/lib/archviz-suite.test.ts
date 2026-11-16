@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  FLYTHROUGH_DURATION_MS,
   buildBatchMatrixSpecs,
   buildDesignPackDocumentHtml,
   buildHouseStyleProfile,
   buildMaterialScheduleRows,
+  buildOrbitDollyZoomRig,
+  computeBatchProgress,
   computeOutpaintGeometry,
   computeSolarPositionFromGeo,
   decodeReviewPinsParam,
@@ -12,6 +15,9 @@ import {
   encodeReviewPinsParam,
   getQueueStats,
   interpolateCameraKeyframes,
+  interpolateCameraPathCatmullRom,
+  sampleCameraPathPoints,
+  upsertRoleKeyframe,
   type CameraKeyframe,
   type ReviewPin,
 } from "./archviz-suite.ts";
@@ -238,5 +244,52 @@ describe("archviz-suite pure logic", () => {
     assert.deepEqual(getQueueStats(queue), { total: 3, pending: 1, processing: 0, completed: 1, failed: 1 });
     assert.equal(queue[0]?.url, "/viz/p01-pavilion-dusk.jpg");
     assert.equal(queue[1]?.errorMessage, "Timeout");
+
+    const progress = computeBatchProgress(queue);
+    assert.equal(progress.progressPct, 67);
+    assert.equal(progress.nextPendingId, q3.id);
+    assert.equal(progress.activeProcessingId, null);
+    assert.equal(progress.isComplete, false);
+  });
+
+  it("stages 3 Orbit/Dolly/Zoom camera positions and evaluates smooth 4-second Catmull-Rom spline", () => {
+    assert.equal(FLYTHROUGH_DURATION_MS, 4000);
+
+    const rig = buildOrbitDollyZoomRig([14, 7, 14], [0, 2, 0], 35);
+    assert.equal(rig.length, 3);
+    assert.deepEqual(
+      rig.map((k) => k.role),
+      ["orbit", "dolly", "zoom"],
+    );
+    assert.ok(rig[0]!.focalLength < rig[2]!.focalLength, "zoom pose must increase focal length over orbit pose");
+
+    const start = interpolateCameraPathCatmullRom(rig, 0);
+    const mid = interpolateCameraPathCatmullRom(rig, 0.5);
+    const end = interpolateCameraPathCatmullRom(rig, 1);
+
+    assert.ok(start && mid && end);
+    assert.deepEqual(start.pos, rig[0]!.pos);
+    assert.ok(Math.abs(mid.pos[0] - rig[1]!.pos[0]) < 0.01);
+    assert.ok(Math.abs(mid.pos[2] - rig[1]!.pos[2]) < 0.01);
+    assert.deepEqual(end.pos, rig[2]!.pos);
+    assert.equal(end.focalLength, rig[2]!.focalLength);
+
+    const sampled = sampleCameraPathPoints(rig, 24);
+    assert.equal(sampled.length, 25);
+
+    const replacedDolly = upsertRoleKeyframe(rig, {
+      id: "kf-custom-dolly",
+      label: "2. Dolly (Custom)",
+      role: "dolly",
+      pos: [5, 3, 6],
+      target: [0, 2, 0],
+      focalLength: 38,
+    });
+    assert.equal(replacedDolly.length, 3);
+    assert.deepEqual(
+      replacedDolly.map((k) => k.role),
+      ["orbit", "dolly", "zoom"],
+    );
+    assert.equal(replacedDolly[1]?.id, "kf-custom-dolly");
   });
 });

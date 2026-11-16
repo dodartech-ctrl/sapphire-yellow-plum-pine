@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDirectionalOutpaintBounds, dilateBinaryMask, invertBinaryMask } from "./cv-pipeline";
+import {
+  buildDirectionalOutpaintBounds,
+  dilateBinaryMask,
+  heuristicSemanticBoxesForPrompt,
+  invertBinaryMask,
+  normalizeGroundedBoxes,
+} from "./cv-pipeline";
 import {
   DEFAULT_ENGINE,
   DEFAULT_SCENE3D,
@@ -95,3 +101,33 @@ test("buildIopaintDirective & compileEngineBrief adapt prompt per IOPaint task m
   });
   assert.match(buildIopaintDirective(exampleEngine, "place oak chair"), /IOPAINT PAINT-BY-EXAMPLE/);
 });
+
+test("normalizeGroundedBoxes clamps coordinates 0..1000 and filters degenerate boxes", () => {
+  const boxes = normalizeGroundedBoxes(
+    [
+      { label: "Glazing Bay", box_2d: [-50, 120, 640, 1200], confidence: 1.4 },
+      { label: "Invalid Box", box_2d: [400, 400, 390, 600], confidence: 0.9 },
+      { label: "Too Thin", box_2d: [100, 100, 104, 300], confidence: 0.8 },
+    ],
+    "fallback",
+  );
+  assert.equal(boxes.length, 1);
+  assert.deepEqual(boxes[0].box_2d, [0, 120, 640, 1000]);
+  assert.equal(boxes[0].confidence, 1);
+  assert.equal(boxes[0].label, "Glazing Bay");
+});
+
+test("heuristicSemanticBoxesForPrompt returns architectural bounding box priors per object category", () => {
+  const skyBoxes = heuristicSemanticBoxesForPrompt("sky dome");
+  assert.equal(skyBoxes[0].label, "Sky Dome");
+  assert.ok(skyBoxes[0].box_2d[2] <= 400);
+
+  const sofaBoxes = heuristicSemanticBoxesForPrompt("sofa and furniture");
+  assert.equal(sofaBoxes.length, 2);
+  assert.ok(sofaBoxes[0].box_2d[0] >= 400);
+
+  const glazingBoxes = heuristicSemanticBoxesForPrompt("windows and glazing");
+  assert.equal(glazingBoxes.length, 2);
+  assert.equal(glazingBoxes[0].label, "Glazing Bay");
+});
+

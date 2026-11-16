@@ -18,6 +18,11 @@ export function frameAspect(ratio: Ratio): string {
   return ratio.replace(":", " / ");
 }
 
+export function frameAspectNumber(ratio: Ratio): number {
+  const [w, h] = ratio.split(":").map(Number);
+  return w > 0 && h > 0 ? w / h : 16 / 9;
+}
+
 export function frameEdge(resolution: Resolution): number {
   return resolution === "2k" ? 2048 : 1280;
 }

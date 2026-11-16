@@ -7,11 +7,14 @@ import {
   Copy,
   Download,
   FileSpreadsheet,
+  FileText,
   GripVertical,
+  Grid,
   MoveRight,
   Palette,
   RefreshCw,
   Save,
+  Share2,
   Sliders,
   Sparkles,
   Sun,
@@ -19,9 +22,43 @@ import {
   Upload,
   Wand2,
 } from "lucide-react";
-import { useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
+import { BriefCollabDrawer } from "@/components/brief-collab-drawer";
+import { BriefTemplateLibrary } from "@/components/brief-template-library";
+import { ClientPdfExportModal } from "@/components/client-pdf-export-modal";
 import { MidLayerBar } from "@/components/mid-layer-bar";
+import { MoodboardOverlay } from "@/components/moodboard-overlay";
+import {
+  buildBriefShareUrl,
+  buildSharedBriefSnapshot,
+  normalizeAuthorName,
+  sanitizeShareId,
+  type CollabParameterKey,
+  type CollabReviewerRole,
+  type SharedBriefSession,
+} from "@/lib/brief-collab";
+import {
+  addBriefCommentFn,
+  createSharedBriefFn,
+  deleteBriefCommentFn,
+  getSharedBriefFn,
+  toggleBriefCommentStatusFn,
+  updateSharedBriefFn,
+} from "@/lib/brief-collab-api";
+import {
+  formatReferenceNoteFromImage,
+  parseBriefToMoodboardQueries,
+  type MoodboardGenerationResult,
+  type MoodboardImageItem,
+} from "@/lib/brief-moodboard";
+import { generateMoodboardFn } from "@/lib/brief-moodboard-api";
+import {
+  BRIEF_TEMPLATES,
+  buildTemplateCompiledNotes,
+  resolveBriefTemplateSlots,
+  type BriefTemplate,
+} from "@/lib/brief-templates";
 import {
   ARCHVIZ_PRESETS,
   DICTIONARY_BLOCKS,
@@ -86,8 +123,14 @@ function BriefBuilderPage() {
   const setDesignField = useOriel((state) => state.setDesignField);
   const setEngineField = useOriel((state) => state.setEngineField);
   const setScene3DField = useOriel((state) => state.setScene3DField);
+  const setFrame = useOriel((state) => state.setFrame);
+  const applyBriefTemplateConfig = useOriel((state) => state.applyBriefTemplateConfig);
+  const applySharedBriefState = useOriel((state) => state.applySharedBriefState);
   const saveProject = useOriel((state) => state.saveProject);
   const saveBrief = useOriel((state) => state.saveBrief);
+  const plate = useOriel((state) => state.plate);
+  const upload = useOriel((state) => state.upload);
+  const frame = useOriel((state) => state.frame);
   const dictionaryBlocks = useOriel((state) => state.dictionaryBlocks);
   const dictionaryParams = useOriel((state) => state.dictionaryParams);
   const setDictionarySelection = useOriel((state) => state.setDictionarySelection);
@@ -117,11 +160,30 @@ function BriefBuilderPage() {
   const [activeTab, setActiveTab] = useState<BlockCategory | "dictionary">("style");
   const [dictGroup, setDictGroup] = useState<ArchvizPresetGroup>("Core Edit");
   const [activeDictPresetId, setActiveDictPresetId] = useState<string>("facade");
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [dictSearch, setDictSearch] = useState("");
   const [previewTab, setPreviewTab] = useState<"spec" | "prompt" | "materials" | "dictionary" | "bim">("spec");
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const jsonInputRef = useRef<HTMLInputElement>(null);
+
+  // Team Collaboration & Parameter Comments state
+  const [collabOpen, setCollabOpen] = useState(false);
+  const [collabSession, setCollabSession] = useState<SharedBriefSession | null>(null);
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [isSyncingShare, setIsSyncingShare] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [reviewerName, setReviewerName] = useState("Lead Architect");
+  const [reviewerRole, setReviewerRole] = useState<CollabReviewerRole>("Lead Architect");
+
+  // Automated Moodboard Overlay state
+  const [moodboardOpen, setMoodboardOpen] = useState(false);
+  const [moodboardCustomQuery, setMoodboardCustomQuery] = useState("");
+  const [moodboardLoading, setMoodboardLoading] = useState(false);
+  const [moodboardError, setMoodboardError] = useState<string | null>(null);
+  const [moodboardResult, setMoodboardResult] = useState<MoodboardGenerationResult | null>(null);
+  const [pinnedMoodboardIds, setPinnedMoodboardIds] = useState<string[]>([]);
 
   // Effective dictionary blocks (falls back to selected scenario preset if empty)
   const effectiveDictBlocks = useMemo(
@@ -146,6 +208,322 @@ function BriefBuilderPage() {
     () => buildMaterialScheduleRows(design, engine, scene3d),
     [design, engine, scene3d],
   );
+
+  // Parsed moodboard queries from active brief
+  const moodboardQueries = useMemo(
+    () =>
+      parseBriefToMoodboardQueries({
+        visionDoc,
+        selectedStyle,
+        selectedLighting,
+        selectedMood,
+        design,
+        engine,
+        scene3d,
+        customNotes,
+        customQueryOverride: moodboardCustomQuery,
+      }),
+    [visionDoc, selectedStyle, selectedLighting, selectedMood, design, engine, scene3d, customNotes, moodboardCustomQuery],
+  );
+
+  // Current collaboration snapshot payload
+  const currentCollabSnapshot = useMemo(
+    () =>
+      buildSharedBriefSnapshot({
+        title: visionDoc.title,
+        subtitle: visionDoc.subtitle,
+        selectedStyle,
+        selectedLighting,
+        selectedMood,
+        selectedCamera,
+        customNotes,
+        activeDictPresetId,
+        dictionaryBlocks: effectiveDictBlocks,
+        dictionaryParams,
+        activeTemplateId,
+        design,
+        engine,
+        scene3d,
+        frame,
+        synthesizedPrompt: visionDoc.synthesizedPrompt,
+        bimSchedule,
+      }),
+    [
+      visionDoc.title,
+      visionDoc.subtitle,
+      visionDoc.synthesizedPrompt,
+      selectedStyle,
+      selectedLighting,
+      selectedMood,
+      selectedCamera,
+      customNotes,
+      activeDictPresetId,
+      effectiveDictBlocks,
+      dictionaryParams,
+      activeTemplateId,
+      design,
+      engine,
+      scene3d,
+      frame,
+      bimSchedule,
+    ],
+  );
+
+  const hydrateFromSharedSession = useCallback(
+    (session: SharedBriefSession) => {
+      const snap = session.snapshot;
+      setSelectedStyle(
+        snap.slotIds.styleId
+          ? ARCHITECTURAL_STYLES.find((s) => s.id === snap.slotIds.styleId) ?? null
+          : null,
+      );
+      setSelectedLighting(
+        snap.slotIds.lightingId
+          ? LIGHTING_CONDITIONS.find((l) => l.id === snap.slotIds.lightingId) ?? null
+          : null,
+      );
+      setSelectedMood(
+        snap.slotIds.moodId ? MOOD_SETTINGS.find((m) => m.id === snap.slotIds.moodId) ?? null : null,
+      );
+      setSelectedCamera(
+        snap.slotIds.cameraId
+          ? CAMERA_PRESETS.find((c) => c.id === snap.slotIds.cameraId) ?? null
+          : null,
+      );
+      setCustomNotes(snap.customNotes ?? "");
+      setActiveDictPresetId(snap.activeDictPresetId || "facade");
+      setActiveTemplateId(snap.activeTemplateId ?? null);
+      applySharedBriefState(snap);
+    },
+    [applySharedBriefState],
+  );
+
+  // Load ?share=<id> on initial navigation
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedName = window.localStorage.getItem("oriel-collab-name");
+    if (savedName) setReviewerName(savedName);
+
+    const shareParam = sanitizeShareId(new URLSearchParams(window.location.search).get("share") ?? "");
+    if (!shareParam) return;
+
+    let cancelled = false;
+    setIsSyncingShare(true);
+    void getSharedBriefFn({ data: { shareId: shareParam } })
+      .then((loaded) => {
+        if (cancelled) return;
+        if (!loaded) {
+          toast.error(`Shared brief "${shareParam}" was not found.`);
+          return;
+        }
+        setCollabSession(loaded);
+        hydrateFromSharedSession(loaded);
+        setLastSyncedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        toast.success(`Loaded shared brief from ${loaded.authorName}`);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          toast.error(err instanceof Error ? err.message : "Could not load shared brief.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsSyncingShare(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateFromSharedSession]);
+
+  // Poll server for live collaborator comments while a shared session is active
+  const activeShareId = collabSession?.shareId ?? null;
+  useEffect(() => {
+    if (!activeShareId) return;
+    const syncNow = () => {
+      void getSharedBriefFn({ data: { shareId: activeShareId } })
+        .then((fresh) => {
+          if (!fresh) return;
+          setCollabSession(fresh);
+          setLastSyncedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        })
+        .catch(() => undefined);
+    };
+    const intervalMs = collabOpen ? 2000 : 5000;
+    const timer = window.setInterval(syncNow, intervalMs);
+    window.addEventListener("focus", syncNow);
+    document.addEventListener("visibilitychange", syncNow);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", syncNow);
+      document.removeEventListener("visibilitychange", syncNow);
+    };
+  }, [activeShareId, collabOpen]);
+
+  function handleReviewerNameChange(name: string) {
+    setReviewerName(name);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("oriel-collab-name", name);
+    }
+  }
+
+  async function handleGenerateShareLink() {
+    setIsCreatingShare(true);
+    try {
+      const created = await createSharedBriefFn({
+        data: {
+          authorName: normalizeAuthorName(reviewerName),
+          snapshot: currentCollabSnapshot,
+        },
+      });
+      setCollabSession(created);
+      setLastSyncedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      if (typeof window !== "undefined") {
+        const nextUrl = buildBriefShareUrl(window.location.origin, created.shareId);
+        window.history.replaceState(null, "", nextUrl);
+      }
+      toast.success(`Share link created (${created.shareId})`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate share link.");
+    } finally {
+      setIsCreatingShare(false);
+    }
+  }
+
+  async function handleSyncSharedSnapshot() {
+    if (!collabSession) return;
+    setIsSyncingShare(true);
+    try {
+      const updated = await updateSharedBriefFn({
+        data: {
+          shareId: collabSession.shareId,
+          snapshot: currentCollabSnapshot,
+        },
+      });
+      setCollabSession(updated);
+      setLastSyncedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      toast.success("Synced updated brief parameters to shared link");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to sync brief snapshot.");
+    } finally {
+      setIsSyncingShare(false);
+    }
+  }
+
+  async function handleRefreshSharedSession() {
+    if (!collabSession) return;
+    setIsSyncingShare(true);
+    try {
+      const fresh = await getSharedBriefFn({ data: { shareId: collabSession.shareId } });
+      if (fresh) {
+        setCollabSession(fresh);
+        hydrateFromSharedSession(fresh);
+        setLastSyncedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        toast.success("Synced latest brief & comments");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not refresh shared brief.");
+    } finally {
+      setIsSyncingShare(false);
+    }
+  }
+
+  async function handleAddCollabComment(payload: { parameterKey: CollabParameterKey; body: string }) {
+    if (!collabSession) return;
+    try {
+      const created = await addBriefCommentFn({
+        data: {
+          shareId: collabSession.shareId,
+          parameterKey: payload.parameterKey,
+          authorName: normalizeAuthorName(reviewerName),
+          authorRole: reviewerRole,
+          body: payload.body,
+        },
+      });
+      setCollabSession((prev) =>
+        prev ? { ...prev, comments: [...prev.comments, created] } : prev,
+      );
+      toast.success(`Anchored comment to ${created.parameterLabel}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not post comment.");
+    }
+  }
+
+  async function handleToggleCommentStatus(commentId: string, nextStatus: "open" | "resolved") {
+    if (!collabSession) return;
+    try {
+      const updated = await toggleBriefCommentStatusFn({
+        data: { shareId: collabSession.shareId, commentId, status: nextStatus },
+      });
+      setCollabSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              comments: prev.comments.map((c) => (c.id === updated.id ? updated : c)),
+            }
+          : prev,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update comment status.");
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (!collabSession) return;
+    try {
+      await deleteBriefCommentFn({
+        data: { shareId: collabSession.shareId, commentId },
+      });
+      setCollabSession((prev) =>
+        prev
+          ? { ...prev, comments: prev.comments.filter((c) => c.id !== commentId) }
+          : prev,
+      );
+      toast.message("Comment removed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete comment.");
+    }
+  }
+
+  async function handleRunMoodboard(overrideQuery?: string) {
+    const effectiveOverride = overrideQuery !== undefined ? overrideQuery : moodboardCustomQuery;
+    if (overrideQuery !== undefined && overrideQuery !== moodboardCustomQuery) {
+      setMoodboardCustomQuery(overrideQuery);
+    }
+    const queriesToRun = parseBriefToMoodboardQueries({
+      visionDoc,
+      selectedStyle,
+      selectedLighting,
+      selectedMood,
+      design,
+      engine,
+      scene3d,
+      customNotes,
+      customQueryOverride: effectiveOverride,
+    });
+    setMoodboardLoading(true);
+    setMoodboardError(null);
+    try {
+      const res = await generateMoodboardFn({ data: { queries: queriesToRun } });
+      setMoodboardResult(res);
+    } catch (err) {
+      setMoodboardError(err instanceof Error ? err.message : "Public moodboard API lookup failed.");
+    } finally {
+      setMoodboardLoading(false);
+    }
+  }
+
+  function handleOpenMoodboard() {
+    setMoodboardOpen(true);
+    void handleRunMoodboard();
+  }
+
+  function handlePinMoodboardItem(item: MoodboardImageItem) {
+    if (pinnedMoodboardIds.includes(item.id)) return;
+    const note = formatReferenceNoteFromImage(item);
+    setCustomNotes((prev) => (prev.trim() ? `${prev.trim()}\n${note}` : note));
+    setPinnedMoodboardIds((prev) => [...prev, item.id]);
+    toast.success(`Pinned "${item.title}" to Studio Directives`);
+  }
 
   // Drag and Drop Handlers
   function handleDragStart(event: DragEvent<HTMLDivElement>, block: BuilderBlock) {
@@ -240,7 +618,24 @@ function BriefBuilderPage() {
     setSelectedCamera(camera);
     const syncedSlots = buildInitialBuilderNotes(style, light, mood, camera);
     setCustomNotes(preset.notes ? `${syncedSlots}. ${preset.notes}` : syncedSlots);
+    setActiveTemplateId(null);
     toast.success(`Loaded Preset: ${preset.name}`);
+  }
+
+  function handleLoadBriefTemplate(template: BriefTemplate) {
+    const slots = resolveBriefTemplateSlots(template);
+    const compiledNotes = buildTemplateCompiledNotes(template);
+    const nextDoc = synthesizeVisionDocument(slots.style, slots.lighting, slots.mood, slots.camera, compiledNotes);
+
+    setSelectedStyle(slots.style);
+    setSelectedLighting(slots.lighting);
+    setSelectedMood(slots.mood);
+    setSelectedCamera(slots.camera);
+    setCustomNotes(compiledNotes);
+    setActiveDictPresetId(template.dictionaryPresetId);
+    setActiveTemplateId(template.id);
+    applyBriefTemplateConfig(template, nextDoc.synthesizedPrompt);
+    toast.success(`Loaded "${template.name}" template & visual parameters`);
   }
 
   // Load ARCHVIZ Dictionary Preset (from 46 presets)
@@ -282,6 +677,7 @@ function BriefBuilderPage() {
     setSelectedCamera(null);
     setDictionarySelection([]);
     setCustomNotes("");
+    setActiveTemplateId(null);
     toast.message("Cleared all brief slots & prompt keywords.");
   }
 
@@ -495,6 +891,35 @@ function BriefBuilderPage() {
             </button>
             <button
               type="button"
+              data-testid="open-moodboard-btn"
+              onClick={handleOpenMoodboard}
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#d4b06a]/60 bg-raised px-4 text-xs font-semibold text-fg transition hover:border-[#b08a45] hover:bg-[#fffaf0]"
+            >
+              <Grid className="size-3.5 text-[#b08a45]" />
+              Moodboard Grid
+            </button>
+            <button
+              type="button"
+              data-testid="open-collab-btn"
+              onClick={() => setCollabOpen(true)}
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#d4b06a]/60 bg-raised px-4 text-xs font-semibold text-fg transition hover:border-[#b08a45] hover:bg-[#fffaf0]"
+            >
+              <Share2 className="size-3.5 text-[#b08a45]" />
+              {collabSession
+                ? `Review (${collabSession.comments.filter((c) => c.status === "open").length})`
+                : "Share & Review"}
+            </button>
+            <button
+              type="button"
+              data-testid="open-pdf-export-btn"
+              onClick={() => setPdfModalOpen(true)}
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#d4b06a]/60 bg-raised px-4 text-xs font-semibold text-fg transition hover:border-[#b08a45] hover:bg-[#fffaf0]"
+            >
+              <FileText className="size-3.5 text-[#b08a45]" />
+              Export Client PDF
+            </button>
+            <button
+              type="button"
               onClick={handleSendToStudio}
               className="gold-fill inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-5 text-xs font-semibold text-[#2a1c0c]"
             >
@@ -504,6 +929,41 @@ function BriefBuilderPage() {
             </button>
           </div>
         </div>
+
+        {/* Active Shared Brief Collaboration Banner */}
+        {collabSession ? (
+          <div
+            data-testid="collab-active-banner"
+            className="mx-auto mt-3 flex max-w-7xl flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d4b06a]/50 bg-[#fffaf0] px-4 py-2 text-xs text-fg"
+          >
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-mono font-semibold text-[#b08a45]">
+                Shared Session · {collabSession.shareId}
+              </span>
+              <span className="text-muted">Owner: {collabSession.authorName}</span>
+              <span className="font-mono text-[11px] tabular-nums text-fg/80">
+                {collabSession.comments.length} parameter comment(s)
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleSyncSharedSnapshot()}
+                disabled={isSyncingShare}
+                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-line bg-white px-2.5 text-[11px] font-medium text-fg hover:border-[#b08a45]"
+              >
+                Push Brief Edits
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollabOpen(true)}
+                className="gold-fill inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-3 text-[11px] font-semibold text-[#2a1c0c]"
+              >
+                Open Review Thread
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {/* Quick Presets Bar */}
         <div className="no-scrollbar mx-auto mt-4 flex max-w-7xl items-center gap-2 overflow-x-auto pt-1 pb-1">
@@ -531,6 +991,19 @@ function BriefBuilderPage() {
           />
         </div>
       </div>
+
+      {/* Pre-Defined Architectural Brief Template Library & Live Visual Config */}
+      <BriefTemplateLibrary
+        activeTemplateId={activeTemplateId}
+        onLoadTemplate={handleLoadBriefTemplate}
+        design={design}
+        engine={engine}
+        scene3d={scene3d}
+        frame={frame}
+        onUpdateFrame={setFrame}
+        onUpdateEngineField={setEngineField}
+        onUpdateScene3DField={setScene3DField}
+      />
 
       {/* Main Builder Grid */}
       <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 grid-cols-1 gap-6 p-4 md:p-6 lg:grid-cols-12">
@@ -944,6 +1417,16 @@ function BriefBuilderPage() {
                 />
                 <button
                   type="button"
+                  data-testid="toolbar-export-pdf-btn"
+                  onClick={() => setPdfModalOpen(true)}
+                  className="hover-chip inline-flex h-8 items-center gap-1.5 rounded-full border border-[#d4b06a]/50 bg-raised px-3 text-xs font-medium text-fg"
+                  title="Export formatted Client Presentation PDF"
+                >
+                  <FileText className="size-3 text-[#b08a45]" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
                   onClick={handleSaveToProject}
                   className="gold-fill inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#2a1c0c]"
                 >
@@ -1153,6 +1636,65 @@ function BriefBuilderPage() {
           </section>
         </div>
       </div>
+
+      <ClientPdfExportModal
+        open={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        visionDoc={visionDoc}
+        design={design}
+        engine={engine}
+        scene3d={scene3d}
+        frame={frame}
+        schedule={bimSchedule}
+        dictionarySummary={{
+          presetId: activeDictPresetId,
+          blockCount: composedDictionary.keptIds.length,
+          text: composedDictionary.text,
+          warningsCount: composedDictionary.warnings.length,
+        }}
+        activeTemplateName={BRIEF_TEMPLATES.find((t) => t.id === activeTemplateId)?.name ?? null}
+        previewImageUrl={
+          plate?.url ??
+          upload ??
+          BRIEF_TEMPLATES.find((t) => t.id === activeTemplateId)?.previewImage ??
+          selectedStyle?.image ??
+          "/viz/p01-pavilion-day.jpg"
+        }
+      />
+
+      <BriefCollabDrawer
+        open={collabOpen}
+        onClose={() => setCollabOpen(false)}
+        session={collabSession}
+        activeSnapshot={currentCollabSnapshot}
+        isSyncing={isSyncingShare}
+        isCreatingShare={isCreatingShare}
+        lastSyncedAt={lastSyncedAt}
+        reviewerName={reviewerName}
+        onReviewerNameChange={handleReviewerNameChange}
+        reviewerRole={reviewerRole}
+        onReviewerRoleChange={setReviewerRole}
+        onGenerateShareLink={handleGenerateShareLink}
+        onSyncSnapshot={handleSyncSharedSnapshot}
+        onRefreshSession={handleRefreshSharedSession}
+        onAddComment={handleAddCollabComment}
+        onToggleCommentStatus={handleToggleCommentStatus}
+        onDeleteComment={handleDeleteComment}
+      />
+
+      <MoodboardOverlay
+        open={moodboardOpen}
+        onClose={() => setMoodboardOpen(false)}
+        queries={moodboardQueries}
+        result={moodboardResult}
+        loading={moodboardLoading}
+        error={moodboardError}
+        customQuery={moodboardCustomQuery}
+        onCustomQueryChange={setMoodboardCustomQuery}
+        onGenerate={handleRunMoodboard}
+        onPinToBrief={handlePinMoodboardItem}
+        pinnedIds={pinnedMoodboardIds}
+      />
     </main>
   );
 }

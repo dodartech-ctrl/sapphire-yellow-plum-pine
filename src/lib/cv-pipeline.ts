@@ -1,4 +1,5 @@
 import type { AnnotatorMode, EsrganModel, IopaintFaceModel, IopaintOutpaintPad, IopaintRemoveBgModel } from "./engines";
+import { extractBinaryBitmapFromRgba } from "./grounded-sam2-binary";
 
 export function rgbToLuminance(r: number, g: number, b: number): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -846,10 +847,7 @@ export async function refineMaskBuffer(
   ctx.drawImage(img, 0, 0, width, height);
   const px = ctx.getImageData(0, 0, width, height).data;
   const total = width * height;
-  let binary = new Uint8Array(total);
-  for (let i = 0; i < total; i++) {
-    binary[i] = px[i * 4 + 3] > 24 ? 1 : 0;
-  }
+  let binary = extractBinaryBitmapFromRgba(px, width, height, 24).bitmap;
   if (options.dilatePx > 0) {
     binary = dilateBinaryMask(binary, width, height, options.dilatePx);
   }
@@ -894,15 +892,8 @@ export async function runLocalLamaErasePass(
   const mPx = maskCtx.getImageData(0, 0, width, height).data;
 
   const total = width * height;
-  const rawMask = new Uint8Array(total);
-  let hasMask = false;
-  for (let i = 0; i < total; i++) {
-    if (mPx[i * 4 + 3] > 24) {
-      rawMask[i] = 1;
-      hasMask = true;
-    }
-  }
-  if (!hasMask) return src;
+  const { bitmap: rawMask, activePixels } = extractBinaryBitmapFromRgba(mPx, width, height, 24);
+  if (activePixels === 0) return src;
 
   // Slightly feather border halo by 1px for crisp anti-aliased seams
   const activeMask = dilateBinaryMask(rawMask, width, height, 1);
@@ -1055,17 +1046,31 @@ export async function runInteractiveSamMultiPointMask(params: {
   }
 
   const threshold = params.threshold ?? 45;
-  const colorGate = 24 + threshold * 1.1;
-  const edgeStop = 42 + threshold * 0.9;
+  const colorGate = 22 + threshold * 0.78;
+  const edgeStop = 26 + threshold * 0.65;
 
   function floodFromPoint(pt: { xNorm: number; yNorm: number }, mult = 1): Uint8Array {
     const sx = Math.max(0, Math.min(width - 1, Math.round(pt.xNorm * (width - 1))));
     const sy = Math.max(0, Math.min(height - 1, Math.round(pt.yNorm * (height - 1))));
     const seedIdx = sy * width + sx;
-    const sp = seedIdx * 4;
-    const sr = px[sp];
-    const sg = px[sp + 1];
-    const sb = px[sp + 2];
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let samples = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = Math.max(0, Math.min(width - 1, sx + dx));
+        const ny = Math.max(0, Math.min(height - 1, sy + dy));
+        const sp = (ny * width + nx) * 4;
+        sumR += px[sp];
+        sumG += px[sp + 1];
+        sumB += px[sp + 2];
+        samples++;
+      }
+    }
+    const sr = sumR / samples;
+    const sg = sumG / samples;
+    const sb = sumB / samples;
 
     const vis = new Uint8Array(total);
     const queue = new Int32Array(total);
@@ -1098,13 +1103,14 @@ export async function runInteractiveSamMultiPointMask(params: {
     return vis;
   }
 
-  const mask = new Uint8Array(total);
+  const rawMask = new Uint8Array(total);
   for (const pt of params.posPoints) {
     const reg = floodFromPoint(pt, 1);
     for (let i = 0; i < total; i++) {
-      if (reg[i]) mask[i] = 1;
+      if (reg[i]) rawMask[i] = 1;
     }
   }
+  const mask = dilateBinaryMask(rawMask, width, height, 1);
   for (const npt of params.negPoints) {
     const excl = floodFromPoint(npt, 0.85);
     const exclDilated = dilateBinaryMask(excl, width, height, 2);
@@ -1151,7 +1157,7 @@ export async function runInteractiveSamMultiPointMask(params: {
   return {
     previewUrl: canvas.toDataURL("image/jpeg", 0.9),
     maskDataUrl: maskCanvas.toDataURL("image/png"),
-    coveragePct: Math.round((count / Math.max(1, total)) * 100),
+    coveragePct: count > 0 ? Math.max(1, Math.round((count / Math.max(1, total)) * 100)) : 0,
   };
 }
 
@@ -1340,8 +1346,7 @@ export async function runLocalAnyText(
   if (!mCtx) return src;
   mCtx.drawImage(maskImg, 0, 0, width, height);
   const mPx = mCtx.getImageData(0, 0, width, height).data;
-  const bin = new Uint8Array(width * height);
-  for (let i = 0; i < bin.length; i++) bin[i] = mPx[i * 4 + 3] > 24 ? 1 : 0;
+  const { bitmap: bin } = extractBinaryBitmapFromRgba(mPx, width, height, 24);
   const bbox = getMaskBbox(bin, width, height);
   if (!bbox) return src;
 
@@ -1386,8 +1391,7 @@ export async function runLocalPaintByExample(
   if (!mCtx) return src;
   mCtx.drawImage(maskImg, 0, 0, width, height);
   const mPx = mCtx.getImageData(0, 0, width, height).data;
-  const bin = new Uint8Array(width * height);
-  for (let i = 0; i < bin.length; i++) bin[i] = mPx[i * 4 + 3] > 24 ? 1 : 0;
+  const { bitmap: bin } = extractBinaryBitmapFromRgba(mPx, width, height, 24);
   const bbox = getMaskBbox(bin, width, height);
   if (!bbox) return src;
 
@@ -1396,7 +1400,17 @@ export async function runLocalPaintByExample(
   exPatch.height = height;
   const exCtx = exPatch.getContext("2d");
   if (!exCtx) return src;
-  exCtx.drawImage(maskImg, 0, 0, width, height);
+  const alphaMask = exCtx.createImageData(width, height);
+  for (let i = 0; i < bin.length; i++) {
+    if (bin[i]) {
+      const p = i * 4;
+      alphaMask.data[p] = 255;
+      alphaMask.data[p + 1] = 255;
+      alphaMask.data[p + 2] = 255;
+      alphaMask.data[p + 3] = 255;
+    }
+  }
+  exCtx.putImageData(alphaMask, 0, 0);
   exCtx.globalCompositeOperation = "source-in";
   exCtx.drawImage(exImg, bbox.minX, bbox.minY, bbox.w, bbox.h);
   exCtx.globalCompositeOperation = "source-over";
@@ -1406,5 +1420,438 @@ export async function runLocalPaintByExample(
   ctx.drawImage(exPatch, 0, 0, width, height);
   ctx.restore();
   return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+export type GroundedSamBox = {
+  label: string;
+  box_2d: [number, number, number, number];
+  confidence: number;
+};
+
+/**
+ * Pure validator & normalizer for Grounded-SAM 2 bounding boxes in 0..1000 [ymin, xmin, ymax, xmax] space.
+ */
+export function normalizeGroundedBoxes(raw: unknown, defaultLabel = "Object"): GroundedSamBox[] {
+  if (!Array.isArray(raw)) return [];
+  const out: GroundedSamBox[] = [];
+  for (const entry of raw.slice(0, 12)) {
+    if (!entry || typeof entry !== "object") continue;
+    const item = entry as { label?: unknown; box_2d?: unknown; confidence?: unknown };
+    if (!Array.isArray(item.box_2d) || item.box_2d.length !== 4) continue;
+    const clamped = item.box_2d.map((n) => Math.max(0, Math.min(1000, Math.round(Number(n) || 0))));
+    const [ymin, xmin, ymax, xmax] = clamped;
+    if (ymax <= ymin + 8 || xmax <= xmin + 8) continue;
+    out.push({
+      label:
+        typeof item.label === "string" && item.label.trim()
+          ? item.label.trim().slice(0, 32)
+          : defaultLabel.slice(0, 32),
+      box_2d: [ymin, xmin, ymax, xmax],
+      confidence: Number(Math.max(0.1, Math.min(1, Number(item.confidence) || 0.85)).toFixed(2)),
+    });
+  }
+  return out;
+}
+
+/**
+ * Pure architectural priors for Grounded-SAM 2 bounding-box localization when running offline or without API keys.
+ */
+export function heuristicSemanticBoxesForPrompt(prompt: string): GroundedSamBox[] {
+  const p = prompt.trim().toLowerCase();
+  if (!p) {
+    return [{ label: "Architectural Zone", box_2d: [220, 180, 780, 820], confidence: 0.82 }];
+  }
+  if (p.includes("sky")) {
+    return [{ label: "Sky Dome", box_2d: [0, 0, 360, 1000], confidence: 0.93 }];
+  }
+  if (p.includes("floor") || p.includes("rug") || p.includes("deck") || p.includes("paving") || p.includes("terrace")) {
+    return [{ label: "Flooring Surface", box_2d: [620, 40, 995, 960], confidence: 0.91 }];
+  }
+  if (p.includes("sofa") || p.includes("chair") || p.includes("furniture") || p.includes("table") || p.includes("bed")) {
+    return [
+      { label: "Primary Seating", box_2d: [480, 140, 860, 620], confidence: 0.89 },
+      { label: "Lounge Accent", box_2d: [510, 610, 830, 880], confidence: 0.84 },
+    ];
+  }
+  if (p.includes("glass") || p.includes("glazing") || p.includes("window") || p.includes("curtain wall")) {
+    return [
+      { label: "Glazing Bay", box_2d: [180, 160, 680, 560], confidence: 0.92 },
+      { label: "Window Mullions", box_2d: [200, 580, 690, 910], confidence: 0.88 },
+    ];
+  }
+  if (p.includes("tree") || p.includes("foliage") || p.includes("plant") || p.includes("garden")) {
+    return [
+      { label: "Canopy Foliage", box_2d: [140, 20, 740, 320], confidence: 0.87 },
+      { label: "Courtyard Greens", box_2d: [240, 700, 780, 980], confidence: 0.85 },
+    ];
+  }
+  if (p.includes("lamp") || p.includes("light") || p.includes("pendant") || p.includes("chandelier")) {
+    return [{ label: "Pendant Lighting", box_2d: [70, 320, 390, 680], confidence: 0.9 }];
+  }
+  if (p.includes("roof") || p.includes("ceiling")) {
+    return [{ label: "Roof / Ceiling Plane", box_2d: [20, 60, 340, 940], confidence: 0.9 }];
+  }
+  if (p.includes("water") || p.includes("pool")) {
+    return [{ label: "Reflecting Pool", box_2d: [560, 120, 940, 880], confidence: 0.89 }];
+  }
+  return [{ label: prompt.trim().slice(0, 28), box_2d: [190, 170, 760, 830], confidence: 0.84 }];
+}
+
+/**
+ * Exports a compact JPEG data URL for server-side Grounded-SAM 2 / Gemini bounding-box localization
+ * (handles local relative routes like `/viz/...` smoothly as well as uploaded images).
+ */
+export async function toCompactDataUrlForSegmentation(src: string): Promise<string> {
+  if (src.startsWith("data:image/") && src.length <= 900_000) return src;
+  const img = await loadImage(src);
+  const { canvas } = prepareWorkCanvas(img, 768);
+  return canvas.toDataURL("image/jpeg", 0.86);
+}
+
+/**
+ * Grounded-SAM 2 One-Click Box-Constrained Edge-Aware Segmentation inside IOPaint & CV stages.
+ * Combines Grounded bounding boxes `[ymin, xmin, ymax, xmax]` (0..1000) with SAM-2 seeded flooding
+ * constrained cleanly to object bounds, plus optional interactive + / - refinement points.
+ */
+export async function runGroundedSam2Segment(params: {
+  src: string;
+  prompt: string;
+  boxes?: GroundedSamBox[];
+  posPoints?: Array<{ xNorm: number; yNorm: number }>;
+  negPoints?: Array<{ xNorm: number; yNorm: number }>;
+  threshold?: number;
+}): Promise<{
+  previewUrl: string;
+  maskDataUrl: string;
+  coveragePct: number;
+  boxes: GroundedSamBox[];
+}> {
+  const img = await loadImage(params.src);
+  const { canvas, ctx, width, height } = prepareWorkCanvas(img, 640);
+  const px = ctx.getImageData(0, 0, width, height).data;
+  const total = width * height;
+  const lum = new Float32Array(total);
+  for (let i = 0; i < total; i++) {
+    const p = i * 4;
+    lum[i] = rgbToLuminance(px[p], px[p + 1], px[p + 2]);
+  }
+
+  const activeBoxes =
+    params.boxes && params.boxes.length > 0
+      ? normalizeGroundedBoxes(params.boxes, params.prompt)
+      : heuristicSemanticBoxesForPrompt(params.prompt);
+
+  const threshold = params.threshold ?? 45;
+  const colorGate = 26 + threshold * 1.15;
+  const edgeStop = 40 + threshold * 0.92;
+  const finalMask = new Uint8Array(total);
+
+  function floodConstrained(
+    seedXNorm: number,
+    seedYNorm: number,
+    boundsNorm?: { ymin: number; xmin: number; ymax: number; xmax: number },
+    mult = 1,
+  ): Uint8Array {
+    const sx = Math.max(0, Math.min(width - 1, Math.round(seedXNorm * (width - 1))));
+    const sy = Math.max(0, Math.min(height - 1, Math.round(seedYNorm * (height - 1))));
+    const minPxX = boundsNorm ? Math.max(0, Math.floor(boundsNorm.xmin * (width - 1))) : 0;
+    const maxPxX = boundsNorm ? Math.min(width - 1, Math.ceil(boundsNorm.xmax * (width - 1))) : width - 1;
+    const minPxY = boundsNorm ? Math.max(0, Math.floor(boundsNorm.ymin * (height - 1))) : 0;
+    const maxPxY = boundsNorm ? Math.min(height - 1, Math.ceil(boundsNorm.ymax * (height - 1))) : height - 1;
+
+    const seedIdx = sy * width + sx;
+    const sp = seedIdx * 4;
+    const sr = px[sp];
+    const sg = px[sp + 1];
+    const sb = px[sp + 2];
+
+    const vis = new Uint8Array(total);
+    const queue = new Int32Array(total);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = seedIdx;
+    vis[seedIdx] = 1;
+
+    while (head < tail) {
+      const idx = queue[head++];
+      const cx = idx % width;
+      const cy = Math.floor(idx / width);
+      const neighbors = [
+        cx > minPxX ? idx - 1 : -1,
+        cx < maxPxX ? idx + 1 : -1,
+        cy > minPxY ? idx - width : -1,
+        cy < maxPxY ? idx + width : -1,
+      ];
+      for (const nIdx of neighbors) {
+        if (nIdx < 0 || vis[nIdx]) continue;
+        const np = nIdx * 4;
+        const distSeed = Math.hypot(px[np] - sr, px[np + 1] - sg, px[np + 2] - sb);
+        const localStep = Math.abs(lum[nIdx] - lum[idx]);
+        if (distSeed <= colorGate * mult && localStep <= edgeStop * mult) {
+          vis[nIdx] = 1;
+          queue[tail++] = nIdx;
+        }
+      }
+    }
+    return vis;
+  }
+
+  for (const box of activeBoxes) {
+    const [ymin, xmin, ymax, xmax] = box.box_2d;
+    const bNorm = {
+      ymin: Math.max(0, ymin / 1000 - 0.02),
+      xmin: Math.max(0, xmin / 1000 - 0.02),
+      ymax: Math.min(1, ymax / 1000 + 0.02),
+      xmax: Math.min(1, xmax / 1000 + 0.02),
+    };
+    const cyNorm = (ymin + ymax) / 2000;
+    const cxNorm = (xmin + xmax) / 2000;
+
+    // Seed from center + inner quarter points inside the Grounded box
+    const seeds: Array<[number, number]> = [
+      [cxNorm, cyNorm],
+      [(xmin * 0.7 + xmax * 0.3) / 1000, (ymin * 0.7 + ymax * 0.3) / 1000],
+      [(xmin * 0.3 + xmax * 0.7) / 1000, (ymin * 0.3 + ymax * 0.7) / 1000],
+    ];
+    let boxHits = 0;
+    const boxMask = new Uint8Array(total);
+    for (const [sxNorm, syNorm] of seeds) {
+      const reg = floodConstrained(sxNorm, syNorm, bNorm, 1.08);
+      for (let i = 0; i < total; i++) {
+        if (reg[i] && !boxMask[i]) {
+          boxMask[i] = 1;
+          boxHits++;
+        }
+      }
+    }
+
+    const minPxX = Math.floor((xmin / 1000) * (width - 1));
+    const maxPxX = Math.ceil((xmax / 1000) * (width - 1));
+    const minPxY = Math.floor((ymin / 1000) * (height - 1));
+    const maxPxY = Math.ceil((ymax / 1000) * (height - 1));
+    const boxArea = Math.max(1, (maxPxX - minPxX + 1) * (maxPxY - minPxY + 1));
+
+    // If multi-textured region didn't flood enough of the bounding box, refine semantically inside box bounds
+    if (boxHits < boxArea * 0.14) {
+      for (let y = minPxY; y <= maxPxY; y++) {
+        const yNorm = y / Math.max(1, height - 1);
+        for (let x = minPxX; x <= maxPxX; x++) {
+          const xNorm = x / Math.max(1, width - 1);
+          const idx = y * width + x;
+          const p = idx * 4;
+          const semHit = matchSemanticSegmentPixel({
+            r: px[p],
+            g: px[p + 1],
+            b: px[p + 2],
+            xNorm,
+            yNorm,
+            prompt: `${params.prompt} ${box.label}`,
+            threshold: threshold + 12,
+          });
+          if (semHit || (Math.abs(xNorm - cxNorm) <= 0.16 && Math.abs(yNorm - cyNorm) <= 0.12)) {
+            boxMask[idx] = 1;
+          }
+        }
+      }
+    }
+
+    for (let i = 0; i < total; i++) {
+      if (boxMask[i]) finalMask[i] = 1;
+    }
+  }
+
+  for (const pt of params.posPoints ?? []) {
+    const reg = floodConstrained(pt.xNorm, pt.yNorm, undefined, 1);
+    for (let i = 0; i < total; i++) {
+      if (reg[i]) finalMask[i] = 1;
+    }
+  }
+  for (const npt of params.negPoints ?? []) {
+    const excl = floodConstrained(npt.xNorm, npt.yNorm, undefined, 0.85);
+    const exclDilated = dilateBinaryMask(excl, width, height, 2);
+    for (let i = 0; i < total; i++) {
+      if (exclDilated[i]) finalMask[i] = 0;
+    }
+  }
+
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskCtx = maskCanvas.getContext("2d");
+  if (!maskCtx) throw new Error("Mask canvas unavailable");
+
+  const previewOut = ctx.createImageData(width, height);
+  const maskOut = maskCtx.createImageData(width, height);
+  const pDst = previewOut.data;
+  const mDst = maskOut.data;
+  let count = 0;
+
+  for (let i = 0; i < total; i++) {
+    const p = i * 4;
+    if (finalMask[i]) {
+      count++;
+      pDst[p] = Math.min(255, Math.round(px[p] * 0.45 + 225 * 0.55));
+      pDst[p + 1] = Math.min(255, Math.round(px[p + 1] * 0.45 + 178 * 0.55));
+      pDst[p + 2] = Math.min(255, Math.round(px[p + 2] * 0.45 + 90 * 0.55));
+      pDst[p + 3] = 255;
+
+      mDst[p] = 212;
+      mDst[p + 1] = 176;
+      mDst[p + 2] = 106;
+      mDst[p + 3] = 210;
+    } else {
+      pDst[p] = Math.round(px[p] * 0.56);
+      pDst[p + 1] = Math.round(px[p + 1] * 0.56);
+      pDst[p + 2] = Math.round(px[p + 2] * 0.56);
+      pDst[p + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(previewOut, 0, 0);
+  maskCtx.putImageData(maskOut, 0, 0);
+  return {
+    previewUrl: canvas.toDataURL("image/jpeg", 0.9),
+    maskDataUrl: maskCanvas.toDataURL("image/png"),
+    coveragePct: Math.round((count / Math.max(1, total)) * 100),
+    boxes: activeBoxes,
+  };
+}
+
+/**
+ * IOPaint Texture & Material Replacement Fallback Synthesizer:
+ * Applies procedural architectural surface finishes (travertine veining, fluted oak planks,
+ * board-formed concrete, Nordic brick, brushed bronze, or Low-E glazing) strictly inside
+ * the painted mask while preserving original directional lighting & shadows.
+ */
+export async function runLocalTextureReplacePass(
+  src: string,
+  maskDataUrl: string,
+  instruction: string,
+  strength = 75,
+): Promise<string> {
+  const [img, maskImg] = await Promise.all([loadImage(src), loadImage(maskDataUrl)]);
+  const { canvas, ctx, width, height } = prepareWorkCanvas(img, 1280);
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const px = imgData.data;
+
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const mCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
+  if (!mCtx) return src;
+  mCtx.drawImage(maskImg, 0, 0, width, height);
+  const mPx = mCtx.getImageData(0, 0, width, height).data;
+  const { bitmap: rawMask } = extractBinaryBitmapFromRgba(mPx, width, height, 24);
+
+  const note = instruction.trim().toLowerCase();
+  const alphaBlend = Math.max(0.45, Math.min(0.95, strength / 100));
+
+  type MaterialKind = "travertine" | "oak" | "concrete" | "brick" | "bronze" | "glass" | "foliage" | "marble";
+  let kind: MaterialKind = "travertine";
+  let baseRgb: [number, number, number] = [220, 206, 181];
+
+  if (note.includes("oak") || note.includes("timber") || note.includes("wood") || note.includes("cedar") || note.includes("walnut")) {
+    kind = "oak";
+    baseRgb = note.includes("walnut") ? [116, 78, 52] : [182, 132, 84];
+  } else if (note.includes("concrete") || note.includes("plaster") || note.includes("stucco") || note.includes("cement")) {
+    kind = "concrete";
+    baseRgb = [172, 168, 160];
+  } else if (note.includes("brick") || note.includes("terracotta")) {
+    kind = "brick";
+    baseRgb = [158, 90, 68];
+  } else if (note.includes("bronze") || note.includes("brass") || note.includes("metal") || note.includes("copper") || note.includes("zinc")) {
+    kind = "bronze";
+    baseRgb = note.includes("zinc") ? [102, 108, 114] : [146, 112, 72];
+  } else if (note.includes("glass") || note.includes("glaz") || note.includes("mirror") || note.includes("water")) {
+    kind = "glass";
+    baseRgb = [138, 178, 192];
+  } else if (note.includes("green") || note.includes("moss") || note.includes("foliage") || note.includes("grass") || note.includes("plant")) {
+    kind = "foliage";
+    baseRgb = [74, 126, 76];
+  } else if (note.includes("marble") || note.includes("terrazzo")) {
+    kind = "marble";
+    baseRgb = [234, 231, 226];
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!rawMask[i]) continue;
+      const p = i * 4;
+      const maskAlpha = Math.max(0.82, mPx[p + 3] / 255);
+
+      const origLum = rgbToLuminance(px[p], px[p + 1], px[p + 2]) / 255;
+      const shade = 0.52 + origLum * 0.72;
+      let tr = baseRgb[0];
+      let tg = baseRgb[1];
+      let tb = baseRgb[2];
+
+      if (kind === "oak") {
+        // Vertical / horizontal wood grain flutes + plank seam
+        const grain = Math.sin(x * 0.42 + Math.sin(y * 0.04) * 3.5) * 14 + (((x + y * 3) % 7) - 3) * 1.8;
+        const seam = x % 48 === 0 ? -24 : 0;
+        tr += grain + seam;
+        tg += grain * 0.8 + seam;
+        tb += grain * 0.55 + seam;
+      } else if (kind === "brick") {
+        const row = Math.floor(y / 14);
+        const mortarY = y % 14 < 2;
+        const offsetX = (row % 2) * 20;
+        const mortarX = (x + offsetX) % 40 < 2;
+        if (mortarX || mortarY) {
+          tr = 198;
+          tg = 191;
+          tb = 180;
+        } else {
+          const brickVar = ((row * 31 + Math.floor((x + offsetX) / 40) * 17) % 19) - 9;
+          tr += brickVar * 1.4;
+          tg += brickVar * 0.8;
+          tb += brickVar * 0.6;
+        }
+      } else if (kind === "concrete") {
+        const tieHole = x % 96 < 4 && y % 64 < 4 ? -28 : 0;
+        const board = y % 32 === 0 ? -10 : 0;
+        const pore = (((x * 13 + y * 29) % 11) - 5) * 2.1;
+        tr += pore + board + tieHole;
+        tg += pore + board + tieHole;
+        tb += pore + board + tieHole;
+      } else if (kind === "marble" || kind === "travertine") {
+        const vein = Math.sin(x * 0.045 + y * 0.07 + Math.sin(x * 0.02) * 4.5);
+        const strata = kind === "travertine" ? Math.sin(y * 0.25 + x * 0.01) * 10 : vein > 0.78 ? -26 : 0;
+        const pore = (((x * 17 + y * 7) % 9) - 4) * 1.4;
+        tr += strata + pore;
+        tg += strata * 0.9 + pore;
+        tb += strata * 0.8 + pore;
+      } else if (kind === "bronze") {
+        const brush = Math.sin(y * 0.85) * 8 + (((x * 11 + y * 5) % 9) - 4) * 1.6;
+        const spec = Math.exp(-(((x / width - 0.45) * 4) ** 2)) * 28;
+        tr += brush + spec;
+        tg += brush * 0.88 + spec * 0.9;
+        tb += brush * 0.75 + spec * 0.7;
+      } else if (kind === "glass") {
+        const reflection = Math.sin((x + y) * 0.03) * 18 + (1 - y / height) * 26;
+        tr += reflection;
+        tg += reflection * 1.05;
+        tb += reflection * 1.15;
+      } else if (kind === "foliage") {
+        const leaf = Math.sin(x * 0.4) * Math.cos(y * 0.4) * 24 + (((x * 19 + y * 23) % 13) - 6) * 2.2;
+        tr += leaf * 0.7;
+        tg += leaf * 1.1;
+        tb += leaf * 0.5;
+      }
+
+      const finR = Math.max(0, Math.min(255, tr * shade));
+      const finG = Math.max(0, Math.min(255, tg * shade));
+      const finB = Math.max(0, Math.min(255, tb * shade));
+      const w = maskAlpha * alphaBlend;
+
+      px[p] = Math.round(px[p] * (1 - w) + finR * w);
+      px[p + 1] = Math.round(px[p + 1] * (1 - w) + finG * w);
+      px[p + 2] = Math.round(px[p + 2] * (1 - w) + finB * w);
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.93);
 }
 

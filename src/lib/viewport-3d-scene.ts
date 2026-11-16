@@ -274,6 +274,16 @@ export function buildTreeCluster(
   return tree;
 }
 
+function tagMesh(mesh: THREE.Mesh, objectId: string, pickLabel: string): THREE.Mesh {
+  mesh.name = objectId;
+  mesh.userData.objectId = objectId;
+  mesh.userData.pickLabel = pickLabel;
+  if (!mesh.userData.originalMaterial) {
+    mesh.userData.originalMaterial = mesh.material;
+  }
+  return mesh;
+}
+
 export function buildPresetMassing(preset: Scene3DPreset, mats: SharedSceneMaterials): THREE.Group {
   const group = new THREE.Group();
   const { primaryMat, glassMat, darkTrimMat, timberMat, waterMat, plinthMat, interiorGlowMat, contactShadowMat } = mats;
@@ -282,154 +292,172 @@ export function buildPresetMassing(preset: Scene3DPreset, mats: SharedSceneMater
   const plinthShadow = new THREE.Mesh(new THREE.CircleGeometry(11.6, 32), contactShadowMat);
   plinthShadow.rotation.x = -Math.PI / 2;
   plinthShadow.position.y = 0.014;
+  plinthShadow.userData.nonPickable = true;
   group.add(plinthShadow);
 
   // Landscape plinth & terrace base (disjoint Y >= 0.02)
-  const terrace = new THREE.Mesh(new THREE.BoxGeometry(16, 0.35, 13), plinthMat);
+  const terrace = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(16, 0.35, 13), plinthMat), "terrace-plinth", "Terrace Plinth");
   terrace.position.set(0, 0.175, 0);
   terrace.receiveShadow = true;
   group.add(terrace);
 
   // Subtle perimeter dark trim edge
-  const plinthTrim = new THREE.Mesh(new THREE.BoxGeometry(16.12, 0.08, 13.12), darkTrimMat);
+  const plinthTrim = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(16.12, 0.08, 13.12), darkTrimMat), "plinth-trim", "Plinth Perimeter Trim");
   plinthTrim.position.set(0, 0.33, 0);
   group.add(plinthTrim);
 
   if (preset === "pavilion") {
-    const basin = new THREE.Mesh(new THREE.BoxGeometry(12, 0.08, 9), waterMat);
+    const basin = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(12, 0.08, 9), waterMat), "reflecting-pool", "Reflecting Pool");
     basin.position.set(0.4, 0.41, 0.6);
     group.add(basin);
 
     for (let i = 0; i < 4; i++) {
-      const stone = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 0.85), plinthMat);
+      const stone = tagMesh(
+        new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 0.85), plinthMat),
+        `stepping-stone-${i + 1}`,
+        `Stepping Stone #${i + 1}`,
+      );
       stone.position.set(-3.2 + i * 1.45, 0.46, 3.6);
       stone.receiveShadow = true;
       group.add(stone);
     }
 
-    const coreWall = new THREE.Mesh(new THREE.BoxGeometry(6.8, 3.3, 0.45), primaryMat);
+    const coreWall = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(6.8, 3.3, 0.45), primaryMat), "core-wall", "North Core Wall");
     coreWall.position.set(-0.6, 2.0, -2.0);
     coreWall.castShadow = true;
     coreWall.receiveShadow = true;
     group.add(coreWall);
 
-    const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.3, 4.4), primaryMat);
+    const sideWall = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.3, 4.4), primaryMat), "west-wing-wall", "West Shear Wall");
     sideWall.position.set(-3.8, 2.0, 0.1);
     sideWall.castShadow = true;
     sideWall.receiveShadow = true;
     group.add(sideWall);
 
     // Interior illuminated hearth volume visible through glass
-    const interiorCore = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.1, 0.6), interiorGlowMat);
+    const interiorCore = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.1, 0.6), interiorGlowMat), "interior-hearth", "Interior Hearth Core");
     interiorCore.position.set(-0.9, 1.45, -1.2);
     group.add(interiorCore);
 
-    const glassWall = new THREE.Mesh(new THREE.BoxGeometry(6.2, 3.05, 0.08), glassMat);
+    const glassWall = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(6.2, 3.05, 0.08), glassMat), "glazing-south", "South Curtain Glazing");
     glassWall.position.set(-0.5, 1.92, 2.0);
     group.add(glassWall);
 
-    const glassEast = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.05, 3.9), glassMat);
+    const glassEast = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.05, 3.9), glassMat), "glazing-east", "East Corner Glazing");
     glassEast.position.set(2.6, 1.92, 0.05);
     group.add(glassEast);
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.36, 7.2), primaryMat);
+    const roof = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.36, 7.2), primaryMat), "canopy-roof", "Cantilever Roof Slab");
     roof.position.set(-0.2, 3.84, 0.2);
     roof.castShadow = true;
     group.add(roof);
 
-    const fascia = new THREE.Mesh(new THREE.BoxGeometry(9.72, 0.1, 7.32), darkTrimMat);
+    const fascia = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(9.72, 0.1, 7.32), darkTrimMat), "roof-fascia", "Roof Edge Fascia");
     fascia.position.set(-0.2, 3.99, 0.2);
     group.add(fascia);
 
-    const soffit = new THREE.Mesh(new THREE.BoxGeometry(9.1, 0.08, 6.7), timberMat);
+    const soffit = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(9.1, 0.08, 6.7), timberMat), "timber-soffit", "Timber Roof Soffit");
     soffit.position.set(-0.2, 3.63, 0.2);
     group.add(soffit);
 
-    for (const [cx, cz] of [
+    const colCoords = [
       [3.9, 3.1],
       [3.9, -2.8],
       [-4.4, 3.1],
-    ] as const) {
-      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 3.25, 12), darkTrimMat);
+    ] as const;
+    colCoords.forEach(([cx, cz], colIdx) => {
+      const col = tagMesh(
+        new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 3.25, 12), darkTrimMat),
+        `column-${colIdx + 1}`,
+        `Steel Column #${colIdx + 1}`,
+      );
       col.position.set(cx, 2.0, cz);
       col.castShadow = true;
       group.add(col);
-    }
+    });
   } else if (preset === "villa") {
-    const pool = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.1, 3.6), waterMat);
+    const pool = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.1, 3.6), waterMat), "villa-pool", "Infinity Lap Pool");
     pool.position.set(2.6, 0.42, 3.2);
     group.add(pool);
 
-    const lowerBase = new THREE.Mesh(new THREE.BoxGeometry(8.6, 2.8, 5.4), plinthMat);
+    const lowerBase = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(8.6, 2.8, 5.4), plinthMat), "lower-podium", "Lower Stone Podium");
     lowerBase.position.set(-1.4, 1.78, -0.6);
     lowerBase.castShadow = true;
     lowerBase.receiveShadow = true;
     group.add(lowerBase);
 
-    const lowerGlow = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.8, 0.4), interiorGlowMat);
+    const lowerGlow = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.8, 0.4), interiorGlowMat), "lower-hearth", "Ground Living Hearth");
     lowerGlow.position.set(-1.1, 1.45, 1.55);
     group.add(lowerGlow);
 
-    const lowerGlass = new THREE.Mesh(new THREE.BoxGeometry(5.6, 2.4, 0.1), glassMat);
+    const lowerGlass = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(5.6, 2.4, 0.1), glassMat), "lower-glazing", "Garden Level Glazing");
     lowerGlass.position.set(-1.1, 1.65, 2.14);
     group.add(lowerGlass);
 
-    const upperCantilever = new THREE.Mesh(new THREE.BoxGeometry(10.4, 2.5, 5.2), primaryMat);
+    const upperCantilever = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(10.4, 2.5, 5.2), primaryMat), "upper-cantilever", "Upper Cantilever Volume");
     upperCantilever.position.set(0.6, 4.44, -0.1);
     upperCantilever.castShadow = true;
     upperCantilever.receiveShadow = true;
     group.add(upperCantilever);
 
-    const upperGlaze = new THREE.Mesh(new THREE.BoxGeometry(7.4, 2.0, 0.12), glassMat);
+    const upperGlaze = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(7.4, 2.0, 0.12), glassMat), "upper-glazing", "Upper Panoramic Glazing");
     upperGlaze.position.set(1.2, 4.38, 2.54);
     group.add(upperGlaze);
 
     for (let i = 0; i < 9; i++) {
-      const louver = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.35, 0.45), timberMat);
+      const louver = tagMesh(
+        new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.35, 0.45), timberMat),
+        `timber-louver-${i + 1}`,
+        `Timber Brise-Soleil #${i + 1}`,
+      );
       louver.position.set(-3.2 + i * 0.65, 4.44, 2.68);
       louver.castShadow = true;
       group.add(louver);
     }
 
-    const fascia = new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.18, 5.5), darkTrimMat);
+    const fascia = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.18, 5.5), darkTrimMat), "villa-fascia", "Upper Roof Fascia");
     fascia.position.set(0.6, 5.76, -0.1);
     group.add(fascia);
   } else if (preset === "loft") {
-    const shellBack = new THREE.Mesh(new THREE.BoxGeometry(10.2, 5.8, 0.6), primaryMat);
+    const shellBack = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(10.2, 5.8, 0.6), primaryMat), "loft-north-wall", "Loft Back Shell Wall");
     shellBack.position.set(0, 3.28, -3.2);
     shellBack.castShadow = true;
     shellBack.receiveShadow = true;
     group.add(shellBack);
 
-    const shellLeft = new THREE.Mesh(new THREE.BoxGeometry(0.6, 5.8, 6.8), primaryMat);
+    const shellLeft = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(0.6, 5.8, 6.8), primaryMat), "loft-west-wall", "Loft West Wall");
     shellLeft.position.set(-4.8, 3.28, 0.1);
     shellLeft.castShadow = true;
     group.add(shellLeft);
 
-    const mezz = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.28, 5.2), timberMat);
+    const mezz = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.28, 5.2), timberMat), "loft-mezzanine", "Oak Mezzanine Deck");
     mezz.position.set(-1.8, 3.2, -0.4);
     mezz.castShadow = true;
     group.add(mezz);
 
-    const island = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.92, 1.1), plinthMat);
+    const island = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.92, 1.1), plinthMat), "loft-island", "Kitchen Monolith Island");
     island.position.set(1.8, 0.84, 0.4);
     island.castShadow = true;
     group.add(island);
 
-    const hearthGlow = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 0.35), interiorGlowMat);
+    const hearthGlow = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 0.35), interiorGlowMat), "loft-hearth", "Atrium Lighting Core");
     hearthGlow.position.set(1.8, 2.2, -2.5);
     group.add(hearthGlow);
 
-    const curtain = new THREE.Mesh(new THREE.BoxGeometry(8.8, 5.2, 0.08), glassMat);
+    const curtain = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(8.8, 5.2, 0.08), glassMat), "loft-curtainwall", "Double-Height Curtain Wall");
     curtain.position.set(0.2, 2.98, 3.2);
     group.add(curtain);
 
-    for (let x = -4; x <= 4; x += 2) {
-      const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.12, 5.4, 0.18), darkTrimMat);
+    for (let x = -4, idx = 1; x <= 4; x += 2, idx++) {
+      const mullion = tagMesh(
+        new THREE.Mesh(new THREE.BoxGeometry(0.12, 5.4, 0.18), darkTrimMat),
+        `loft-mullion-${idx}`,
+        `Steel Mullion #${idx}`,
+      );
       mullion.position.set(x, 3.08, 3.25);
       group.add(mullion);
     }
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.3, 7.2), darkTrimMat);
+    const roof = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.3, 7.2), darkTrimMat), "loft-roof", "Steel Truss Roof Deck");
     roof.position.set(0, 6.3, 0.1);
     roof.castShadow = true;
     group.add(roof);
@@ -437,31 +465,39 @@ export function buildPresetMassing(preset: Scene3DPreset, mats: SharedSceneMater
     // Civic Timber Hall
     for (let i = 0; i < 5; i++) {
       const bayX = -4.2 + i * 2.1;
-      const col = new THREE.Mesh(new THREE.BoxGeometry(0.28, 4.4, 0.36), timberMat);
+      const col = tagMesh(
+        new THREE.Mesh(new THREE.BoxGeometry(0.28, 4.4, 0.36), timberMat),
+        `glulam-col-${i + 1}`,
+        `Glulam Column #${i + 1}`,
+      );
       col.position.set(bayX, 2.58, 2.6);
       col.castShadow = true;
       group.add(col);
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.42, 6.4), timberMat);
+      const beam = tagMesh(
+        new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.42, 6.4), timberMat),
+        `glulam-beam-${i + 1}`,
+        `Glulam Roof Beam #${i + 1}`,
+      );
       beam.position.set(bayX, 4.95, -0.2);
       beam.castShadow = true;
       group.add(beam);
     }
 
-    const core = new THREE.Mesh(new THREE.BoxGeometry(8.6, 4.3, 4.6), primaryMat);
+    const core = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(8.6, 4.3, 4.6), primaryMat), "civic-core", "Civic Acoustic Core");
     core.position.set(0, 2.52, -1.2);
     core.castShadow = true;
     core.receiveShadow = true;
     group.add(core);
 
-    const interiorAtrium = new THREE.Mesh(new THREE.BoxGeometry(6.8, 1.0, 0.4), interiorGlowMat);
+    const interiorAtrium = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(6.8, 1.0, 0.4), interiorGlowMat), "civic-atrium", "Clerestory Lantern");
     interiorAtrium.position.set(0, 3.9, 0.9);
     group.add(interiorAtrium);
 
-    const clerestory = new THREE.Mesh(new THREE.BoxGeometry(8.8, 1.4, 0.1), glassMat);
+    const clerestory = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(8.8, 1.4, 0.1), glassMat), "civic-clerestory", "Clerestory Glazing Band");
     clerestory.position.set(0, 4.02, 1.16);
     group.add(clerestory);
 
-    const zincRoof = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.28, 7.2), darkTrimMat);
+    const zincRoof = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.28, 7.2), darkTrimMat), "civic-roof", "Standing-Seam Zinc Roof");
     zincRoof.position.set(0, 5.28, -0.1);
     zincRoof.rotation.x = 0.08;
     zincRoof.castShadow = true;
@@ -503,24 +539,50 @@ export function normalizeAndGroundObject(root: THREE.Object3D): { meshCount: num
       mesh.receiveShadow = true;
       meshCount++;
       const label = mesh.name?.trim() || `Architectural Part ${meshCount}`;
+      const objectId = (mesh.name?.trim() || `cad-mesh-${meshCount}`).toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+      mesh.userData.objectId = objectId;
       mesh.userData.pickLabel = label;
+      if (!mesh.userData.originalMaterial) {
+        mesh.userData.originalMaterial = mesh.material;
+      }
       partNames.push(label);
     }
   });
   return { meshCount, partNames };
 }
 
-// #4 Procedural Equirectangular HDRI Sky Texture for PMREM reflections
-export function createProceduralHdriTexture(
-  mood: "studio" | "clear-sky" | "golden-dusk" | "overcast-nordic",
-): THREE.CanvasTexture {
+// #4 Procedural Equirectangular HDRI Sky Texture for PMREM reflections (syncs live with Time of Day & Month sunPosition)
+export function createDynamicSolarHdriTexture(params: {
+  mood: "studio" | "clear-sky" | "golden-dusk" | "overcast-nordic";
+  azimuthDeg?: number;
+  rawElevationDeg?: number;
+  zenithHex?: string;
+  horizonHex?: string;
+  groundBounceHex?: string;
+  isDaylight?: boolean;
+}): THREE.CanvasTexture {
+  const {
+    mood,
+    azimuthDeg = 148,
+    rawElevationDeg = 38,
+    zenithHex,
+    horizonHex,
+    groundBounceHex,
+    isDaylight = true,
+  } = params;
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
   if (ctx) {
     const grad = ctx.createLinearGradient(0, 0, 0, 256);
-    if (mood === "golden-dusk") {
+    if (zenithHex && horizonHex && groundBounceHex) {
+      grad.addColorStop(0, zenithHex);
+      grad.addColorStop(0.45, horizonHex);
+      grad.addColorStop(0.55, horizonHex);
+      grad.addColorStop(0.65, groundBounceHex);
+      grad.addColorStop(1, "#2a2520");
+    } else if (mood === "golden-dusk") {
       grad.addColorStop(0, "#1c2d4a");
       grad.addColorStop(0.42, "#596a88");
       grad.addColorStop(0.55, "#f0b475");
@@ -546,15 +608,32 @@ export function createProceduralHdriTexture(
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 256);
 
-    // Bright solar softbox disc for crisp architectural glass specular reflections
+    // Project azimuth (0-360°) -> equirectangular U (0-512) and elevation (-20..85°) -> V (0-256)
+    const uNorm = (((azimuthDeg % 360) + 360) % 360) / 360;
+    const sunX = uNorm * 512;
+    const clampedEl = Math.max(-15, Math.min(84, rawElevationDeg));
+    const sunY = Math.max(16, Math.min(168, 128 - (clampedEl / 90) * 116));
+
     if (mood !== "overcast-nordic") {
-      const sunY = mood === "golden-dusk" ? 132 : 74;
-      const rad = ctx.createRadialGradient(340, sunY, 2, 340, sunY, 44);
-      rad.addColorStop(0, mood === "golden-dusk" ? "rgba(255,214,150,0.95)" : "rgba(255,252,240,0.95)");
-      rad.addColorStop(0.4, "rgba(255,235,190,0.35)");
-      rad.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = rad;
-      ctx.fillRect(280, sunY - 50, 120, 100);
+      const discColor = !isDaylight
+        ? "rgba(182,210,255,0.68)"
+        : clampedEl < 18
+          ? "rgba(255,198,125,0.96)"
+          : "rgba(255,252,240,0.98)";
+      const haloColor = !isDaylight
+        ? "rgba(130,170,240,0.2)"
+        : clampedEl < 18
+          ? "rgba(255,165,92,0.42)"
+          : "rgba(255,236,196,0.38)";
+      for (const offsetX of [0, -512, 512]) {
+        const cx = sunX + offsetX;
+        const rad = ctx.createRadialGradient(cx, sunY, 2, cx, sunY, isDaylight ? 52 : 34);
+        rad.addColorStop(0, discColor);
+        rad.addColorStop(0.38, haloColor);
+        rad.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = rad;
+        ctx.fillRect(cx - 56, sunY - 56, 112, 112);
+      }
     }
   }
   const tex = new THREE.CanvasTexture(canvas);
@@ -563,34 +642,95 @@ export function createProceduralHdriTexture(
   return tex;
 }
 
+export function createProceduralHdriTexture(
+  mood: "studio" | "clear-sky" | "golden-dusk" | "overcast-nordic",
+): THREE.CanvasTexture {
+  return createDynamicSolarHdriTexture({ mood });
+}
+
 // #7 Extrude detected 2D floor plan walls into real 3D room architecture
 export function buildFloorPlanExtrusionGroup(
   walls: Array<{ id: string; x: number; z: number; width: number; depth: number; height: number; hasDoorGap?: boolean }>,
   mats: SharedSceneMaterials,
 ): THREE.Group {
   const group = new THREE.Group();
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(15.2, 0.25, 12.2), mats.plinthMat);
+  const floor = tagMesh(new THREE.Mesh(new THREE.BoxGeometry(15.2, 0.25, 12.2), mats.plinthMat), "floor-slab", "Floor Slab");
   floor.position.set(0, 0.125, 0);
   floor.receiveShadow = true;
-  floor.userData.pickLabel = "Floor Slab";
   group.add(floor);
 
   for (const wall of walls) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(wall.width, wall.height, wall.depth), mats.primaryMat);
+    const mesh = tagMesh(
+      new THREE.Mesh(new THREE.BoxGeometry(wall.width, wall.height, wall.depth), mats.primaryMat),
+      `plan-wall-${wall.id}`,
+      `Extruded Wall (${wall.id})`,
+    );
     mesh.position.set(wall.x, wall.height * 0.5 + 0.25, wall.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.userData.pickLabel = `Extruded Wall (${wall.id})`;
     group.add(mesh);
   }
 
   // Translucent sky glazing roof canopy strip for daylight study
-  const skylight = new THREE.Mesh(new THREE.BoxGeometry(13.6, 0.08, 10.6), mats.glassMat);
+  const skylight = tagMesh(
+    new THREE.Mesh(new THREE.BoxGeometry(13.6, 0.08, 10.6), mats.glassMat),
+    "skylight-canopy",
+    "Skylight Canopy",
+  );
   skylight.position.set(0, 3.4, 0);
-  skylight.userData.pickLabel = "Skylight Canopy";
   group.add(skylight);
 
   return group;
+}
+
+export function disposeMaterialIfCustom(mat: THREE.Material | THREE.Material[] | null | undefined, customPool: THREE.Material[]): void {
+  if (!mat) return;
+  const list = Array.isArray(mat) ? mat : [mat];
+  for (const item of list) {
+    const idx = customPool.indexOf(item);
+    if (idx !== -1) {
+      item.dispose();
+      customPool.splice(idx, 1);
+    }
+  }
+}
+
+export function applyMaterialOverrideToMesh(
+  mesh: THREE.Mesh,
+  spec: {
+    hex: string;
+    roughness: number;
+    metalness: number;
+    clearcoat: number;
+    opacity: number;
+    transparent: boolean;
+  },
+  customPool: THREE.Material[],
+): THREE.MeshPhysicalMaterial {
+  if (!mesh.userData.originalMaterial) {
+    mesh.userData.originalMaterial = mesh.material;
+  }
+  disposeMaterialIfCustom(mesh.material, customPool);
+  const nextMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(spec.hex),
+    roughness: spec.roughness,
+    metalness: spec.metalness,
+    clearcoat: spec.clearcoat,
+    transparent: spec.transparent,
+    opacity: spec.opacity,
+    envMapIntensity: spec.transparent ? 1.4 : 1.05,
+  });
+  customPool.push(nextMat);
+  mesh.material = nextMat;
+  return nextMat;
+}
+
+export function restoreOriginalMeshMaterial(mesh: THREE.Mesh, customPool: THREE.Material[]): boolean {
+  const original = mesh.userData.originalMaterial as THREE.Material | THREE.Material[] | undefined;
+  if (!original || mesh.material === original) return false;
+  disposeMaterialIfCustom(mesh.material, customPool);
+  mesh.material = original;
+  return true;
 }
 
 // #2 Render true Depth, Normal, and AO Clay channels directly from the live Three.js WebGL camera

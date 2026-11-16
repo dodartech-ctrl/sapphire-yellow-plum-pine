@@ -284,16 +284,33 @@ export function buildBatchMatrixSpecs(params: {
   ];
 }
 
-// #18 Camera-Path Keyframe Interpolator
+// #18 Camera-Path Keyframe Interpolator (4-second Orbit / Dolly / Zoom Flythrough)
+export const FLYTHROUGH_DURATION_MS = 4000;
+
+export type CameraMoveRole = "orbit" | "dolly" | "zoom";
+
 export type CameraKeyframe = {
   id: string;
   label: string;
+  role?: CameraMoveRole;
   pos: [number, number, number];
   target: [number, number, number];
   focalLength: number;
 };
 
-export function interpolateCameraKeyframes(
+function catmullRomScalar(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (
+    0.5 *
+    (2 * p1 +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+  );
+}
+
+export function interpolateCameraPathCatmullRom(
   keyframes: CameraKeyframe[],
   tNorm: number,
 ): { pos: [number, number, number]; target: [number, number, number]; focalLength: number } | null {
@@ -301,22 +318,153 @@ export function interpolateCameraKeyframes(
   if (keyframes.length === 1) return keyframes[0];
 
   const t = Math.max(0, Math.min(1, tNorm));
+  if (keyframes.length === 2) {
+    const ease = t * t * (3 - 2 * t);
+    const a = keyframes[0];
+    const b = keyframes[1];
+    const lerp = (v0: number, v1: number) => Number((v0 + (v1 - v0) * ease).toFixed(3));
+    return {
+      pos: [lerp(a.pos[0], b.pos[0]), lerp(a.pos[1], b.pos[1]), lerp(a.pos[2], b.pos[2])],
+      target: [lerp(a.target[0], b.target[0]), lerp(a.target[1], b.target[1]), lerp(a.target[2], b.target[2])],
+      focalLength: lerp(a.focalLength, b.focalLength),
+    };
+  }
+
+  // Smooth global timing ease at ends while keeping middle spline flow continuous
   const segments = keyframes.length - 1;
   const scaled = t * segments;
   const idx = Math.min(segments - 1, Math.floor(scaled));
   const localT = scaled - idx;
-  // Smoothstep cubic easing for architectural camera motion
-  const ease = localT * localT * (3 - 2 * localT);
 
-  const a = keyframes[idx];
-  const b = keyframes[idx + 1];
-  const lerp = (v0: number, v1: number) => Number((v0 + (v1 - v0) * ease).toFixed(3));
+  const p1 = keyframes[idx];
+  const p2 = keyframes[idx + 1];
+  const p0: CameraKeyframe =
+    idx > 0
+      ? keyframes[idx - 1]
+      : {
+          ...p1,
+          pos: [2 * p1.pos[0] - p2.pos[0], 2 * p1.pos[1] - p2.pos[1], 2 * p1.pos[2] - p2.pos[2]],
+          target: [2 * p1.target[0] - p2.target[0], 2 * p1.target[1] - p2.target[1], 2 * p1.target[2] - p2.target[2]],
+          focalLength: 2 * p1.focalLength - p2.focalLength,
+        };
+  const p3: CameraKeyframe =
+    idx + 2 < keyframes.length
+      ? keyframes[idx + 2]
+      : {
+          ...p2,
+          pos: [2 * p2.pos[0] - p1.pos[0], 2 * p2.pos[1] - p1.pos[1], 2 * p2.pos[2] - p1.pos[2]],
+          target: [2 * p2.target[0] - p1.target[0], 2 * p2.target[1] - p1.target[1], 2 * p2.target[2] - p1.target[2]],
+          focalLength: 2 * p2.focalLength - p1.focalLength,
+        };
+
+  const evalTuple = (i: 0 | 1 | 2, key: "pos" | "target") =>
+    Number(catmullRomScalar(p0[key][i], p1[key][i], p2[key][i], p3[key][i], localT).toFixed(3));
+  const rawFocal = catmullRomScalar(p0.focalLength, p1.focalLength, p2.focalLength, p3.focalLength, localT);
 
   return {
-    pos: [lerp(a.pos[0], b.pos[0]), lerp(a.pos[1], b.pos[1]), lerp(a.pos[2], b.pos[2])],
-    target: [lerp(a.target[0], b.target[0]), lerp(a.target[1], b.target[1]), lerp(a.target[2], b.target[2])],
-    focalLength: lerp(a.focalLength, b.focalLength),
+    pos: [evalTuple(0, "pos"), Math.max(0.4, evalTuple(1, "pos")), evalTuple(2, "pos")],
+    target: [evalTuple(0, "target"), evalTuple(1, "target"), evalTuple(2, "target")],
+    focalLength: Number(Math.max(14, Math.min(120, rawFocal)).toFixed(2)),
   };
+}
+
+export function interpolateCameraKeyframes(
+  keyframes: CameraKeyframe[],
+  tNorm: number,
+): { pos: [number, number, number]; target: [number, number, number]; focalLength: number } | null {
+  return interpolateCameraPathCatmullRom(keyframes, tNorm);
+}
+
+export function sampleCameraPathPoints(keyframes: CameraKeyframe[], steps = 28): [number, number, number][] {
+  if (keyframes.length < 2) return keyframes.map((k) => k.pos);
+  const count = Math.max(4, steps);
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i <= count; i++) {
+    const sample = interpolateCameraPathCatmullRom(keyframes, i / count);
+    if (sample) pts.push(sample.pos);
+  }
+  return pts;
+}
+
+export function buildOrbitDollyZoomRig(
+  basePos: [number, number, number],
+  baseTarget: [number, number, number],
+  baseFocalLength: number,
+): CameraKeyframe[] {
+  const dx = basePos[0] - baseTarget[0];
+  const dy = basePos[1] - baseTarget[1];
+  const dz = basePos[2] - baseTarget[2];
+  const radius = Math.max(4, Math.hypot(dx, dz));
+  const baseAz = Math.atan2(dz, dx);
+
+  // 1. Orbit: wide lateral sweep around target
+  const orbitAz = baseAz - 0.62;
+  const orbitPos: [number, number, number] = [
+    Number((baseTarget[0] + Math.cos(orbitAz) * (radius * 1.12)).toFixed(2)),
+    Number(Math.max(1.8, baseTarget[1] + dy + 1.4).toFixed(2)),
+    Number((baseTarget[2] + Math.sin(orbitAz) * (radius * 1.12)).toFixed(2)),
+  ];
+
+  // 2. Dolly: architectural push closer along approach vector at eye-horizon height
+  const dollyAz = baseAz + 0.14;
+  const dollyPos: [number, number, number] = [
+    Number((baseTarget[0] + Math.cos(dollyAz) * (radius * 0.72)).toFixed(2)),
+    Number(Math.max(1.5, baseTarget[1] + Math.max(0.8, dy * 0.65)).toFixed(2)),
+    Number((baseTarget[2] + Math.sin(dollyAz) * (radius * 0.72)).toFixed(2)),
+  ];
+
+  // 3. Zoom: tight focal-length detail punch into facade/courtyard
+  const zoomAz = baseAz + 0.48;
+  const zoomPos: [number, number, number] = [
+    Number((baseTarget[0] + Math.cos(zoomAz) * (radius * 0.56)).toFixed(2)),
+    Number(Math.max(1.4, baseTarget[1] + Math.max(0.6, dy * 0.52)).toFixed(2)),
+    Number((baseTarget[2] + Math.sin(zoomAz) * (radius * 0.56)).toFixed(2)),
+  ];
+
+  const wideMm = Math.max(18, Math.min(28, Math.round(baseFocalLength * 0.78)));
+  const midMm = Math.max(24, Math.min(45, Math.round(baseFocalLength)));
+  const teleMm = Math.max(50, Math.min(85, Math.round(baseFocalLength + 24)));
+
+  return [
+    {
+      id: `kf-orbit-${Date.now()}-1`,
+      label: `1. Orbit (${wideMm}mm)`,
+      role: "orbit",
+      pos: orbitPos,
+      target: [...baseTarget],
+      focalLength: wideMm,
+    },
+    {
+      id: `kf-dolly-${Date.now()}-2`,
+      label: `2. Dolly (${midMm}mm)`,
+      role: "dolly",
+      pos: dollyPos,
+      target: [baseTarget[0], Number((baseTarget[1] + 0.35).toFixed(2)), baseTarget[2]],
+      focalLength: midMm,
+    },
+    {
+      id: `kf-zoom-${Date.now()}-3`,
+      label: `3. Zoom (${teleMm}mm)`,
+      role: "zoom",
+      pos: zoomPos,
+      target: [baseTarget[0], Number((baseTarget[1] + 0.65).toFixed(2)), baseTarget[2]],
+      focalLength: teleMm,
+    },
+  ];
+}
+
+export function upsertRoleKeyframe(
+  keyframes: CameraKeyframe[],
+  incoming: CameraKeyframe,
+): CameraKeyframe[] {
+  if (!incoming.role) {
+    return [...keyframes, incoming].slice(0, 6);
+  }
+  const roleOrder: Record<CameraMoveRole, number> = { orbit: 0, dolly: 1, zoom: 2 };
+  const withoutSameRole = keyframes.filter((k) => k.role !== incoming.role);
+  return [...withoutSameRole, incoming]
+    .sort((a, b) => (a.role ? roleOrder[a.role] : 9) - (b.role ? roleOrder[b.role] : 9))
+    .slice(0, 6);
 }
 
 // #19 Interactive Client Review Pins & Shareable Payload Codec
@@ -500,3 +648,84 @@ export function getQueueStats(queue: RenderQueueItem[]): {
   }
   return { total: queue.length, pending, processing, completed, failed };
 }
+
+export function computeBatchProgress(queue: RenderQueueItem[]): {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  progressPct: number;
+  activeProcessingId: string | null;
+  nextPendingId: string | null;
+  isComplete: boolean;
+} {
+  const stats = getQueueStats(queue);
+  const activeProcessing = queue.find((item) => item.status === "processing" || item.status === "running");
+  const nextPending = queue.find((item) => item.status === "pending" || item.status === "queued");
+  const finished = stats.completed + stats.failed;
+  const progressPct = stats.total > 0 ? Math.round((finished / stats.total) * 100) : 0;
+  return {
+    ...stats,
+    progressPct,
+    activeProcessingId: activeProcessing?.id ?? null,
+    nextPendingId: nextPending?.id ?? null,
+    isComplete: stats.total > 0 && stats.pending === 0 && stats.processing === 0,
+  };
+}
+
+export function getQueueItemVisualMeta(
+  item: RenderQueueItem,
+  fallbackThumb = "/viz/p01-pavilion-day.jpg",
+): {
+  normalizedStatus: "pending" | "processing" | "completed" | "error";
+  statusLabel: "Pending" | "Processing" | "Completed" | "Failed";
+  barWidthPct: number;
+  statusHint: string;
+  thumbnail: string;
+} {
+  const isEvening = item.light.toLowerCase().includes("evening") || (typeof item.sunHour === "number" && item.sunHour >= 19.5);
+  const isGolden = item.light.toLowerCase().includes("golden") || (typeof item.sunHour === "number" && item.sunHour >= 16.5 && item.sunHour < 19.5);
+  const defaultPreview = isEvening
+    ? "/viz/p01-pavilion-dusk.jpg"
+    : isGolden
+      ? "/viz/t05-subtropical-home.jpg"
+      : fallbackThumb;
+  const thumbnail = item.url || item.thumbnailUrl || defaultPreview;
+
+  if (item.status === "processing" || item.status === "running") {
+    return {
+      normalizedStatus: "processing",
+      statusLabel: "Processing",
+      barWidthPct: 68,
+      statusHint: "Synthesizing architectural pass…",
+      thumbnail,
+    };
+  }
+  if (item.status === "completed" || item.status === "done") {
+    return {
+      normalizedStatus: "completed",
+      statusLabel: "Completed",
+      barWidthPct: 100,
+      statusHint: item.durationMs ? `Done in ${(item.durationMs / 1000).toFixed(2)}s` : "Ready to inspect",
+      thumbnail,
+    };
+  }
+  if (item.status === "error") {
+    return {
+      normalizedStatus: "error",
+      statusLabel: "Failed",
+      barWidthPct: 100,
+      statusHint: item.errorMessage || "Render pass failed — retry available",
+      thumbnail,
+    };
+  }
+  return {
+    normalizedStatus: "pending",
+    statusLabel: "Pending",
+    barWidthPct: 18,
+    statusHint: "Queued · waiting turn",
+    thumbnail,
+  };
+}
+

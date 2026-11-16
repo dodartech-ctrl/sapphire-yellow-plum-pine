@@ -194,6 +194,7 @@ export type RenderQueueItem = {
   promptNote?: string;
   status: RenderQueueStatus;
   url?: string;
+  thumbnailUrl?: string;
   errorMessage?: string;
   durationMs?: number;
   createdAt: number;
@@ -685,7 +686,7 @@ export function sanitizeScene3DState(input?: Partial<Scene3DState>): Scene3DStat
     geoEnabled: typeof input?.geoEnabled === "boolean" ? input.geoEnabled : DEFAULT_SCENE3D.geoEnabled,
     geoLatitude: clampFloat(input?.geoLatitude, -65, 65, DEFAULT_SCENE3D.geoLatitude),
     geoMonth: clamp(input?.geoMonth, 1, 12, DEFAULT_SCENE3D.geoMonth),
-    geoHour: clampFloat(input?.geoHour, 5, 21, DEFAULT_SCENE3D.geoHour),
+    geoHour: clampFloat(input?.geoHour, 0, 24, DEFAULT_SCENE3D.geoHour),
     hdriMood: pickOne(input?.hdriMood, ["studio", "clear-sky", "golden-dusk", "overcast-nordic"], DEFAULT_SCENE3D.hdriMood),
     materialPickMode: typeof input?.materialPickMode === "boolean" ? input.materialPickMode : DEFAULT_SCENE3D.materialPickMode,
     customModelName: typeof input?.customModelName === "string" ? input.customModelName.slice(0, 80) : null,
@@ -879,6 +880,7 @@ export function createQueueItem(
     cameraPreset?: CameraPreset3D;
     sunHour?: number;
     promptNote?: string;
+    thumbnailUrl?: string;
     status?: RenderQueueStatus;
   },
 ): RenderQueueItem {
@@ -890,6 +892,7 @@ export function createQueueItem(
     cameraPreset: options?.cameraPreset,
     sunHour: options?.sunHour,
     promptNote: options?.promptNote,
+    thumbnailUrl: options?.thumbnailUrl,
     status: options?.status ?? "pending",
     createdAt: Date.now(),
   };

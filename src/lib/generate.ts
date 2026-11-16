@@ -39,8 +39,16 @@ type Input = {
 
 function cleanDataUrl(value: unknown): string | undefined {
   if (typeof value !== "string" || !value.startsWith("data:image/")) return undefined;
-  if (value.length > 2_500_000) throw new Error("That image is too large. Try a smaller photo.");
+  if (value.length > 6_500_000) throw new Error("That image is too large. Try a smaller photo under 5 MB.");
   return value;
+}
+
+export function formatCloudFallbackWarning(providerErrors: readonly string[], hasAuthError: boolean): string | undefined {
+  if (hasAuthError) {
+    return "Cloud AI key unavailable — rendered Studio preview composite. Verify your billing-enabled key in Settings > Secrets for live cloud rendering.";
+  }
+  const first = providerErrors.find((msg) => msg.trim().length > 0);
+  return first ? `${first} Showing Studio preview composite.` : undefined;
 }
 
 function cleanDictionaryBlocks(value: unknown): string[] | undefined {
@@ -152,14 +160,16 @@ export const generatePlate = createServerFn({ method: "POST" })
       .join("\n\n")
       .slice(0, 8000);
 
-    const { hasGeminiKey, generateImageWithGemini } = await import("@/lib/gemini.server");
+    const { hasNvidiaKey, generateImageWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const { hasGeminiKey, generateImageWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
+    const nvidiaEnabled = hasNvidiaKey();
     const geminiEnabled = hasGeminiKey();
     const xaiKey = process.env.XAI_API_KEY;
     const { charge, refund, readWallet } = await import("@/lib/credits.server");
-    if (!geminiEnabled && !xaiKey) {
+    if (!nvidiaEnabled && !geminiEnabled && !xaiKey) {
       const wallet = await readWallet().catch(() => ({ credits: 4500 }));
       return {
-        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed),
+        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed, 0, data.idea),
         cost: 0,
         credits: wallet.credits,
         frame: data.frame,
@@ -170,6 +180,9 @@ export const generatePlate = createServerFn({ method: "POST" })
     }
 
     const wallet = await charge(PLATE_COST, data.image ? "edit" : "plate");
+    const providerErrors: string[] = [];
+    let hasAuthError = false;
+
     if (geminiEnabled) {
       try {
         const url = await generateImageWithGemini(prompt, data.frame, geminiAttachments(data));
@@ -183,53 +196,75 @@ export const generatePlate = createServerFn({ method: "POST" })
           summary: compiled.parametersSummary,
         };
       } catch (error) {
-        await refund(PLATE_COST, "plate-refund").catch(() => undefined);
-        const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-        return {
-          url: pickServerFallbackPlate(data.design, data.engine, compiled.seed),
-          cost: 0,
-          credits: refreshed.credits,
-          frame: data.frame,
-          fallback: true,
-          seed: compiled.seed,
-          summary: compiled.parametersSummary,
-          warning: error instanceof Error ? error.message : "Gemini plate generation unavailable.",
-        };
+        if (isGeminiAuthError(error)) hasAuthError = true;
+        if (error instanceof Error) providerErrors.push(error.message);
       }
     }
 
-    try {
-      const source = data.image ?? data.sketchImage;
-      const url = await callXaiImage(xaiKey!, prompt, data.frame, source);
-      return {
-        url,
-        cost: PLATE_COST,
-        credits: wallet.credits,
-        frame: data.frame,
-        fallback: false,
-        seed: compiled.seed,
-        summary: compiled.parametersSummary,
-      };
-    } catch {
-      await refund(PLATE_COST, "plate-refund").catch(() => undefined);
-      const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-      return {
-        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed),
-        cost: 0,
-        credits: refreshed.credits,
-        frame: data.frame,
-        fallback: true,
-        seed: compiled.seed,
-        summary: compiled.parametersSummary,
-      };
+    if (nvidiaEnabled) {
+      try {
+        const url = await generateImageWithNvidia(prompt, data.frame, {
+          seed: compiled.seed,
+          fast: data.engine.renderFidelity === "draft",
+          depthImage: data.depthImage,
+          annotatorImage: data.annotatorImage,
+          sketchImage: data.sketchImage,
+          sourceImage: data.image,
+        });
+        return {
+          url,
+          cost: PLATE_COST,
+          credits: wallet.credits,
+          frame: data.frame,
+          fallback: false,
+          seed: compiled.seed,
+          summary: compiled.parametersSummary,
+        };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
     }
+
+    if (xaiKey) {
+      try {
+        const source = data.image ?? data.sketchImage;
+        const url = await callXaiImage(xaiKey, prompt, data.frame, source);
+        return {
+          url,
+          cost: PLATE_COST,
+          credits: wallet.credits,
+          frame: data.frame,
+          fallback: false,
+          seed: compiled.seed,
+          summary: compiled.parametersSummary,
+        };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+
+    await refund(PLATE_COST, "plate-refund").catch(() => undefined);
+    const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
+    const warning = formatCloudFallbackWarning(providerErrors, hasAuthError);
+    return {
+      url: pickServerFallbackPlate(data.design, data.engine, compiled.seed, 0, data.idea),
+      cost: 0,
+      credits: refreshed.credits,
+      frame: data.frame,
+      fallback: true,
+      seed: compiled.seed,
+      summary: compiled.parametersSummary,
+      ...(warning ? { warning } : {}),
+    };
   });
 
 export const generateVariations = createServerFn({ method: "POST" })
   .validator(parseInput)
   .handler(async ({ data }) => {
     const { dictionaryBrief } = await import("@/lib/blocks.server");
-    const { hasGeminiKey, generateImageWithGemini } = await import("@/lib/gemini.server");
+    const { hasNvidiaKey, generateImageWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const { hasGeminiKey, generateImageWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
+    const nvidiaEnabled = hasNvidiaKey();
     const geminiEnabled = hasGeminiKey();
     const xaiKey = process.env.XAI_API_KEY;
     const { charge, refund, readWallet } = await import("@/lib/credits.server");
@@ -239,10 +274,10 @@ export const generateVariations = createServerFn({ method: "POST" })
       frame: data.frame,
     });
 
-    if (!geminiEnabled && !xaiKey) {
+    if (!nvidiaEnabled && !geminiEnabled && !xaiKey) {
       const wallet = await readWallet().catch(() => ({ credits: 4500 }));
       return {
-        urls: pickFourFallbackPlates(data.design, data.engine, compiled0.seed),
+        urls: pickFourFallbackPlates(data.design, data.engine, compiled0.seed, data.idea),
         fallback: true,
         credits: wallet.credits,
         frame: data.frame,
@@ -269,6 +304,9 @@ export const generateVariations = createServerFn({ method: "POST" })
         .slice(0, 8000);
     };
 
+    const providerErrors: string[] = [];
+    let hasAuthError = false;
+
     if (geminiEnabled) {
       try {
         const urls = await Promise.all(
@@ -284,40 +322,140 @@ export const generateVariations = createServerFn({ method: "POST" })
           seed: compiled0.seed,
         };
       } catch (error) {
-        await refund(batchCost, "grid-refund").catch(() => undefined);
-        const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + batchCost }));
+        if (isGeminiAuthError(error)) hasAuthError = true;
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+
+    if (nvidiaEnabled) {
+      try {
+        const urls = await Promise.all(
+          [0, 1, 2, 3].map((idx) =>
+            generateImageWithNvidia(buildVariationPrompt(idx), data.frame, {
+              seed: compiled0.seed + idx,
+              fast: data.engine.renderFidelity === "draft",
+              depthImage: data.depthImage,
+              annotatorImage: data.annotatorImage,
+              sketchImage: data.sketchImage,
+              sourceImage: data.image,
+            }),
+          ),
+        );
         return {
-          urls: pickFourFallbackPlates(data.design, data.engine, compiled0.seed),
-          fallback: true,
-          credits: refreshed.credits,
+          urls,
+          fallback: false,
+          credits: wallet.credits,
           frame: data.frame,
           seed: compiled0.seed,
-          warning: error instanceof Error ? error.message : "Gemini variation grid unavailable.",
+        };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+
+    if (xaiKey) {
+      try {
+        const source = data.image ?? data.sketchImage;
+        const urls = await Promise.all([0, 1, 2, 3].map((idx) => callXaiImage(xaiKey, buildVariationPrompt(idx), data.frame, source)));
+        return {
+          urls,
+          fallback: false,
+          credits: wallet.credits,
+          frame: data.frame,
+          seed: compiled0.seed,
+        };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+
+    await refund(batchCost, "grid-refund").catch(() => undefined);
+    const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + batchCost }));
+    const warning = formatCloudFallbackWarning(providerErrors, hasAuthError);
+    return {
+      urls: pickFourFallbackPlates(data.design, data.engine, compiled0.seed, data.idea),
+      fallback: true,
+      credits: refreshed.credits,
+      frame: data.frame,
+      seed: compiled0.seed,
+      ...(warning ? { warning } : {}),
+    };
+  });
+
+export const segmentObjectWithSam2 = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const data = input as { image?: unknown; prompt?: unknown; clickPoint?: unknown };
+    const cp =
+      data.clickPoint &&
+      typeof data.clickPoint === "object" &&
+      typeof (data.clickPoint as { xNorm?: unknown }).xNorm === "number" &&
+      typeof (data.clickPoint as { yNorm?: unknown }).yNorm === "number"
+        ? {
+            xNorm: Math.max(0, Math.min(1, Number((data.clickPoint as { xNorm: number }).xNorm))),
+            yNorm: Math.max(0, Math.min(1, Number((data.clickPoint as { yNorm: number }).yNorm))),
+          }
+        : undefined;
+    return {
+      image: cleanDataUrl(data.image),
+      prompt: typeof data.prompt === "string" ? data.prompt.trim().slice(0, 120) : "architectural element",
+      clickPoint: cp,
+    };
+  })
+  .handler(async ({ data }) => {
+    const { heuristicSemanticBoxesForPrompt, normalizeGroundedBoxes } = await import("@/lib/cv-pipeline");
+    const { hasNvidiaKey, detectGroundedSam2BoxesWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const { hasGeminiKey, detectGroundedSam2BoxesWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
+    const prompt = data.prompt || "architectural element";
+
+    if (hasGeminiKey() && data.image) {
+      try {
+        const boxes = await detectGroundedSam2BoxesWithGemini(data.image, prompt, data.clickPoint);
+        if (boxes.length > 0) {
+          return {
+            boxes: normalizeGroundedBoxes(boxes, prompt),
+            fallback: false,
+            model: "grounded-sam-2-gemini",
+          };
+        }
+      } catch (error) {
+        if (!hasNvidiaKey()) {
+          return {
+            boxes: heuristicSemanticBoxesForPrompt(prompt),
+            fallback: true,
+            model: "grounded-sam-2-local",
+            ...(!isGeminiAuthError(error)
+              ? { warning: error instanceof Error ? error.message : "Server Grounded-SAM 2 fallback used." }
+              : {}),
+          };
+        }
+      }
+    }
+
+    if (hasNvidiaKey() && data.image) {
+      try {
+        const boxes = await detectGroundedSam2BoxesWithNvidia(data.image, prompt, data.clickPoint);
+        if (boxes.length > 0) {
+          return {
+            boxes: normalizeGroundedBoxes(boxes, prompt),
+            fallback: false,
+            model: "grounded-sam-2-nvidia",
+          };
+        }
+      } catch (error) {
+        return {
+          boxes: heuristicSemanticBoxesForPrompt(prompt),
+          fallback: true,
+          model: "grounded-sam-2-local",
+          warning: error instanceof Error ? error.message : "NVIDIA Grounded-SAM 2 fallback used.",
         };
       }
     }
 
-    try {
-      const source = data.image ?? data.sketchImage;
-      const urls = await Promise.all([0, 1, 2, 3].map((idx) => callXaiImage(xaiKey!, buildVariationPrompt(idx), data.frame, source)));
-      return {
-        urls,
-        fallback: false,
-        credits: wallet.credits,
-        frame: data.frame,
-        seed: compiled0.seed,
-      };
-    } catch {
-      await refund(batchCost, "grid-refund").catch(() => undefined);
-      const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + batchCost }));
-      return {
-        urls: pickFourFallbackPlates(data.design, data.engine, compiled0.seed),
-        fallback: true,
-        credits: refreshed.credits,
-        frame: data.frame,
-        seed: compiled0.seed,
-      };
-    }
+    return {
+      boxes: heuristicSemanticBoxesForPrompt(prompt),
+      fallback: true,
+      model: "grounded-sam-2-local",
+    };
   });
 
 export const inpaintPlate = createServerFn({ method: "POST" })
@@ -330,53 +468,110 @@ export const inpaintPlate = createServerFn({ method: "POST" })
       frame: data.frame,
     });
     const dictSection = dictionaryBrief(data.design.vertical, data.design.advanced, data.dictionaryBlocks, data.dictionaryParams);
-    const fullPrompt = [data.houseStyleDirective, compiled.prompt, dictSection].filter(Boolean).join("\n\n").slice(0, 4000);
-    const { hasGeminiKey, generateImageWithGemini } = await import("@/lib/gemini.server");
+    const opLabel =
+      data.engine.iopaintTask === "erase"
+        ? "OBJECT_REMOVAL"
+        : data.engine.iopaintTask === "replace"
+          ? "TEXTURE_REPLACEMENT"
+          : data.engine.iopaintTask === "anytext"
+            ? "ANYTEXT_SIGNAGE"
+            : data.engine.iopaintTask === "paint-by-example"
+              ? "PAINT_BY_EXAMPLE"
+              : "DIRECTIONAL_OUTPAINT";
+    const iopaintServerHeader = `IOPAINT SERVER PIPELINE · TASK: ${opLabel} · ENGINE MODEL: ${data.engine.iopaintModel}`;
+    const fullPrompt = [iopaintServerHeader, data.houseStyleDirective, compiled.prompt, dictSection]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, 4200);
+    const { hasNvidiaKey, generateImageWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const { hasGeminiKey, generateImageWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
+    const nvidiaEnabled = hasNvidiaKey();
     const geminiEnabled = hasGeminiKey();
     const xaiKey = process.env.XAI_API_KEY;
     const { charge, refund, readWallet } = await import("@/lib/credits.server");
-    if ((!geminiEnabled && !xaiKey) || !data.image) {
+    if ((!nvidiaEnabled && !geminiEnabled && !xaiKey) || !data.image) {
       const wallet = await readWallet().catch(() => ({ credits: 4500 }));
       return {
-        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed, 1),
+        url: data.image ?? pickServerFallbackPlate(data.design, data.engine, compiled.seed, 1, data.idea),
         fallback: true,
         credits: wallet.credits,
         frame: data.frame,
         seed: compiled.seed,
+        modelUsed: data.engine.iopaintModel,
+        operation: data.engine.iopaintTask,
       };
     }
     const wallet = await charge(PLATE_COST, "inpaint");
+    const providerErrors: string[] = [];
+    let hasAuthError = false;
     if (geminiEnabled) {
       try {
         const url = await generateImageWithGemini(fullPrompt, data.frame, geminiAttachments(data));
-        return { url, fallback: false, credits: wallet.credits, frame: data.frame, seed: compiled.seed };
-      } catch (error) {
-        await refund(PLATE_COST, "inpaint-refund").catch(() => undefined);
-        const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
         return {
-          url: pickServerFallbackPlate(data.design, data.engine, compiled.seed, 1),
-          fallback: true,
-          credits: refreshed.credits,
+          url,
+          fallback: false,
+          credits: wallet.credits,
           frame: data.frame,
           seed: compiled.seed,
-          warning: error instanceof Error ? error.message : "Gemini inpaint unavailable.",
+          modelUsed: data.engine.iopaintModel,
+          operation: data.engine.iopaintTask,
         };
+      } catch (error) {
+        if (isGeminiAuthError(error)) hasAuthError = true;
+        if (error instanceof Error) providerErrors.push(error.message);
       }
     }
-    try {
-      const url = await callXaiImage(xaiKey!, fullPrompt, data.frame, data.image);
-      return { url, fallback: false, credits: wallet.credits, frame: data.frame, seed: compiled.seed };
-    } catch {
-      await refund(PLATE_COST, "inpaint-refund").catch(() => undefined);
-      const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-      return {
-        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed, 1),
-        fallback: true,
-        credits: refreshed.credits,
-        frame: data.frame,
-        seed: compiled.seed,
-      };
+    if (nvidiaEnabled) {
+      try {
+        const url = await generateImageWithNvidia(fullPrompt, data.frame, {
+          seed: compiled.seed,
+          depthImage: data.depthImage,
+          annotatorImage: data.annotatorImage,
+          sketchImage: data.sketchImage,
+          sourceImage: data.image,
+        });
+        return {
+          url,
+          fallback: false,
+          credits: wallet.credits,
+          frame: data.frame,
+          seed: compiled.seed,
+          modelUsed: `nvidia-flux · ${data.engine.iopaintModel}`,
+          operation: data.engine.iopaintTask,
+        };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
     }
+    if (xaiKey) {
+      try {
+        const url = await callXaiImage(xaiKey, fullPrompt, data.frame, data.image);
+        return {
+          url,
+          fallback: false,
+          credits: wallet.credits,
+          frame: data.frame,
+          seed: compiled.seed,
+          modelUsed: data.engine.iopaintModel,
+          operation: data.engine.iopaintTask,
+        };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+    await refund(PLATE_COST, "inpaint-refund").catch(() => undefined);
+    const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
+    const warning = formatCloudFallbackWarning(providerErrors, hasAuthError);
+    return {
+      url: data.image,
+      fallback: true,
+      credits: refreshed.credits,
+      frame: data.frame,
+      seed: compiled.seed,
+      modelUsed: data.engine.iopaintModel,
+      operation: data.engine.iopaintTask,
+      ...(warning ? { warning } : {}),
+    };
   });
 
 export const enhancePlate = createServerFn({ method: "POST" })
@@ -385,14 +580,16 @@ export const enhancePlate = createServerFn({ method: "POST" })
     const { dictionaryBrief } = await import("@/lib/blocks.server");
     const compiled = compileEngineBrief(data.design, data.engine, data.scene3d, data.idea, { frame: data.frame });
     const dictSection = dictionaryBrief(data.design.vertical, data.design.advanced, ["upscale-safety", ...(data.dictionaryBlocks ?? [])], data.dictionaryParams);
-    const { hasGeminiKey, generateImageWithGemini } = await import("@/lib/gemini.server");
+    const { hasNvidiaKey, generateImageWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const { hasGeminiKey, generateImageWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
+    const nvidiaEnabled = hasNvidiaKey();
     const geminiEnabled = hasGeminiKey();
     const xaiKey = process.env.XAI_API_KEY;
     const { charge, refund, readWallet } = await import("@/lib/credits.server");
-    if ((!geminiEnabled && !xaiKey) || !data.image) {
+    if ((!nvidiaEnabled && !geminiEnabled && !xaiKey) || !data.image) {
       const wallet = await readWallet().catch(() => ({ credits: 4500 }));
       return {
-        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed),
+        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed, 0, data.idea),
         fallback: true,
         credits: wallet.credits,
         frame: data.frame,
@@ -403,49 +600,62 @@ export const enhancePlate = createServerFn({ method: "POST" })
       0,
       4000,
     );
+    const providerErrors: string[] = [];
+    let hasAuthError = false;
     if (geminiEnabled) {
       try {
         const url = await generateImageWithGemini(enhancePrompt, data.frame, { sourceImage: data.image });
         return { url, fallback: false, credits: wallet.credits, frame: data.frame };
       } catch (error) {
-        await refund(PLATE_COST, "enhance-refund").catch(() => undefined);
-        const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-        return {
-          url: pickServerFallbackPlate(data.design, data.engine, compiled.seed),
-          fallback: true,
-          credits: refreshed.credits,
-          frame: data.frame,
-          warning: error instanceof Error ? error.message : "Gemini enhance unavailable.",
-        };
+        if (isGeminiAuthError(error)) hasAuthError = true;
+        if (error instanceof Error) providerErrors.push(error.message);
       }
     }
-    try {
-      const url = await callXaiImage(xaiKey!, enhancePrompt, data.frame, data.image);
-      return { url, fallback: false, credits: wallet.credits, frame: data.frame };
-    } catch {
-      await refund(PLATE_COST, "enhance-refund").catch(() => undefined);
-      const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-      return {
-        url: pickServerFallbackPlate(data.design, data.engine, compiled.seed),
-        fallback: true,
-        credits: refreshed.credits,
-        frame: data.frame,
-      };
+    if (nvidiaEnabled) {
+      try {
+        const url = await generateImageWithNvidia(enhancePrompt, data.frame, {
+          seed: compiled.seed,
+          sourceImage: data.image,
+        });
+        return { url, fallback: false, credits: wallet.credits, frame: data.frame };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
     }
+    if (xaiKey) {
+      try {
+        const url = await callXaiImage(xaiKey, enhancePrompt, data.frame, data.image);
+        return { url, fallback: false, credits: wallet.credits, frame: data.frame };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+    await refund(PLATE_COST, "enhance-refund").catch(() => undefined);
+    const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
+    const warning = formatCloudFallbackWarning(providerErrors, hasAuthError);
+    return {
+      url: pickServerFallbackPlate(data.design, data.engine, compiled.seed, 0, data.idea),
+      fallback: true,
+      credits: refreshed.credits,
+      frame: data.frame,
+      ...(warning ? { warning } : {}),
+    };
   });
 
 export const relightPlate = createServerFn({ method: "POST" })
   .validator(parseInput)
   .handler(async ({ data }) => {
     const compiled = compileEngineBrief(data.design, data.engine, data.scene3d, data.idea, { frame: data.frame });
-    const { hasGeminiKey, generateImageWithGemini } = await import("@/lib/gemini.server");
+    const { hasNvidiaKey, generateImageWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const { hasGeminiKey, generateImageWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
     const { readWallet, charge, refund } = await import("@/lib/credits.server");
+    const nvidiaEnabled = hasNvidiaKey();
     const geminiEnabled = hasGeminiKey();
     const xaiKey = process.env.XAI_API_KEY;
-    if ((!geminiEnabled && !xaiKey) || !data.image) {
+    if ((!nvidiaEnabled && !geminiEnabled && !xaiKey) || !data.image) {
       const wallet = await readWallet().catch(() => ({ credits: 4500 }));
       return {
-        url: data.image ?? pickServerFallbackPlate(data.design, data.engine, compiled.seed),
+        url: data.image ?? pickServerFallbackPlate(data.design, data.engine, compiled.seed, 0, data.idea),
         fallback: true,
         credits: wallet.credits,
         seed: compiled.seed,
@@ -456,44 +666,64 @@ export const relightPlate = createServerFn({ method: "POST" })
       0,
       4000,
     );
+    const providerErrors: string[] = [];
+    let hasAuthError = false;
     if (geminiEnabled) {
       try {
         const url = await generateImageWithGemini(relightPrompt, data.frame, geminiAttachments(data));
         return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
       } catch (error) {
-        await refund(PLATE_COST, "relight-refund").catch(() => undefined);
-        const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-        return {
-          url: data.image,
-          fallback: true,
-          credits: refreshed.credits,
-          seed: compiled.seed,
-          warning: error instanceof Error ? error.message : "Relight fallback applied.",
-        };
+        if (isGeminiAuthError(error)) hasAuthError = true;
+        if (error instanceof Error) providerErrors.push(error.message);
       }
     }
-    try {
-      const url = await callXaiImage(xaiKey!, relightPrompt, data.frame, data.image);
-      return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
-    } catch {
-      await refund(PLATE_COST, "relight-refund").catch(() => undefined);
-      const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-      return { url: data.image, fallback: true, credits: refreshed.credits, seed: compiled.seed };
+    if (nvidiaEnabled) {
+      try {
+        const url = await generateImageWithNvidia(relightPrompt, data.frame, {
+          seed: compiled.seed,
+          depthImage: data.depthImage,
+          annotatorImage: data.annotatorImage,
+          sourceImage: data.image,
+        });
+        return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
     }
+    if (xaiKey) {
+      try {
+        const url = await callXaiImage(xaiKey, relightPrompt, data.frame, data.image);
+        return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+    await refund(PLATE_COST, "relight-refund").catch(() => undefined);
+    const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
+    const warning = formatCloudFallbackWarning(providerErrors, hasAuthError);
+    return {
+      url: data.image,
+      fallback: true,
+      credits: refreshed.credits,
+      seed: compiled.seed,
+      ...(warning ? { warning } : {}),
+    };
   });
 
 export const outpaintPlate = createServerFn({ method: "POST" })
   .validator(parseInput)
   .handler(async ({ data }) => {
     const compiled = compileEngineBrief(data.design, data.engine, data.scene3d, data.idea, { frame: data.frame });
-    const { hasGeminiKey, generateImageWithGemini } = await import("@/lib/gemini.server");
+    const { hasNvidiaKey, generateImageWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const { hasGeminiKey, generateImageWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
     const { readWallet, charge, refund } = await import("@/lib/credits.server");
+    const nvidiaEnabled = hasNvidiaKey();
     const geminiEnabled = hasGeminiKey();
     const xaiKey = process.env.XAI_API_KEY;
-    if ((!geminiEnabled && !xaiKey) || !data.image) {
+    if ((!nvidiaEnabled && !geminiEnabled && !xaiKey) || !data.image) {
       const wallet = await readWallet().catch(() => ({ credits: 4500 }));
       return {
-        url: data.image ?? pickServerFallbackPlate(data.design, data.engine, compiled.seed),
+        url: data.image ?? pickServerFallbackPlate(data.design, data.engine, compiled.seed, 0, data.idea),
         fallback: true,
         credits: wallet.credits,
         seed: compiled.seed,
@@ -505,6 +735,8 @@ export const outpaintPlate = createServerFn({ method: "POST" })
       4000,
     );
     const aspectOverride = data.engine.outpaintRatio === "9:16" ? "9:16" : "16:9";
+    const providerErrors: string[] = [];
+    let hasAuthError = false;
     if (geminiEnabled) {
       try {
         const url = await generateImageWithGemini(outpaintPrompt, data.frame, {
@@ -513,25 +745,40 @@ export const outpaintPlate = createServerFn({ method: "POST" })
         });
         return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
       } catch (error) {
-        await refund(PLATE_COST, "outpaint-refund").catch(() => undefined);
-        const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-        return {
-          url: data.image,
-          fallback: true,
-          credits: refreshed.credits,
-          seed: compiled.seed,
-          warning: error instanceof Error ? error.message : "Outpaint canvas fallback applied.",
-        };
+        if (isGeminiAuthError(error)) hasAuthError = true;
+        if (error instanceof Error) providerErrors.push(error.message);
       }
     }
-    try {
-      const url = await callXaiImage(xaiKey!, outpaintPrompt, data.frame, data.image);
-      return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
-    } catch {
-      await refund(PLATE_COST, "outpaint-refund").catch(() => undefined);
-      const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
-      return { url: data.image, fallback: true, credits: refreshed.credits, seed: compiled.seed };
+    if (nvidiaEnabled) {
+      try {
+        const outFrame: Frame = { ...data.frame, ratio: aspectOverride };
+        const url = await generateImageWithNvidia(outpaintPrompt, outFrame, {
+          seed: compiled.seed,
+          sourceImage: data.image,
+        });
+        return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
     }
+    if (xaiKey) {
+      try {
+        const url = await callXaiImage(xaiKey, outpaintPrompt, data.frame, data.image);
+        return { url, fallback: false, credits: wallet.credits, seed: compiled.seed };
+      } catch (error) {
+        if (error instanceof Error) providerErrors.push(error.message);
+      }
+    }
+    await refund(PLATE_COST, "outpaint-refund").catch(() => undefined);
+    const refreshed = await readWallet().catch(() => ({ credits: wallet.credits + PLATE_COST }));
+    const warning = formatCloudFallbackWarning(providerErrors, hasAuthError);
+    return {
+      url: data.image,
+      fallback: true,
+      credits: refreshed.credits,
+      seed: compiled.seed,
+      ...(warning ? { warning } : {}),
+    };
   });
 
 function designFacts(design: DesignState, idea: string): string {
@@ -575,16 +822,35 @@ export const enhanceIdea = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const fallback = fallbackIdea(data.design, data.idea);
-    const { hasGeminiKey, enhanceIdeaWithGemini } = await import("@/lib/gemini.server");
+    const { hasGeminiKey, enhanceIdeaWithGemini, isGeminiAuthError } = await import("@/lib/gemini.server");
+    const { hasNvidiaKey, enhanceIdeaWithNvidia } = await import("@/lib/nvidia-vision.server");
+    const nvidiaEnabled = hasNvidiaKey();
     if (hasGeminiKey()) {
       try {
         const idea = await enhanceIdeaWithGemini(designFacts(data.design, data.idea));
         return { idea };
       } catch (error) {
-        return {
-          idea: fallback,
-          warning: error instanceof Error ? error.message : "Gemini prompt enhancement unavailable.",
-        };
+        if (!nvidiaEnabled && !process.env.XAI_API_KEY) {
+          return {
+            idea: fallback,
+            ...(!isGeminiAuthError(error)
+              ? { warning: error instanceof Error ? error.message : "Gemini prompt enhancement unavailable." }
+              : {}),
+          };
+        }
+      }
+    }
+    if (nvidiaEnabled) {
+      try {
+        const idea = await enhanceIdeaWithNvidia(designFacts(data.design, data.idea));
+        return { idea };
+      } catch (error) {
+        if (!process.env.XAI_API_KEY) {
+          return {
+            idea: fallback,
+            warning: error instanceof Error ? error.message : "NVIDIA prompt enhancement unavailable.",
+          };
+        }
       }
     }
     const key = process.env.XAI_API_KEY;
