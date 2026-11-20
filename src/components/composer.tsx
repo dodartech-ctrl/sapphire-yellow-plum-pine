@@ -49,7 +49,7 @@ export function Composer() {
   const { busy, generate, generateGrid } = useGenerate();
 
   const [enhancing, setEnhancing] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(true);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [entourageOpen, setEntourageOpen] = useState(false);
   const [midLayerOpen, setMidLayerOpen] = useState(false);
   const [queueDrawerOpen, setQueueDrawerOpen] = useState(false);
@@ -118,13 +118,13 @@ export function Composer() {
     <div className="shrink-0 space-y-2.5" data-testid="bottom-chat-dock">
       {/* Studio Dialogue Thread (Visible when messages exist) */}
       {hasThread ? (
-        <div className="rounded-2xl border border-[#d1c5b8]/40 bg-white/75 px-3.5 py-2 backdrop-blur-xl shadow-xs">
+        <div className="rounded-2xl border border-[#d1c5b8]/40 bg-white/75 px-3.5 py-2 backdrop-blur-xl shadow-xs dark:border-[#a9bdc9]/20 dark:bg-[#16202d]/80">
           <button
             type="button"
             onClick={() => setThreadOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#4d463c] hover:text-[#1b1c1a]"
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]"
           >
-            <MessageSquare className="size-3.5 text-[#725b38]" />
+            <MessageSquare className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
             <span>Studio Thread · {chat.length} msg</span>
             {threadOpen ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
           </button>
@@ -136,10 +136,12 @@ export function Composer() {
                   key={line.id}
                   className={cn(
                     "truncate rounded-xl px-2.5 py-1 text-xs",
-                    line.role === "you" ? "bg-[#f5f3ef] font-medium text-[#1b1c1a]" : "bg-white text-[#4d463c]",
+                    line.role === "you"
+                      ? "bg-[#f5f3ef] font-medium text-[#1b1c1a] dark:bg-[#202b38] dark:text-[#e8eff3]"
+                      : "bg-white text-[#4d463c] dark:bg-[#050f1b]/80 dark:text-[#cfe3f0]",
                   )}
                 >
-                  <span className="mr-1.5 font-mono text-[10px] uppercase text-[#725b38]">
+                  <span className="mr-1.5 font-mono text-[10px] uppercase text-[#725b38] dark:text-[#e8c98a]">
                     {line.role === "you" ? "You" : "Oriel"}
                   </span>
                   {line.text}
@@ -158,18 +160,18 @@ export function Composer() {
         <BatchRenderQueue onClose={queue.length === 0 ? () => setQueueDrawerOpen(false) : undefined} />
       ) : null}
 
-      {/* Atelier Frosted Glass Prompt Composer Card */}
+      {/* Atelier / Arctic Harbor Frosted Glass Prompt Composer Card */}
       <div role="region" aria-label="Render Prompt Composer">
         <div
           className={cn(
-            "atelier-glass rounded-3xl border p-3.5 sm:p-4 transition-[border-color,box-shadow] duration-150",
-            chatFocused ? "border-[#725b38]/60 ring-2 ring-[#c5a880]/25" : "border-[#d1c5b8]/35",
+            "arctic-glass rounded-3xl border p-3.5 sm:p-4 transition-[border-color,box-shadow] duration-150",
+            chatFocused ? "border-[#725b38]/60 ring-2 ring-[#c5a880]/25 dark:border-[#cfe3f0]/55 dark:ring-[#cfe3f0]/20" : "",
           )}
         >
-          {/* Tier 0: Inject Refinements + Seed Readout */}
+          {/* Tier 0: Inject Refinements + Keep Clause + Seed Readout */}
           <div className="mb-2.5 flex items-center justify-between gap-2">
             <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto py-0.5">
-              <span className="shrink-0 font-serif text-[11px] font-medium uppercase tracking-widest text-[#725b38]">
+              <span className="shrink-0 font-display text-[11px] font-medium uppercase tracking-widest text-[#725b38] dark:text-[#e8c98a]">
                 Inject Refinements:
               </span>
               {ATELIER_REFINEMENT_CHIPS.map((chip) => (
@@ -180,28 +182,31 @@ export function Composer() {
                     setIdea(appendSuggestionToIdea(idea, chip));
                     ideaRef.current?.focus();
                   }}
-                  className="shrink-0 rounded-full bg-[#efeeea]/80 px-2.5 py-1 text-[11px] text-[#4d463c] transition hover:bg-[#c5a880]/25 hover:text-[#1b1c1a]"
+                  className="shrink-0 rounded-full bg-[#efeeea]/80 px-2.5 py-1 text-[11px] text-[#4d463c] transition hover:bg-[#c5a880]/25 hover:text-[#1b1c1a] dark:bg-[#202b38]/85 dark:text-[#cfe3f0] dark:hover:border-[#e8c98a] dark:hover:text-white"
                 >
                   + {chip}
                 </button>
               ))}
             </div>
-            <span className="hidden shrink-0 font-mono text-[11px] tabular-nums text-[#5a5e68] md:inline">
-              Seed #{engine.seed}
-            </span>
+            <div className="hidden shrink-0 items-center gap-2 font-mono text-[11px] tabular-nums text-[#5a5e68] md:flex dark:text-[#a9bdc9]">
+              <span className="rounded-full bg-[#c5a880]/15 px-2 py-0.5 text-[10px] font-semibold text-[#725b38] dark:bg-[#584411]/60 dark:text-[#e8c98a]">
+                {engine.outputMode === "grid-4" ? 16 : PLATE_COST} CR
+              </span>
+              <span>Seed #{engine.seed}</span>
+            </div>
           </div>
 
           {/* Tier 1: Reference Image + Auto-Expanding Input + Engine Badge + Render Plate */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end rounded-2xl bg-[#fbf9f5]/85 p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.03)]">
+          <div className="flex flex-col gap-2 rounded-2xl bg-[#fbf9f5]/85 p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.03)] sm:flex-row sm:items-end dark:bg-[#050f1b]/85 dark:border dark:border-[#a9bdc9]/20">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#e4e2de]/70 text-[#725b38] transition hover:bg-[#c5a880]/25"
+                className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#e4e2de]/70 text-[#725b38] transition hover:bg-[#c5a880]/25 dark:bg-[#16202d] dark:text-[#e8c98a]"
                 aria-label={upload ? "Replace reference image" : "Upload a reference image"}
                 title={upload ? "Replace reference image" : "Attach photo, plan, or massing image"}
               >
-                {upload ? <img src={upload} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="size-4.5 text-[#725b38]" />}
+                {upload ? <img src={upload} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="size-4.5 text-[#725b38] dark:text-[#e8c98a]" />}
                 {upload ? (
                   <span
                     role="button"
@@ -251,20 +256,31 @@ export function Composer() {
                     }
                   }}
                   placeholder="Describe your architectural refinement, materials, or lighting atmosphere..."
-                  className="max-h-36 min-h-[38px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-sm font-light leading-snug text-[#1b1c1a] outline-none placeholder:text-[#7f766a]"
+                  className="max-h-36 min-h-[38px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-sm font-light leading-snug text-[#1b1c1a] outline-none placeholder:text-[#7f766a] dark:text-[#e8eff3] dark:placeholder:text-[#5f7f98]"
                   suppressHydrationWarning
                 />
               </label>
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+              {!toolsOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setToolsOpen(true)}
+                  className="hidden h-9 items-center gap-1.5 rounded-xl bg-[#f5f3ef] px-2.5 text-[11px] font-medium text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] xl:inline-flex dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
+                  title="Active Aspect Ratio, Resolution & Lighting — click to edit"
+                >
+                  <Sun className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
+                  <span>{frame.ratio} · {design.light}</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setPanel("engine")}
-                className="hidden h-9 items-center gap-1.5 rounded-xl bg-[#f5f3ef] px-3 text-[11px] font-medium text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] sm:inline-flex"
+                className="hidden h-9 items-center gap-1.5 rounded-xl bg-[#f5f3ef] px-3 text-[11px] font-medium text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] sm:inline-flex dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
                 title="Active Engine Preset — click to configure in Inspector"
               >
-                <SlidersHorizontal className="size-3.5 text-[#725b38]" />
+                <SlidersHorizontal className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
                 <span className="capitalize">{engine.workflowPreset.replace(/-/g, " ")}</span>
               </button>
               <button
@@ -272,7 +288,7 @@ export function Composer() {
                 data-testid="toggle-studio-tools-btn"
                 aria-expanded={toolsOpen}
                 onClick={() => setToolsOpen((v) => !v)}
-                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-[#d1c5b8]/45 bg-white px-2.5 text-xs font-medium text-[#4d463c] transition hover:border-[#725b38] hover:text-[#1b1c1a]"
+                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-[#d1c5b8]/45 bg-white px-2.5 text-xs font-medium text-[#4d463c] transition hover:border-[#725b38] hover:text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]"
                 title={toolsOpen ? "Collapse chat controls" : "Show all chat controls"}
               >
                 <span className="hidden sm:inline">{toolsOpen ? "Compact" : "Controls"}</span>
@@ -282,10 +298,10 @@ export function Composer() {
                 type="button"
                 disabled={busy}
                 onClick={() => void generateGrid()}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#d1c5b8]/50 bg-white px-3 text-xs font-medium text-[#1b1c1a] transition hover:border-[#725b38] disabled:opacity-50"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#d1c5b8]/50 bg-white px-3 text-xs font-medium text-[#1b1c1a] transition hover:border-[#725b38] disabled:opacity-50 dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3]"
                 title="Generate 4-up concept grid"
               >
-                <Grid2X2 className="size-3.5 text-[#725b38]" /> 4-Up
+                <Grid2X2 className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" /> 4-Up
               </button>
               <button
                 type="button"
@@ -293,22 +309,22 @@ export function Composer() {
                 data-hydrated={hydrated ? "true" : "false"}
                 disabled={busy || credits < PLATE_COST}
                 onClick={triggerRender}
-                className="inline-flex h-9.5 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-[#c5a880] px-4 text-xs font-medium tracking-wide text-[#513d1d] shadow-[0_4px_16px_rgba(197,168,128,0.32)] transition hover:bg-[#e0c298] disabled:opacity-60"
+                className="ice-cta inline-flex h-9.5 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 text-xs font-semibold tracking-wide disabled:opacity-60"
               >
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                 <span>{busy ? "Rendering..." : engine.outputMode === "grid-4" ? "Render 4-Up" : "Render Plate"}</span>
-                <kbd className="hidden rounded bg-[#513d1d]/10 px-1.5 py-0.5 font-mono text-[10px] sm:inline">⌘↵</kbd>
+                <kbd className="hidden rounded bg-[#08131f]/15 px-1.5 py-0.5 font-mono text-[10px] sm:inline">⌘↵</kbd>
               </button>
             </div>
           </div>
 
           {/* Tier 2: Easy-View Unified Studio Controls (All Key Controls Retained) */}
           {toolsOpen ? (
-            <div data-testid="studio-tools-drawer" className="mt-2.5 space-y-2 border-t border-[#d1c5b8]/35 pt-2.5">
+            <div data-testid="studio-tools-drawer" className="mt-2.5 space-y-2 border-t border-[#d1c5b8]/35 pt-2.5 dark:border-[#a9bdc9]/20">
               <div className="flex flex-wrap items-center gap-2">
                 {/* Segmented Aspect Ratios */}
                 <div
-                  className="inline-flex flex-wrap items-center gap-0.5 rounded-full bg-[#efeeea]/80 p-0.5"
+                  className="inline-flex flex-wrap items-center gap-0.5 rounded-full bg-[#efeeea]/80 p-0.5 dark:bg-[#121c29]"
                   role="group"
                   aria-label="Aspect Ratio"
                 >
@@ -320,7 +336,9 @@ export function Composer() {
                       onClick={() => setFrame({ ...frame, ratio })}
                       className={cn(
                         "h-6.5 shrink-0 whitespace-nowrap rounded-full px-2.5 text-[11px] transition",
-                        frame.ratio === ratio ? "bg-[#c5a880] font-semibold text-[#281800] shadow-xs" : "text-[#4d463c] hover:text-[#1b1c1a]",
+                        frame.ratio === ratio
+                          ? "bg-[#c5a880] font-semibold text-[#281800] shadow-xs dark:bg-[#cfe3f0] dark:text-[#08131f]"
+                          : "text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]",
                       )}
                     >
                       {ratio}
@@ -330,7 +348,7 @@ export function Composer() {
 
                 {/* Segmented Quality */}
                 <div
-                  className="inline-flex items-center gap-0.5 rounded-full bg-[#efeeea]/80 p-0.5"
+                  className="inline-flex items-center gap-0.5 rounded-full bg-[#efeeea]/80 p-0.5 dark:bg-[#121c29]"
                   role="group"
                   aria-label="Resolution"
                 >
@@ -342,7 +360,9 @@ export function Composer() {
                       onClick={() => setFrame({ ...frame, resolution })}
                       className={cn(
                         "h-6.5 shrink-0 whitespace-nowrap rounded-full px-2.5 text-[11px] uppercase transition",
-                        frame.resolution === resolution ? "bg-[#c5a880] font-semibold text-[#281800] shadow-xs" : "text-[#4d463c] hover:text-[#1b1c1a]",
+                        frame.resolution === resolution
+                          ? "bg-[#c5a880] font-semibold text-[#281800] shadow-xs dark:bg-[#cfe3f0] dark:text-[#08131f]"
+                          : "text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]",
                       )}
                     >
                       {resolution}
@@ -369,10 +389,10 @@ export function Composer() {
                         .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not enhance that idea."))
                         .finally(() => setEnhancing(false));
                     }}
-                    className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] disabled:opacity-60"
+                    className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] disabled:opacity-60 dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
                     title="Expand and polish prompt wording with AI"
                   >
-                    {enhancing ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5 text-[#725b38]" />} Refine Prompt
+                    {enhancing ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />} Refine Prompt
                   </button>
                   <button
                     type="button"
@@ -384,10 +404,10 @@ export function Composer() {
                       setDesignField("look", next);
                       toast.success(`Style: ${next}`);
                     }}
-                    className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[#c5a880]/25 px-2.5 text-xs font-medium text-[#513d1d] transition hover:bg-[#c5a880]/40"
+                    className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[#c5a880]/25 px-2.5 text-xs font-medium text-[#513d1d] transition hover:bg-[#c5a880]/40 dark:bg-[#202b38] dark:text-[#e8c98a]"
                     title="Cycle architectural aesthetic style"
                   >
-                    <SwatchBook className="size-3.5 text-[#725b38]" /> {design.look}
+                    <SwatchBook className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" /> {design.look}
                   </button>
                   <button
                     type="button"
@@ -398,10 +418,10 @@ export function Composer() {
                       setDesignField("light", next);
                       toast.success(`Lighting: ${next}`);
                     }}
-                    className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs text-[#1b1c1a] transition hover:bg-[#efeeea]"
+                    className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs text-[#1b1c1a] transition hover:bg-[#efeeea] dark:text-[#e8eff3] dark:hover:bg-[#202b38]"
                     title="Cycle lighting atmosphere (Daylight, Golden hour, Evening, Soft overcast, Night)"
                   >
-                    <Sun className="size-3.5 text-[#725b38]" /> {design.light}
+                    <Sun className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" /> {design.light}
                   </button>
                   <button
                     type="button"
@@ -410,11 +430,13 @@ export function Composer() {
                     onClick={() => setEntourageOpen((v) => !v)}
                     className={cn(
                       "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs transition",
-                      entourageOpen ? "bg-[#c5a880]/30 font-medium text-[#513d1d]" : "text-[#4d463c] hover:bg-[#efeeea] hover:text-[#1b1c1a]",
+                      entourageOpen
+                        ? "bg-[#c5a880]/30 font-medium text-[#513d1d] dark:bg-[#202b38] dark:text-[#e8c98a]"
+                        : "text-[#4d463c] hover:bg-[#efeeea] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:bg-[#202b38]",
                     )}
                     title="Stage architectural scale objects (Trees, People, Car, Warm Lamp)"
                   >
-                    <Armchair className="size-3.5 text-[#725b38]" /> Entourage
+                    <Armchair className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" /> Entourage
                   </button>
                   <button
                     type="button"
@@ -424,11 +446,11 @@ export function Composer() {
                     className={cn(
                       "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs transition",
                       midLayerOpen || activeMidLayer
-                        ? "bg-[#c5a880]/30 font-medium text-[#513d1d]"
-                        : "text-[#4d463c] hover:bg-[#efeeea] hover:text-[#1b1c1a]",
+                        ? "bg-[#c5a880]/30 font-medium text-[#513d1d] dark:bg-[#202b38] dark:text-[#e8c98a]"
+                        : "text-[#4d463c] hover:bg-[#efeeea] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:bg-[#202b38]",
                     )}
                   >
-                    <Layers className="size-3.5 text-[#725b38]" />
+                    <Layers className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
                     {activeMidLayer ? activeMidLayer.pillLabel : "Mid-Layer"}
                   </button>
                   <button
@@ -439,12 +461,12 @@ export function Composer() {
                     className={cn(
                       "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs transition",
                       showQueue
-                        ? "bg-[#c5a880]/30 font-medium text-[#513d1d]"
-                        : "text-[#4d463c] hover:bg-[#efeeea] hover:text-[#1b1c1a]",
+                        ? "bg-[#c5a880]/30 font-medium text-[#513d1d] dark:bg-[#202b38] dark:text-[#e8c98a]"
+                        : "text-[#4d463c] hover:bg-[#efeeea] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:bg-[#202b38]",
                     )}
                     title="Open Batch Render Queue, + Add Scene & 3-Light Trio"
                   >
-                    <Clock className="size-3.5 text-[#725b38]" />
+                    <Clock className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
                     Queue{queue.length > 0 ? ` (${queue.length})` : ""}
                   </button>
                 </div>

@@ -494,7 +494,7 @@ var HEADERS = { TSS_SHELL: "X-TSS_SHELL" };
 * the dev styles URL for route-scoped CSS collection.
 */
 async function getStartManifest(matchedRoutes) {
-	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-B2kWFFOA.mjs");
+	const { tsrStartManifest } = await import("../_tanstack-start-manifest_v-CrCD8s8X.mjs");
 	const startManifest = tsrStartManifest();
 	let routes = startManifest.routes;
 	routes[rootRouteId];
@@ -516,27 +516,27 @@ async function getStartManifest(matchedRoutes) {
 var manifest = {
 	"037e055ad6815023db80de12590a5949bca56a79dd279edcbc8488806038d614": {
 		functionName: "segmentObjectWithSam2_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"1f4114a7061edf88ee606090d78afb5715fd66c12663e4d1d39293404f81c4e1": {
 		functionName: "getSharedBriefFn_createServerFn_handler",
-		importer: () => import("./brief-collab-api-vQMibMZE.mjs")
+		importer: () => import("./brief-collab-api-ClYxkYr2.mjs")
 	},
 	"2ecb14625c072bb8b60982f26f46335537b9e5209ecb2ea0af4d3b67f7c65c51": {
 		functionName: "toggleBriefCommentStatusFn_createServerFn_handler",
-		importer: () => import("./brief-collab-api-vQMibMZE.mjs")
+		importer: () => import("./brief-collab-api-ClYxkYr2.mjs")
 	},
 	"3aa4774a98dde2188f519b06cea522ac413b9eceb98d3c50b0a36001a741fa82": {
 		functionName: "relightPlate_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"59971a0ccc36de086fd91d2c8d337fabb9420074790beb05e8c717ef794a8f8f": {
 		functionName: "generatePlate_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"5dc654f5aa22c10eda96aad51cda1b31b16fa38620951de3a903fa05f3f07dd7": {
 		functionName: "updateSharedBriefFn_createServerFn_handler",
-		importer: () => import("./brief-collab-api-vQMibMZE.mjs")
+		importer: () => import("./brief-collab-api-ClYxkYr2.mjs")
 	},
 	"74fdd6b4e7b942b655533fe040ff575b82ba9273c7b6a74bfaed3e4feadf474d": {
 		functionName: "generateMoodboardFn_createServerFn_handler",
@@ -544,39 +544,39 @@ var manifest = {
 	},
 	"784f407cb6d96f7e14268500687060171afa82b7e6a85a0a6ab4de7e4aadbf5e": {
 		functionName: "getStudioCredits_createServerFn_handler",
-		importer: () => import("./credits-CwSuFJJm.mjs")
+		importer: () => import("./credits-2Ai8ehXc.mjs")
 	},
 	"93625d71a6a82f6db479f7e153142e22888c8d7791218dad1a9aa6847d52c617": {
 		functionName: "enhanceIdea_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"944a4a4b92de36fdddb21e29a99ad8ed445a5d30f920324e781fa6de501356ec": {
 		functionName: "enhancePlate_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"a9a820a09f8d4439537588257104fbf39812809b3801dbb0fc1f5cfa0d370865": {
 		functionName: "outpaintPlate_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"b1e5a93d91e1f0383b9cf47e2c358caaf747eb177f831af247cdae577cc394cb": {
 		functionName: "createSharedBriefFn_createServerFn_handler",
-		importer: () => import("./brief-collab-api-vQMibMZE.mjs")
+		importer: () => import("./brief-collab-api-ClYxkYr2.mjs")
 	},
 	"d5fac5773d220c85e2ff9e6587fa77a4305f5ce3330a44cfb848036672ded511": {
 		functionName: "inpaintPlate_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"dbaa0459f2b393dbd53ef2bfda3d9ba7a159bc442cbdfe5ca0412cfa81062107": {
 		functionName: "addBriefCommentFn_createServerFn_handler",
-		importer: () => import("./brief-collab-api-vQMibMZE.mjs")
+		importer: () => import("./brief-collab-api-ClYxkYr2.mjs")
 	},
 	"f40bbf6df3672110cff53c266c5def91e8bb97ddb689d1d22995561ce3723814": {
 		functionName: "generateVariations_createServerFn_handler",
-		importer: () => import("./generate-Cq_2bucG.mjs")
+		importer: () => import("./generate-BqrAb39k.mjs")
 	},
 	"ff36cea5dc2f3591bf4aa5c1f7548e2d101a5c6e935a1acc3292dbe379511d59": {
 		functionName: "deleteBriefCommentFn_createServerFn_handler",
-		importer: () => import("./brief-collab-api-vQMibMZE.mjs")
+		importer: () => import("./brief-collab-api-ClYxkYr2.mjs")
 	}
 };
 async function getServerFnById(id, access) {
@@ -2062,7 +2062,7 @@ var getBaseManifest = getProdBaseManifest;
 var createEarlyHintsForRequest = createEarlyHintsCollector;
 async function loadEntries() {
 	const [routerEntry, startEntry, pluginAdapters] = await Promise.all([
-		import("./router-BiPrL9zA.mjs").then((n) => n.t),
+		import("./router-ZuzrVjzj.mjs").then((n) => n.t),
 		import("./start-COmmreO7.mjs"),
 		import("./empty-plugin-adapters-CeyhLWeJ.mjs")
 	]);

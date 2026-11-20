@@ -65,6 +65,45 @@ import {
   applyMarketSuggestionPatch as applySuggestionPatchPure,
   type MarketSuggestion,
 } from "@/lib/market-suggestions";
+import {
+  isPersistableCompactUrl,
+  loadPlateBundleFromIdb,
+  savePlateBundleToIdb,
+  type CachedIteration,
+} from "@/lib/plate-cache";
+import {
+  INTENT_LOOKS_40,
+  PRESETS_200,
+  buildDefaultDesignContract,
+  evaluateFidelityGate,
+  type DesignContractState,
+  type FidelityGateReport,
+} from "@/lib/presets-catalog";
+import {
+  DEFAULT_AGENT_MISSION,
+  DEFAULT_GOVERNANCE_STATE,
+  DEFAULT_KUM_VIDEO,
+  DEFAULT_LOOK_ANCHOR,
+  DEFAULT_TOUR_STATE,
+  DEFAULT_TRACKED_REVIEWS,
+  type AgentMissionState,
+  type GovernanceState,
+  type KumTimelineClip,
+  type KumVideoState,
+  type LookAnchorSnapshot,
+  type NamedStudioId,
+  type ReviewStatus,
+  type TourHotspot,
+  type TourSceneNode,
+  type TourUnitRecord,
+  type TrackedReviewItem,
+  type VirtualTourState,
+} from "@/lib/prd-studio-data";
+import {
+  DEFAULT_NANO_BANANA_CONFIG,
+  type NanoBananaStudioConfig,
+  type OrchestrationResponseClient,
+} from "@/lib/nano-banana-client";
 
 export type SavedBrief = {
   id: string;
@@ -170,6 +209,34 @@ type State = {
   frame: Frame;
   credits: number;
   history: string[];
+  iterations: CachedIteration[];
+  activeStudio: NamedStudioId;
+  themeMode: "dark" | "light";
+  splitViewMode: "split" | "3d-solo" | "ai-solo";
+  splitRatio: number;
+  radialOptics: {
+    solarAzimuth: number;
+    solarElevation: number;
+    exposureEv: number;
+    vignettePct: number;
+    diffusionLock: number;
+  };
+  activePresetIds: string[];
+  negativePresetIds: string[];
+  presetStrengths: Record<string, number>;
+  questionPicks: Record<string, string>;
+  intentLookId: string;
+  designContract: DesignContractState;
+  fidelityReport: FidelityGateReport | null;
+  lookAnchor: LookAnchorSnapshot;
+  lookAnchorHistory: LookAnchorSnapshot[];
+  trackedReviews: TrackedReviewItem[];
+  tourConfig: VirtualTourState;
+  videoProject: KumVideoState;
+  agentMission: AgentMissionState;
+  governance: GovernanceState;
+  nanoBanana: NanoBananaStudioConfig;
+  lastOrchestration: OrchestrationResponseClient | null;
   projects: Project[];
   chat: ChatLine[];
   nodeWorkflows: NodeWorkflow[];
@@ -304,6 +371,48 @@ type State = {
   applyMarketSuggestion: (suggestion: MarketSuggestion) => void;
   applyMarketSuggestionBatch: (suggestions: MarketSuggestion[], autoApprove?: boolean) => void;
   resetAppliedMarketSuggestions: () => void;
+  restoreIteration: (url: string) => void;
+  setActiveStudio: (studio: NamedStudioId) => void;
+  setThemeMode: (mode: "dark" | "light") => void;
+  setSplitViewMode: (mode: "split" | "3d-solo" | "ai-solo") => void;
+  setSplitRatio: (ratio: number) => void;
+  setRadialOptics: (
+    patch: Partial<{
+      solarAzimuth: number;
+      solarElevation: number;
+      exposureEv: number;
+      vignettePct: number;
+      diffusionLock: number;
+    }>,
+  ) => void;
+  togglePreset200: (id: string, forceMode?: "positive" | "negative") => void;
+  setPresetStrength: (id: string, strength: number) => void;
+  clearPresets200: () => void;
+  setQuestionPick: (questionId: string, value: string) => void;
+  applyIntentLook: (lookId: string) => void;
+  updateDesignContract: (patch: Partial<DesignContractState>) => void;
+  setFidelityReport: (report: FidelityGateReport | null) => void;
+  reanchorLook: (patch?: Partial<LookAnchorSnapshot>) => void;
+  setLookLockStrength: (strength: "strict" | "soft") => void;
+  toggleLookAnchorLock: () => void;
+  restoreLookAnchor: (version: number) => void;
+  addTrackedReview: (item: Omit<TrackedReviewItem, "id" | "number" | "updatedAt" | "history">) => void;
+  transitionTrackedReview: (id: string, toStatus: ReviewStatus, actor?: string, note?: string) => void;
+  replyTrackedReview: (id: string, actor: string, note: string) => void;
+  updateTourConfig: (patch: Partial<VirtualTourState>) => void;
+  addTourScene: (scene: TourSceneNode) => void;
+  addTourHotspot: (hotspot: Omit<TourHotspot, "id">) => void;
+  updateUnitStatus: (unitId: string, status: TourUnitRecord["status"]) => void;
+  updateVideoProject: (patch: Partial<KumVideoState>) => void;
+  addClipToKumVideo: (clip: Omit<KumTimelineClip, "id" | "startSec">) => void;
+  removeClipFromKumVideo: (id: string) => void;
+  updateAgentMission: (patch: Partial<AgentMissionState>) => void;
+  advanceAgentMissionStep: (stepId: string, status: AgentMissionState["steps"][number]["status"], summary?: string) => void;
+  resetAgentMission: () => void;
+  updateGovernance: (patch: Partial<GovernanceState>) => void;
+  appendAuditEvent: (actor: string, action: string, target: string) => void;
+  updateNanoBanana: (patch: Partial<NanoBananaStudioConfig>) => void;
+  setLastOrchestration: (res: OrchestrationResponseClient | null) => void;
 };
 
 function remember(state: { design: DesignState; past: DesignState[] }, design: DesignState) {
@@ -351,6 +460,49 @@ export const useOriel = create<State>()(
       frame: DEFAULT_FRAME,
       credits: 4500,
       history: [],
+      iterations: [],
+      activeStudio: "sam-3d",
+      themeMode: "dark",
+      splitViewMode: "split",
+      splitRatio: 50,
+      radialOptics: {
+        solarAzimuth: 284,
+        solarElevation: 24,
+        exposureEv: 0.6,
+        vignettePct: 18,
+        diffusionLock: 85,
+      },
+      activePresetIds: ["P001", "P041"],
+      negativePresetIds: ["P181"],
+      presetStrengths: { P001: 1.0, P041: 1.0, P181: 1.0 },
+      questionPicks: {
+        camera: "Auto",
+        time: "Auto",
+        weather: "Auto",
+        mood: "Auto",
+        materials: "Auto",
+        people: "Auto",
+        site: "Auto",
+        finish: "Auto",
+      },
+      intentLookId: INTENT_LOOKS_40[0].id,
+      designContract: buildDefaultDesignContract({
+        hasUpload: false,
+        hasSketch: false,
+        vertical: DEFAULT_DESIGN.vertical,
+        look: DEFAULT_DESIGN.look,
+        fidelity: DEFAULT_ENGINE.renderFidelity,
+      }),
+      fidelityReport: null,
+      lookAnchor: DEFAULT_LOOK_ANCHOR,
+      lookAnchorHistory: [DEFAULT_LOOK_ANCHOR],
+      trackedReviews: DEFAULT_TRACKED_REVIEWS,
+      tourConfig: DEFAULT_TOUR_STATE,
+      videoProject: DEFAULT_KUM_VIDEO,
+      agentMission: DEFAULT_AGENT_MISSION,
+      governance: DEFAULT_GOVERNANCE_STATE,
+      nanoBanana: DEFAULT_NANO_BANANA_CONFIG,
+      lastOrchestration: null,
       projects: [],
       chat: [],
       nodeWorkflows: WORKFLOW_TEMPLATES.map(cloneWorkflow),
@@ -396,14 +548,89 @@ export const useOriel = create<State>()(
       clearLog: () => set({ log: [] }),
       setDraft: (draft) => set({ draft }),
       setPlate: (plate) =>
-        set((state) => ({
-          plate,
-          history:
-            state.plate?.url && plate && state.plate.url !== plate.url
-              ? [state.plate.url, ...state.history.filter((url) => url !== state.plate?.url)].slice(0, 8)
-              : state.history,
-        })),
-      setUpload: (upload) => set({ upload }),
+        set((state) => {
+          if (!plate) {
+            void savePlateBundleToIdb({
+              plate: null,
+              history: state.history,
+              iterations: state.iterations,
+              upload: state.upload,
+              savedAt: Date.now(),
+            });
+            return { plate: null, fidelityReport: null };
+          }
+          const nextHistory = [
+            plate.url,
+            ...state.history.filter((url) => url !== plate.url),
+          ].slice(0, 12);
+          const report = evaluateFidelityGate({
+            geometryLock: state.engine.geometryLock,
+            seedLocked: state.engine.seedLocked,
+            hasSource: Boolean(state.upload || state.sketchDataUrl),
+            isFallback: plate.fallback,
+            hasMask: Boolean(state.maskDataUrl),
+            disclosureRequired: Boolean(
+              INTENT_LOOKS_40.find((item) => item.id === state.intentLookId)?.disclosureRequired,
+            ),
+            idea: plate.idea || state.idea,
+            scene3d: state.scene3d,
+            frame: state.frame,
+          });
+          const iterRecord: CachedIteration = {
+            id: `iter-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            url: plate.url,
+            upload: plate.upload,
+            templateId: plate.templateId,
+            idea: plate.idea,
+            seed: plate.seed,
+            summary: plate.summary,
+            fallback: plate.fallback,
+            look: state.design.look,
+            light: state.design.light,
+            ratio: state.frame.ratio,
+            gateScore: report.overallScore,
+            gateStatus: report.status,
+            studio: state.activeStudio,
+            createdAt: Date.now(),
+          };
+          const nextIterations = [
+            iterRecord,
+            ...state.iterations.filter((item) => item.url !== plate.url),
+          ].slice(0, 12);
+
+          void savePlateBundleToIdb({
+            plate,
+            history: nextHistory,
+            iterations: nextIterations,
+            upload: state.upload,
+            savedAt: Date.now(),
+          });
+
+          return {
+            plate,
+            history: nextHistory,
+            iterations: nextIterations,
+            fidelityReport: report,
+          };
+        }),
+      setUpload: (upload) =>
+        set((state) => {
+          const nextContract = buildDefaultDesignContract({
+            hasUpload: Boolean(upload),
+            hasSketch: Boolean(state.sketchDataUrl),
+            vertical: state.design.vertical,
+            look: state.design.look,
+            fidelity: state.engine.renderFidelity,
+          });
+          void savePlateBundleToIdb({
+            plate: state.plate,
+            history: state.history,
+            iterations: state.iterations,
+            upload,
+            savedAt: Date.now(),
+          });
+          return { upload, designContract: nextContract };
+        }),
       setSketchDataUrl: (sketchDataUrl) => set({ sketchDataUrl }),
       setMaskDataUrl: (maskDataUrl) => set({ maskDataUrl }),
       setBinaryMaskData: (binaryMaskDataUrl, binaryMaskStats = null) =>
@@ -897,6 +1124,294 @@ export const useOriel = create<State>()(
           };
         }),
       resetAppliedMarketSuggestions: () => set({ approvedSuggestionIds: [], appliedSuggestionIds: [] }),
+      restoreIteration: (url) =>
+        set((state) => {
+          const found = state.iterations.find((item) => item.url === url);
+          const restoredPlate: Plate = {
+            url,
+            upload: found?.upload ?? state.upload ?? undefined,
+            templateId: found?.templateId ?? state.engine.workflowPreset,
+            idea: found?.idea ?? state.idea.trim(),
+            seed: found?.seed ?? state.engine.seed,
+            fallback: found?.fallback,
+            summary: found?.summary,
+          };
+          const report = evaluateFidelityGate({
+            geometryLock: state.engine.geometryLock,
+            seedLocked: state.engine.seedLocked,
+            hasSource: Boolean(state.upload || state.sketchDataUrl),
+            isFallback: restoredPlate.fallback,
+            idea: restoredPlate.idea,
+            scene3d: state.scene3d,
+            frame: state.frame,
+          });
+          return {
+            plate: restoredPlate,
+            fidelityReport: report,
+            ...(found?.idea ? { idea: found.idea } : {}),
+          };
+        }),
+      setActiveStudio: (activeStudio) => set({ activeStudio }),
+      setThemeMode: (themeMode) => set({ themeMode }),
+      setSplitViewMode: (splitViewMode) => set({ splitViewMode }),
+      setSplitRatio: (ratio) => set({ splitRatio: Math.max(20, Math.min(80, Math.round(ratio))) }),
+      setRadialOptics: (patch) =>
+        set((state) => {
+          const next = { ...state.radialOptics, ...patch };
+          const nextScene3D = sanitizeScene3DState({
+            ...state.scene3d,
+            ...(typeof patch.solarAzimuth === "number" ? { sunAzimuth: patch.solarAzimuth } : {}),
+            ...(typeof patch.solarElevation === "number" ? { sunElevation: patch.solarElevation } : {}),
+          });
+          const nextEngine = sanitizeEngineState({
+            ...state.engine,
+            ...(typeof patch.diffusionLock === "number" ? { geometryLock: patch.diffusionLock } : {}),
+          });
+          return { radialOptics: next, scene3d: nextScene3D, engine: nextEngine };
+        }),
+      togglePreset200: (id, forceMode) =>
+        set((state) => {
+          const preset = PRESETS_200.find((p) => p.id === id);
+          if (!preset) return state;
+          const asNeg = forceMode === "negative" || (forceMode !== "positive" && preset.is_negative);
+          if (asNeg) {
+            const exists = state.negativePresetIds.includes(id);
+            return {
+              negativePresetIds: exists
+                ? state.negativePresetIds.filter((x) => x !== id)
+                : [...state.negativePresetIds, id].slice(-12),
+              activePresetIds: state.activePresetIds.filter((x) => x !== id),
+            };
+          }
+          const exists = state.activePresetIds.includes(id);
+          return {
+            activePresetIds: exists
+              ? state.activePresetIds.filter((x) => x !== id)
+              : [...state.activePresetIds, id].slice(-12),
+            negativePresetIds: state.negativePresetIds.filter((x) => x !== id),
+          };
+        }),
+      setPresetStrength: (id, strength) =>
+        set((state) => ({
+          presetStrengths: {
+            ...state.presetStrengths,
+            [id]: Math.max(0.5, Math.min(1.5, Number(strength.toFixed(2)))),
+          },
+        })),
+      clearPresets200: () => set({ activePresetIds: [], negativePresetIds: [] }),
+      setQuestionPick: (questionId, value) =>
+        set((state) => ({
+          questionPicks: { ...state.questionPicks, [questionId]: value },
+        })),
+      applyIntentLook: (lookId) =>
+        set((state) => {
+          const look = INTENT_LOOKS_40.find(
+            (item) => item.id === lookId || item.code.toLowerCase() === lookId.toLowerCase(),
+          );
+          if (!look) return state;
+          const nextDesign = sanitizeDesign({
+            ...state.design,
+            vertical: look.vertical,
+            light: look.light as DesignState["light"],
+            mood: look.mood as DesignState["mood"],
+          });
+          const nextEngine = sanitizeEngineState({
+            ...state.engine,
+            renderFidelity: look.fidelity === "Creative" ? "draft" : look.fidelity === "Strict" ? "editorial" : "photoreal",
+            geometryLock: look.fidelity === "Strict" ? 90 : look.fidelity === "Balanced" ? 72 : 48,
+          });
+          const presetLookup = new Map(PRESETS_200.map((p) => [p.id, p]));
+          const positiveIds: string[] = [];
+          const negativeIds: string[] = [];
+          for (const pid of look.presetIds) {
+            if (presetLookup.get(pid)?.is_negative) negativeIds.push(pid);
+            else positiveIds.push(pid);
+          }
+          return {
+            intentLookId: look.id,
+            design: nextDesign,
+            engine: nextEngine,
+            activePresetIds: positiveIds,
+            negativePresetIds: negativeIds,
+            radialOptics: { ...state.radialOptics, diffusionLock: nextEngine.geometryLock },
+          };
+        }),
+      updateDesignContract: (patch) =>
+        set((state) => ({
+          designContract: { ...state.designContract, ...patch },
+        })),
+      setFidelityReport: (fidelityReport) => set({ fidelityReport }),
+      reanchorLook: (patch) =>
+        set((state) => {
+          const nextVer = state.lookAnchor.version + 1;
+          const nextAnchor: LookAnchorSnapshot = {
+            ...state.lookAnchor,
+            ...patch,
+            thumbnailUrl: patch?.thumbnailUrl ?? state.plate?.url ?? state.lookAnchor.thumbnailUrl,
+            version: nextVer,
+            locked: true,
+            createdAt: Date.now(),
+          };
+          return {
+            lookAnchor: nextAnchor,
+            lookAnchorHistory: [nextAnchor, ...state.lookAnchorHistory].slice(0, 8),
+          };
+        }),
+      setLookLockStrength: (lockStrength) =>
+        set((state) => ({ lookAnchor: { ...state.lookAnchor, lockStrength } })),
+      toggleLookAnchorLock: () =>
+        set((state) => ({ lookAnchor: { ...state.lookAnchor, locked: !state.lookAnchor.locked } })),
+      restoreLookAnchor: (version) =>
+        set((state) => {
+          const found = state.lookAnchorHistory.find((a) => a.version === version);
+          return found ? { lookAnchor: { ...found, locked: true } } : state;
+        }),
+      addTrackedReview: (item) =>
+        set((state) => {
+          const num = state.trackedReviews.reduce((m, r) => Math.max(m, r.number), 0) + 1;
+          const created: TrackedReviewItem = {
+            ...item,
+            id: `rev-${Date.now()}`,
+            number: num,
+            updatedAt: Date.now(),
+            history: [
+              {
+                id: `rh-${Date.now()}`,
+                actor: item.author || "Studio User",
+                action: `Opened review #${num}`,
+                toStatus: item.status,
+                at: Date.now(),
+              },
+            ],
+          };
+          return { trackedReviews: [created, ...state.trackedReviews].slice(0, 48) };
+        }),
+      transitionTrackedReview: (id, toStatus, actor = "Studio Lead", note) =>
+        set((state) => ({
+          trackedReviews: state.trackedReviews.map((rev) =>
+            rev.id === id
+              ? {
+                  ...rev,
+                  status: toStatus,
+                  updatedAt: Date.now(),
+                  history: [
+                    ...rev.history,
+                    {
+                      id: `rh-${Date.now()}`,
+                      actor,
+                      action: `Changed status to ${toStatus.replace("_", " ")}`,
+                      fromStatus: rev.status,
+                      toStatus,
+                      note,
+                      at: Date.now(),
+                    },
+                  ],
+                }
+              : rev,
+          ),
+        })),
+      replyTrackedReview: (id, actor, note) =>
+        set((state) => ({
+          trackedReviews: state.trackedReviews.map((rev) =>
+            rev.id === id
+              ? {
+                  ...rev,
+                  updatedAt: Date.now(),
+                  history: [
+                    ...rev.history,
+                    { id: `rh-${Date.now()}`, actor, action: "Added reply", note, at: Date.now() },
+                  ],
+                }
+              : rev,
+          ),
+        })),
+      updateTourConfig: (patch) =>
+        set((state) => ({ tourConfig: { ...state.tourConfig, ...patch } })),
+      addTourScene: (scene) =>
+        set((state) => ({
+          tourConfig: {
+            ...state.tourConfig,
+            activeSceneId: scene.id,
+            scenes: [scene, ...state.tourConfig.scenes.filter((s) => s.id !== scene.id)].slice(0, 16),
+          },
+        })),
+      addTourHotspot: (hotspot) =>
+        set((state) => ({
+          tourConfig: {
+            ...state.tourConfig,
+            hotspots: [
+              ...state.tourConfig.hotspots,
+              { ...hotspot, id: `hs-${Date.now()}` },
+            ].slice(0, 40),
+          },
+        })),
+      updateUnitStatus: (unitId, status) =>
+        set((state) => ({
+          tourConfig: {
+            ...state.tourConfig,
+            units: state.tourConfig.units.map((u) => (u.id === unitId ? { ...u, status } : u)),
+          },
+        })),
+      updateVideoProject: (patch) =>
+        set((state) => ({ videoProject: { ...state.videoProject, ...patch } })),
+      addClipToKumVideo: (clip) =>
+        set((state) => {
+          const videoClips = state.videoProject.clips.filter((c) => c.track === "video");
+          const endSec = videoClips.reduce((acc, c) => Math.max(acc, c.startSec + c.durationSec), 0);
+          const created: KumTimelineClip = {
+            ...clip,
+            id: `vc-${Date.now()}`,
+            startSec: clip.track === "video" ? endSec : 0,
+          };
+          return {
+            videoProject: {
+              ...state.videoProject,
+              clips: [...state.videoProject.clips, created].slice(0, 24),
+            },
+          };
+        }),
+      removeClipFromKumVideo: (id) =>
+        set((state) => ({
+          videoProject: {
+            ...state.videoProject,
+            clips: state.videoProject.clips.filter((c) => c.id !== id),
+          },
+        })),
+      updateAgentMission: (patch) =>
+        set((state) => ({ agentMission: { ...state.agentMission, ...patch } })),
+      advanceAgentMissionStep: (stepId, status, summary) =>
+        set((state) => ({
+          agentMission: {
+            ...state.agentMission,
+            steps: state.agentMission.steps.map((s) =>
+              s.id === stepId ? { ...s, status, ...(summary ? { outputSummary: summary } : {}) } : s,
+            ),
+          },
+        })),
+      resetAgentMission: () => set({ agentMission: DEFAULT_AGENT_MISSION }),
+      updateGovernance: (patch) =>
+        set((state) => ({ governance: { ...state.governance, ...patch } })),
+      appendAuditEvent: (actor, action, target) =>
+        set((state) => ({
+          governance: {
+            ...state.governance,
+            auditEvents: [
+              { id: `aud-${Date.now()}`, actor, action, target, at: Date.now() },
+              ...state.governance.auditEvents,
+            ].slice(0, 40),
+          },
+        })),
+      updateNanoBanana: (patch) =>
+        set((state) => ({
+          nanoBanana: {
+            ...state.nanoBanana,
+            ...patch,
+            constraints: patch.constraints
+              ? { ...state.nanoBanana.constraints, ...patch.constraints }
+              : state.nanoBanana.constraints,
+          },
+        })),
+      setLastOrchestration: (lastOrchestration) => set({ lastOrchestration }),
     }),
     {
       name: "oriel-studio",
@@ -930,6 +1445,23 @@ export const useOriel = create<State>()(
         approvedSuggestionIds: state.approvedSuggestionIds.slice(-200),
         appliedSuggestionIds: state.appliedSuggestionIds.slice(-200),
         beginnerGuideOpen: state.beginnerGuideOpen,
+        activeStudio: state.activeStudio,
+        themeMode: state.themeMode,
+        splitViewMode: state.splitViewMode,
+        splitRatio: state.splitRatio,
+        radialOptics: state.radialOptics,
+        activePresetIds: state.activePresetIds,
+        negativePresetIds: state.negativePresetIds,
+        presetStrengths: state.presetStrengths,
+        questionPicks: state.questionPicks,
+        intentLookId: state.intentLookId,
+        trackedReviews: state.trackedReviews.slice(0, 24),
+        tourConfig: state.tourConfig,
+        videoProject: state.videoProject,
+        governance: state.governance,
+        nanoBanana: state.nanoBanana,
+        history: state.history.filter(isPersistableCompactUrl).slice(0, 6),
+        plate: state.plate && isPersistableCompactUrl(state.plate.url) ? state.plate : null,
         idea: state.idea,
         frame: state.frame,
         credits: state.credits,
@@ -984,6 +1516,17 @@ export const useOriel = create<State>()(
           idea: typeof saved.idea === "string" ? saved.idea : "",
           frame: sanitizeFrame(saved.frame),
           credits: typeof saved.credits === "number" ? Math.max(0, Math.min(5000, saved.credits)) : 4500,
+          nanoBanana: saved.nanoBanana
+            ? {
+                ...DEFAULT_NANO_BANANA_CONFIG,
+                ...saved.nanoBanana,
+                constraints: {
+                  ...DEFAULT_NANO_BANANA_CONFIG.constraints,
+                  ...(saved.nanoBanana.constraints ?? {}),
+                },
+              }
+            : DEFAULT_NANO_BANANA_CONFIG,
+          lastOrchestration: null,
           busy: false,
           batchRunning: false,
           selecting: false,
@@ -995,22 +1538,42 @@ export const useOriel = create<State>()(
   ),
 );
 
+let clientHydrationPromise: Promise<void> | null = null;
+
+function ensureClientHydratedOnce(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (clientHydrationPromise) return clientHydrationPromise;
+  clientHydrationPromise = (async () => {
+    try {
+      await Promise.resolve(useOriel.persist.rehydrate());
+    } catch {
+      // Fall back gracefully if localStorage is unavailable or malformed
+    }
+    try {
+      const cached = await loadPlateBundleFromIdb();
+      if (!cached) return;
+      const cur = useOriel.getState();
+      const patch: Partial<State> = {};
+      if (!cur.plate && cached.plate?.url) patch.plate = cached.plate;
+      if (cur.history.length === 0 && cached.history?.length) patch.history = cached.history;
+      if (cur.iterations.length === 0 && cached.iterations?.length) patch.iterations = cached.iterations;
+      if (!cur.upload && cached.upload) patch.upload = cached.upload;
+      if (Object.keys(patch).length > 0) {
+        useOriel.setState(patch);
+      }
+    } catch {
+      // Ignore IndexedDB unavailability in restricted contexts
+    }
+  })();
+  return clientHydrationPromise;
+}
+
 export function useHydrated(): boolean {
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    let alive = true;
-    if (useOriel.persist.hasHydrated()) {
-      setReady(true);
-      return;
-    }
-    const unsub = useOriel.persist.onFinishHydration(() => {
-      if (alive) setReady(true);
-    });
-    void useOriel.persist.rehydrate();
-    return () => {
-      alive = false;
-      unsub();
-    };
+    setReady(true);
+    void ensureClientHydratedOnce();
   }, []);
   return ready;
 }
+

@@ -35,6 +35,8 @@ type Input = {
   frame: Frame;
   engine: EngineState;
   scene3d: Scene3DState;
+  nanoBananaModel?: string;
+  nanoBananaResolution?: "1K" | "2K" | "4K";
 };
 
 function cleanDataUrl(value: unknown): string | undefined {
@@ -95,6 +97,15 @@ function parseInput(input: unknown): Input {
     frame: sanitizeFrame(data.frame as Partial<Frame> | undefined),
     engine: sanitizeEngineState(data.engine as Partial<EngineState> | undefined),
     scene3d: sanitizeScene3DState(data.scene3d as Partial<Scene3DState> | undefined),
+    nanoBananaModel:
+      typeof data.nanoBananaModel === "string" &&
+      ["gemini-nano-banana-2.1", "gemini-3.1-flash-lite-image", "gemini-3-pro-image"].includes(data.nanoBananaModel)
+        ? data.nanoBananaModel
+        : undefined,
+    nanoBananaResolution:
+      data.nanoBananaResolution === "1K" || data.nanoBananaResolution === "2K" || data.nanoBananaResolution === "4K"
+        ? data.nanoBananaResolution
+        : undefined,
   };
 }
 
@@ -117,6 +128,8 @@ function geminiAttachments(data: Input) {
     materialRefImage: data.materialRefImage,
     lightingRefImage: data.lightingRefImage,
     exampleRefImage: data.exampleRefImage,
+    modelOverride: data.nanoBananaModel,
+    imageSizeOverride: data.nanoBananaResolution,
   };
 }
 

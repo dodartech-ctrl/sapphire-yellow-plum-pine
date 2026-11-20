@@ -6,8 +6,9 @@ import type { Frame, Ratio } from "@/lib/frame";
 export const GEMINI_TEXT_MODEL = "gemini-4-hydrogen";
 export const GEMINI_IMAGE_FAST_MODEL = "gemini-3.1-flash-lite-image";
 export const GEMINI_IMAGE_HQ_MODEL = "gemini-nano-banana-2.1";
+export const GEMINI_IMAGE_PRO_MODEL = "gemini-3-pro-image";
 
-type GeminiRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
+type GeminiRatio = "1:1" | "1:4" | "1:8" | "2:3" | "3:2" | "3:4" | "4:1" | "4:3" | "4:5" | "5:4" | "8:1" | "9:16" | "16:9" | "21:9";
 
 export type DetectedSamBox = {
   label: string;
@@ -15,8 +16,8 @@ export type DetectedSamBox = {
   confidence: number;
 };
 
-const ENV_KEY_ORDER = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "API_KEY", "update", "UPDATE"] as const;
-const PLACEHOLDER_KEY_RE = /^(placeholder|undefined|null|changeme|your[_-]?api[_-]?key|test|demo)$/i;
+const ENV_KEY_ORDER = ["GOOGLE_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "API_KEY", "api", "API", "update", "UPDATE"] as const;
+const PLACEHOLDER_KEY_RE = /^(placeholder|undefined|null|changeme|your[_-]?api[_-]?key|my[_-]?gemini[_-]?api[_-]?key|test|demo)$/i;
 
 export function resolveGeminiApiKeys(): string[] {
   const keys: string[] = [];
@@ -55,9 +56,10 @@ export function getGeminiStatus() {
   };
 }
 
-function createGeminiClient(apiKey: string): GoogleGenAI {
+function createGeminiClient(apiKey: string, vertexai = false): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
+    ...(vertexai ? { vertexai: true } : {}),
     httpOptions: {
       headers: {
         "User-Agent": "aistudio-build",
@@ -73,15 +75,21 @@ async function withGeminiClient<T>(fn: (ai: GoogleGenAI) => Promise<T>): Promise
   }
   let lastErr: unknown;
   for (let i = 0; i < keys.length; i++) {
-    try {
-      return await fn(createGeminiClient(keys[i]));
-    } catch (error) {
-      lastErr = error;
-      const cleaned = cleanGeminiError(error);
-      if (i < keys.length - 1 && isGeminiAuthError(cleaned)) {
-        continue;
+    const key = keys[i];
+    const modes = key.startsWith("AQ.") ? [false, true] : [false];
+    for (let m = 0; m < modes.length; m++) {
+      try {
+        return await fn(createGeminiClient(key, modes[m]));
+      } catch (error) {
+        lastErr = error;
+        const cleaned = cleanGeminiError(error);
+        const hasMoreModes = m < modes.length - 1;
+        const hasMoreKeys = i < keys.length - 1;
+        if ((hasMoreModes || hasMoreKeys) && isGeminiAuthError(cleaned)) {
+          continue;
+        }
+        throw error;
       }
-      throw error;
     }
   }
   throw lastErr;
@@ -113,7 +121,7 @@ export function cleanGeminiError(error: unknown): Error {
     .replace(/AQ\.[0-9A-Za-z._-]+/g, "")
     .trim();
   if (/PERMISSION_DENIED|\b403\b/i.test(sanitized)) {
-    return new Error("Gemini permission denied (403). Check or select a Gemini API key in Settings > Secrets.");
+    return new Error(`Gemini permission denied (403). Check or select a Gemini API key in Settings > Secrets. (${sanitized.slice(0, 140)})`);
   }
   if (/API_KEY_INVALID|API key not valid/i.test(sanitized)) {
     return new Error("Gemini rejected the API key (400). Verify or select a Gemini API key in Settings > Secrets.");
@@ -241,11 +249,13 @@ export async function generateImageWithGemini(
     lightingRefImage?: string;
     exampleRefImage?: string;
     aspectOverride?: GeminiRatio;
+    modelOverride?: string;
+    imageSizeOverride?: "1K" | "2K" | "4K";
   },
 ): Promise<string> {
   try {
-    const useHq = frame.resolution === "2k";
-    const model = useHq ? GEMINI_IMAGE_HQ_MODEL : GEMINI_IMAGE_FAST_MODEL;
+    const useHq = frame.resolution === "2k" || Boolean(options?.imageSizeOverride && options.imageSizeOverride !== "1K");
+    const model = options?.modelOverride || (useHq ? GEMINI_IMAGE_HQ_MODEL : GEMINI_IMAGE_FAST_MODEL);
 
     const parts: Part[] = [];
     const attachments: Array<[string, string | undefined]> = [
@@ -288,7 +298,9 @@ export async function generateImageWithGemini(
         config: {
           imageConfig: {
             aspectRatio: options?.aspectOverride ?? toGeminiAspectRatio(frame.ratio),
-            ...(useHq ? { imageSize: "2K" } : {}),
+            ...(model !== GEMINI_IMAGE_FAST_MODEL
+              ? { imageSize: options?.imageSizeOverride ?? (useHq ? "2K" : "1K") }
+              : {}),
           },
         },
       }),

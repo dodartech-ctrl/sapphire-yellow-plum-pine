@@ -1,0 +1,317 @@
+[
+ {
+  "id": "L17",
+  "name": "Hero twilight",
+  "mode": "Strict",
+  "use": "Sales, launch posters",
+  "preset_ids": [
+   "P002",
+   "P041",
+   "P125",
+   "P181",
+   "P188"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L18",
+  "name": "Brochure interior",
+  "mode": "Strict",
+  "use": "Print and PDF brochures",
+  "preset_ids": [
+   "P023",
+   "P123",
+   "P171",
+   "P184",
+   "P182"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L19",
+  "name": "Social reel frame",
+  "mode": "Balanced",
+  "use": "Vertical stills and reels",
+  "preset_ids": [
+   "P001",
+   "P134",
+   "P172",
+   "P194"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L20",
+  "name": "Ad banner clean",
+  "mode": "Strict",
+  "use": "Ads with space for text",
+  "preset_ids": [
+   "P016",
+   "P133",
+   "P167",
+   "P185"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L21",
+  "name": "Aerial masterplan day",
+  "mode": "Strict",
+  "use": "Township overview",
+  "preset_ids": [
+   "P019",
+   "P126",
+   "P099",
+   "P199",
+   "P200"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L22",
+  "name": "Amenity lifestyle",
+  "mode": "Balanced",
+  "use": "Pools, clubs, gyms with people",
+  "preset_ids": [
+   "P101",
+   "P102",
+   "P187",
+   "P161"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L23",
+  "name": "Sample flat staging",
+  "mode": "Strict",
+  "use": "Furnished unit that feels lived in",
+  "preset_ids": [
+   "P021",
+   "P055",
+   "P123",
+   "P190",
+   "P182"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L24",
+  "name": "Before and after reveal",
+  "mode": "Strict",
+  "use": "Matched renovation pair",
+  "preset_ids": [
+   "P171",
+   "P123",
+   "P190",
+   "P181"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L25",
+  "name": "Client review draft",
+  "mode": "Balanced",
+  "use": "Quick clear draft",
+  "preset_ids": [
+   "P003",
+   "P163",
+   "P193"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L26",
+  "name": "Sketch to render",
+  "mode": "Balanced",
+  "use": "Sketch or line drawing to render",
+  "preset_ids": [
+   "P123",
+   "P163",
+   "P181"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L27",
+  "name": "Massing clay",
+  "mode": "Strict",
+  "use": "Early design, white model",
+  "preset_ids": [
+   "P003",
+   "P169",
+   "P181",
+   "P189"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L28",
+  "name": "Section and plan render",
+  "mode": "Strict",
+  "use": "Coloured plans and sections",
+  "preset_ids": [
+   "P126",
+   "P171",
+   "P199",
+   "P181"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L29",
+  "name": "Material options A/B/C",
+  "mode": "Strict",
+  "use": "Same view in three finishes",
+  "preset_ids": [
+   "P023",
+   "P171",
+   "P182",
+   "P181"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L30",
+  "name": "Lighting study",
+  "mode": "Strict",
+  "use": "Sun path and hour comparison",
+  "preset_ids": [
+   "P022",
+   "P032",
+   "P171",
+   "P195"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L31",
+  "name": "Design competition",
+  "mode": "Balanced",
+  "use": "Bold concept board",
+  "preset_ids": [
+   "P008",
+   "P164",
+   "P125"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L32",
+  "name": "Rental listing",
+  "mode": "Strict",
+  "use": "Honest, bright listing",
+  "preset_ids": [
+   "P023",
+   "P122",
+   "P171",
+   "P182",
+   "P199"
+  ],
+  "rules": "Never beautify beyond what exists"
+ },
+ {
+  "id": "L33",
+  "name": "Virtual staging",
+  "mode": "Strict",
+  "use": "Empty room furnished",
+  "preset_ids": [
+   "P023",
+   "P055",
+   "P190",
+   "P183",
+   "P199"
+  ],
+  "rules": "Mark the picture as staged"
+ },
+ {
+  "id": "L34",
+  "name": "Renovation preview",
+  "mode": "Strict",
+  "use": "Existing room, new finishes",
+  "preset_ids": [
+   "P022",
+   "P171",
+   "P190",
+   "P181"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L35",
+  "name": "Handover snag view",
+  "mode": "Strict",
+  "use": "Accurate finish check",
+  "preset_ids": [
+   "P003",
+   "P171",
+   "P188",
+   "P199",
+   "P181"
+  ],
+  "rules": "Never beautify beyond what exists"
+ },
+ {
+  "id": "L36",
+  "name": "Festive evening",
+  "mode": "Balanced",
+  "use": "Seasonal campaigns",
+  "preset_ids": [
+   "P018",
+   "P161",
+   "P175"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L37",
+  "name": "Monsoon and greenery",
+  "mode": "Balanced",
+  "use": "Lush wet season",
+  "preset_ids": [
+   "P062",
+   "P083",
+   "P074",
+   "P163"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L38",
+  "name": "Luxury penthouse night",
+  "mode": "Strict",
+  "use": "Skyline view, dark interior",
+  "preset_ids": [
+   "P034",
+   "P006",
+   "P048",
+   "P177"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L39",
+  "name": "Healthcare and wellness",
+  "mode": "Strict",
+  "use": "Calm clean light",
+  "preset_ids": [
+   "P027",
+   "P060",
+   "P167",
+   "P184"
+  ],
+  "rules": ""
+ },
+ {
+  "id": "L40",
+  "name": "Education campus",
+  "mode": "Strict",
+  "use": "Bright, welcoming campus",
+  "preset_ids": [
+   "P010",
+   "P099",
+   "P187",
+   "P167"
+  ],
+  "rules": ""
+ }
+]

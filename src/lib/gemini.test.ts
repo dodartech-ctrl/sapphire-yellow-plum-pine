@@ -35,13 +35,23 @@ test("cleanGeminiError redacts Google API keys and isGeminiAuthError classifies 
   assert.equal(isGeminiAuthError(err429), false);
 });
 
-test("getGeminiStatus prioritizes GEMINI_API_KEY, ignores placeholders, and keeps update secret fallback", () => {
+test("getGeminiStatus prioritizes GEMINI_API_KEY, ignores placeholders including MY_GEMINI_API_KEY, and supports api/update secrets", () => {
   const prevGem = process.env.GEMINI_API_KEY;
   const prevUpdate = process.env.update;
+  const prevApi = process.env.api;
   try {
     delete process.env.update;
+    delete process.env.api;
     process.env.GEMINI_API_KEY = "placeholder";
     assert.equal(getGeminiStatus().configured, false);
+
+    process.env.GEMINI_API_KEY = "MY_GEMINI_API_KEY";
+    assert.equal(getGeminiStatus().configured, false);
+    assert.deepEqual(resolveGeminiApiKeys(), []);
+
+    process.env.api = "AQ.test-vertex-express-key";
+    assert.equal(getGeminiStatus().configured, true);
+    assert.deepEqual(resolveGeminiApiKeys(), ["AQ.test-vertex-express-key"]);
 
     delete process.env.GEMINI_API_KEY;
     process.env.update = "AQ.test-key-valid-length";
@@ -54,6 +64,7 @@ test("getGeminiStatus prioritizes GEMINI_API_KEY, ignores placeholders, and keep
     process.env.GEMINI_API_KEY = "AIzaSyPrimaryPaidKeyExample123";
     assert.deepEqual(resolveGeminiApiKeys(), [
       "AIzaSyPrimaryPaidKeyExample123",
+      "AQ.test-vertex-express-key",
       "AQ.test-key-valid-length",
     ]);
   } finally {
@@ -61,6 +72,8 @@ test("getGeminiStatus prioritizes GEMINI_API_KEY, ignores placeholders, and keep
     else delete process.env.GEMINI_API_KEY;
     if (prevUpdate !== undefined) process.env.update = prevUpdate;
     else delete process.env.update;
+    if (prevApi !== undefined) process.env.api = prevApi;
+    else delete process.env.api;
   }
 });
 

@@ -83,6 +83,7 @@ import { toast } from "sonner";
 
 type Viewport3DProps = {
   aspect: string;
+  compactSplit?: boolean;
   onCaptureSnapshot: (dataUrl: string, goToSketch?: boolean) => void;
   onCaptureDepthPass?: (dataUrl: string) => void;
   onCaptureChannels?: (channels: { depthUrl: string; normalUrl: string; clayUrl: string }) => void;
@@ -155,7 +156,7 @@ function tagPickableMeshes(group: THREE.Object3D, fallbackPrefix: string): Picka
   return list;
 }
 
-export function Viewport3D({ aspect: _aspect, onCaptureSnapshot, onCaptureDepthPass, onCaptureChannels }: Viewport3DProps) {
+export function Viewport3D({ aspect: _aspect, compactSplit = false, onCaptureSnapshot, onCaptureDepthPass, onCaptureChannels }: Viewport3DProps) {
   const scene3d = useOriel((state) => state.scene3d);
   const setScene3DField = useOriel((state) => state.setScene3DField);
   const meshMaterialOverrides = useOriel((state) => state.meshMaterialOverrides);
@@ -172,7 +173,8 @@ export function Viewport3D({ aspect: _aspect, onCaptureSnapshot, onCaptureDepthP
   const clearCameraKeyframes = useOriel((state) => state.clearCameraKeyframes);
   const setConditioningChannel = useOriel((state) => state.setConditioningChannel);
 
-  const [hudOpen, setHudOpen] = useState(true);
+  const [hudOpen, setHudOpen] = useState(!compactSplit);
+  const [inspectorOpen, setInspectorOpen] = useState(!compactSplit);
   const [rigTab, setRigTab] = useState<"model" | "lighting" | "keyframes">("model");
   const [mountReady, setMountReady] = useState(false);
   const [contextLost, setContextLost] = useState(false);
@@ -1287,10 +1289,13 @@ export function Viewport3D({ aspect: _aspect, onCaptureSnapshot, onCaptureDepthP
       className="w-full overflow-hidden bg-[#181613]"
     >
       {/* Main 3D Stage + Docked Sidebar Inspector Panel (zero floating center overlays) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_296px]">
+      <div className={cn("grid grid-cols-1", inspectorOpen ? "lg:grid-cols-[1fr_296px]" : "lg:grid-cols-1")}>
         {/* Unobstructed Three.js WebGL Canvas Area */}
         <div
-          className="relative h-[340px] w-full min-w-0 overflow-hidden bg-[#181613] lg:h-[492px]"
+          className={cn(
+            "relative w-full min-w-0 overflow-hidden bg-[#181613]",
+            compactSplit ? "h-[280px] md:h-[430px]" : "h-[340px] lg:h-[492px]",
+          )}
         >
           {contextLost ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[#1c1915] px-6 text-center text-[#f6efe4]">
@@ -1313,25 +1318,46 @@ export function Viewport3D({ aspect: _aspect, onCaptureSnapshot, onCaptureDepthP
 
           <input ref={cadInputRef} type="file" accept=".glb,.gltf,.obj,.fbx" className="sr-only" onChange={handleCadInput} />
 
-          {/* Discrete top-right bottom-rig toggle */}
-          <button
-            type="button"
-            onClick={() => setHudOpen((v) => !v)}
-            className="absolute top-3 right-3 z-20 inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-[#14110f] px-3 text-[11px] font-medium text-[#f6efe4] shadow-md hover:border-[#d4b06a] hover:text-[#e7c27a]"
-            aria-expanded={hudOpen}
-            aria-label={hudOpen ? "Collapse 3D rig controls" : "Expand 3D rig controls"}
-          >
-            {hudOpen ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
-            <span>{hudOpen ? "Hide Rig" : "3D Rig"}</span>
-          </button>
+          {/* Discrete top-right Inspector + Rig toggles */}
+          <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setInspectorOpen((v) => !v)}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-[11px] font-medium shadow-md transition",
+                inspectorOpen
+                  ? "border-[#d4b06a] bg-[#2a1c0c] text-[#e7c27a]"
+                  : "border-white/15 bg-[#14110f]/90 text-[#f6efe4] hover:border-[#d4b06a] hover:text-[#e7c27a]",
+              )}
+              aria-expanded={inspectorOpen}
+              aria-label={inspectorOpen ? "Hide 3D scene inspector" : "Show 3D scene inspector"}
+            >
+              <SlidersHorizontal className="size-3" />
+              <span>Inspector</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHudOpen((v) => !v)}
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-[#14110f]/90 px-3 text-[11px] font-medium text-[#f6efe4] shadow-md hover:border-[#d4b06a] hover:text-[#e7c27a]"
+              aria-expanded={hudOpen}
+              aria-label={hudOpen ? "Collapse 3D rig controls" : "Expand 3D rig controls"}
+            >
+              {hudOpen ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+              <span>{hudOpen ? "Hide Rig" : "3D Rig"}</span>
+            </button>
+          </div>
         </div>
 
         {/* Sidebar Inspector Panel: Solar Position (0-24h & Month) + Raycaster PBR Material CRUD */}
-        <aside
-          data-testid="inspector-sidebar"
-          aria-label="3D Scene Inspector"
-          className="flex flex-col gap-2.5 overflow-y-auto border-t border-white/10 bg-[#14110f] p-2.5 text-xs text-[#f6efe4] lg:h-[492px] lg:border-t-0 lg:border-l"
-        >
+        {inspectorOpen ? (
+          <aside
+            data-testid="inspector-sidebar"
+            aria-label="3D Scene Inspector"
+            className={cn(
+              "flex flex-col gap-2.5 overflow-y-auto border-t border-white/10 bg-[#14110f] p-2.5 text-xs text-[#f6efe4] lg:border-t-0 lg:border-l",
+              compactSplit ? "lg:h-[430px]" : "lg:h-[492px]",
+            )}
+          >
           {/* Solar Positioning Vector Section */}
           <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
             <div className="flex items-center justify-between gap-2">
@@ -1671,6 +1697,7 @@ export function Viewport3D({ aspect: _aspect, onCaptureSnapshot, onCaptureDepthP
             </div>
           </div>
         </aside>
+        ) : null}
       </div>
 
       {/* Collapsible D5 Render-Style Model, Lighting & Keyframe Shelf */}

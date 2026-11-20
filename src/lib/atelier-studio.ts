@@ -114,22 +114,47 @@ export const ATELIER_VERTICAL_HERO: Record<VerticalId, { src: string; caption: s
   },
 };
 
+export type AtelierPlateMeta = {
+  idea?: string;
+  seed?: number;
+  look?: string;
+  light?: string;
+  ratio?: string;
+  gateScore?: number;
+  gateStatus?: "verified" | "review" | "flagged";
+  fallback?: boolean;
+};
+
 export function buildAtelierIterationCards(
   history: readonly string[],
   activeUrl: string | null | undefined,
+  metaByUrl?: Record<string, AtelierPlateMeta>,
 ): AtelierPlateCard[] {
-  const uniqueHistory = Array.from(new Set(history.filter(Boolean))).slice(0, 4);
+  const defaultStaticUrls = new Set(ATELIER_DEFAULT_STUDIES.map((d) => d.url));
+  const mergedUrls: string[] = [];
+  if (activeUrl && (!defaultStaticUrls.has(activeUrl) || history.includes(activeUrl))) {
+    mergedUrls.push(activeUrl);
+  }
+  for (const url of history) {
+    if (url && !mergedUrls.includes(url)) {
+      mergedUrls.push(url);
+    }
+  }
+
+  const uniqueHistory = mergedUrls.slice(0, 4);
   const generatedCards: AtelierPlateCard[] = uniqueHistory.map((url, idx) => {
     const versionNum = uniqueHistory.length - idx;
     const isCurrent = Boolean(activeUrl && url === activeUrl);
+    const meta = metaByUrl?.[url];
+    const scoreTag = typeof meta?.gateScore === "number" ? ` · ${(meta.gateScore * 100).toFixed(0)}%` : "";
     return {
-      id: `plate-hist-${idx}`,
-      tag: `Plate v${versionNum}`,
-      title: isCurrent ? "Active Plate" : `Iteration ${versionNum}`,
+      id: `plate-hist-${idx}-${url.slice(-10).replace(/[^a-zA-Z0-9]/g, "")}`,
+      tag: `Plate v${versionNum}${scoreTag}`,
+      title: isCurrent ? (meta?.look ? `Active · ${meta.look}` : "Active Plate") : meta?.look ? `${meta.look} v${versionNum}` : `Iteration ${versionNum}`,
       subtitle: isCurrent ? "Selected" : "Click to restore",
       url,
       isGenerated: true,
-      lightPreset: "Golden hour",
+      lightPreset: (meta?.light as (typeof LIGHTS)[number] | undefined) ?? "Golden hour",
     };
   });
 

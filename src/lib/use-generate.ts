@@ -34,6 +34,12 @@ import {
   relightPlate,
   segmentObjectWithSam2,
 } from "@/lib/generate";
+import {
+  callNanoBananaApi,
+  continueNanoBananaSessionApi,
+  resolveRuntimeModelOverride,
+  type OrchestrationResponseClient,
+} from "@/lib/nano-banana-client";
 import { useOriel } from "@/lib/store";
 
 let queueStopRequested = false;
@@ -172,6 +178,11 @@ export function useGenerate() {
           frame: st.frame,
           engine: st.engine,
           scene3d: st.scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(st.nanoBanana.requestedModel),
+          nanoBananaResolution:
+            st.nanoBanana.resolution === "1K" || st.nanoBanana.resolution === "2K" || st.nanoBanana.resolution === "4K"
+              ? st.nanoBanana.resolution
+              : undefined,
         },
       });
       st.setCredits(result.credits);
@@ -882,6 +893,231 @@ export function useGenerate() {
     }
   }
 
+  async function runOrchestratedGeneration(options?: {
+    confirmConflicts?: boolean;
+    promptOverride?: string;
+  }): Promise<OrchestrationResponseClient | null> {
+    const st = useOriel.getState();
+    if (st.busy) return null;
+    st.setBusy(true);
+    try {
+      const nb = st.nanoBanana;
+      const baseImage = await compactPayloadDataUrl(st.upload ?? st.plate?.url ?? st.sketchDataUrl);
+      const compactMask = await compactPayloadDataUrl(st.maskDataUrl);
+      const [styleRef, matRef, lightRef] = await Promise.all([
+        compactPayloadDataUrl(st.engine.refMatrix.massing.url ?? st.engine.ipAdapterRefUrl),
+        compactPayloadDataUrl(st.engine.refMatrix.material.url),
+        compactPayloadDataUrl(st.engine.refMatrix.lighting.url),
+      ]);
+
+      const references: Array<{
+        imageUrl: string;
+        referenceType: string;
+        priority: number;
+        label: string;
+      }> = [];
+
+      if (baseImage) {
+        references.push({
+          imageUrl: baseImage,
+          referenceType: "geometry_reference",
+          priority: 1,
+          label: "Primary Studio Architecture",
+        });
+      }
+      if (styleRef) {
+        references.push({
+          imageUrl: styleRef,
+          referenceType: "design_reference",
+          priority: 2,
+          label: "Massing & Style Reference",
+        });
+      }
+      if (matRef) {
+        references.push({
+          imageUrl: matRef,
+          referenceType: "material_reference",
+          priority: 3,
+          label: "Material Reference",
+        });
+      }
+      if (lightRef) {
+        references.push({
+          imageUrl: lightRef,
+          referenceType: "lighting_reference",
+          priority: 4,
+          label: "Lighting Reference",
+        });
+      }
+
+      const effectiveMode =
+        nb.generationMode === "multi_reference" && references.length < 2
+          ? references.length > 0
+            ? "image_edit"
+            : "text_to_image"
+          : (nb.generationMode === "image_edit" ||
+                nb.generationMode === "image_to_image" ||
+                nb.generationMode === "style_transfer" ||
+                nb.generationMode === "render_enhancement") &&
+              references.length === 0
+            ? "text_to_image"
+            : nb.generationMode;
+
+      const endpoint =
+        effectiveMode === "multi_reference"
+          ? "/api/v1/images/multi-reference"
+          : effectiveMode === "image_edit" ||
+              effectiveMode === "image_to_image" ||
+              effectiveMode === "style_transfer" ||
+              effectiveMode === "render_enhancement"
+            ? "/api/v1/images/edit"
+            : "/api/v1/images/generate";
+
+      const materials = Object.values(st.design.picks).filter(
+        (v) => v && v !== "Unchanged" && v !== "None" && v !== "Keep",
+      );
+
+      const promptText =
+        (options?.promptOverride ?? st.idea).trim() ||
+        `Transform architectural scene into ${nb.architecturalStyle.replace(/_/g, " ")} ${nb.buildingType.replace(/_/g, " ")} with ${st.design.light.toLowerCase()} lighting.`;
+
+      const res = await callNanoBananaApi(endpoint, {
+        projectId: "default-studio",
+        generationMode: effectiveMode,
+        requestedModel: nb.requestedModel,
+        prompt: promptText,
+        imageUrl: baseImage,
+        maskImageUrl: compactMask,
+        references,
+        sessionId: nb.activeSessionId ?? undefined,
+        confirmConflicts: Boolean(options?.confirmConflicts),
+        design: {
+          buildingType: nb.buildingType,
+          style: st.design.look,
+          architecturalStyle: nb.architecturalStyle,
+          renderStyle: nb.renderStyle,
+          materials: materials.slice(0, 10),
+          lighting: st.design.light.toLowerCase().replace(/\s+/g, "_"),
+          weather: st.design.weather.toLowerCase().replace(/\s+/g, "_"),
+          vegetation: "curated architectural landscaping",
+          camera: st.scene3d.cameraPreset,
+          lensMm: st.scene3d.focalLength,
+          twoPointPerspective: st.scene3d.twoPointTilt,
+        },
+        constraints: nb.constraints,
+        output: {
+          format: "png",
+          quality: nb.resolution === "4K" ? "premium" : nb.resolution === "512" ? "draft" : "high",
+          resolution: nb.resolution,
+          aspectRatio: nb.aspectRatio,
+          renderText: false,
+        },
+      });
+
+      st.setLastOrchestration(res);
+      if (res.sessionId) {
+        st.updateNanoBanana({ activeSessionId: res.sessionId });
+      }
+
+      if (res.status === "needs_confirmation") {
+        toast.warning("Architectural policy conflict detected — confirm in 12-Stage Trace to proceed.");
+        return res;
+      }
+      if (res.status === "blocked") {
+        toast.error("Request blocked by studio structural/safety policy.");
+        return res;
+      }
+
+      if (res.outputImageUrl) {
+        let displayUrl = res.outputImageUrl;
+        if (res.fallbackUsed) {
+          displayUrl = await synthesizeFallbackComposite({
+            baseImage: st.upload ?? st.sketchDataUrl ?? undefined,
+            sketchImage: st.sketchDataUrl ?? undefined,
+            maskImage: st.maskDataUrl ?? undefined,
+            serverFallbackUrl: res.outputImageUrl,
+            design: st.design,
+            engine: st.engine,
+            scene3d: st.scene3d,
+            idea: promptText,
+            variantIndex: 0,
+            renderIteration: renderSequence++,
+          });
+        }
+        st.setPlate({
+          url: displayUrl,
+          upload: st.upload ?? undefined,
+          templateId: res.generationMode,
+          idea: promptText,
+          fallback: res.fallbackUsed,
+          summary: `${res.modelDisplayName} · Score ${res.evaluation.totalScore}/100 (${res.evaluation.status})`,
+        });
+        st.pushLog({
+          title: `${res.modelDisplayName} · ${res.evaluation.totalScore}/100`,
+          model: "gemini",
+          text: `${res.traceId} · ${res.routing.routingRule}`,
+        });
+        window.dispatchEvent(new CustomEvent("oriel-view", { detail: "result" }));
+        toast.success(
+          res.fallbackUsed
+            ? `Orchestrated preview ready (${res.evaluation.totalScore}/100)`
+            : `${res.modelDisplayName} render complete (${res.evaluation.totalScore}/100)`,
+        );
+      }
+      return res;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Orchestrated generation failed.");
+      return null;
+    } finally {
+      useOriel.getState().setBusy(false);
+    }
+  }
+
+  async function continueIterativeSession(
+    instruction: string,
+    confirmConflicts = false,
+  ): Promise<OrchestrationResponseClient | null> {
+    const st = useOriel.getState();
+    const sessionId = st.nanoBanana.activeSessionId;
+    if (!sessionId) {
+      return runOrchestratedGeneration({ promptOverride: instruction, confirmConflicts });
+    }
+    if (st.busy) return null;
+    st.setBusy(true);
+    try {
+      const res = await continueNanoBananaSessionApi(sessionId, {
+        projectId: "default-studio",
+        prompt: instruction,
+        requestedModel: st.nanoBanana.requestedModel,
+        constraints: st.nanoBanana.constraints,
+        output: {
+          resolution: st.nanoBanana.resolution,
+          aspectRatio: st.nanoBanana.aspectRatio,
+        },
+        confirmConflicts,
+      });
+      st.setLastOrchestration(res);
+      if (res.outputImageUrl) {
+        st.setPlate({
+          url: res.outputImageUrl,
+          upload: st.upload ?? undefined,
+          templateId: "iterative_editing",
+          idea: instruction,
+          fallback: res.fallbackUsed,
+          summary: `${res.modelDisplayName} · Session Turn · ${res.evaluation.totalScore}/100`,
+        });
+        window.dispatchEvent(new CustomEvent("oriel-view", { detail: "result" }));
+        toast.success(`Session ${sessionId} updated (${res.evaluation.totalScore}/100)`);
+      }
+      return res;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Iterative session continuation failed.");
+      return null;
+    } finally {
+      useOriel.getState().setBusy(false);
+    }
+  }
+
   return {
     busy,
     batchRunning,
@@ -903,5 +1139,7 @@ export function useGenerate() {
     queueAndRunBatch,
     runThreeLightBatch,
     queueBatchMatrix,
+    runOrchestratedGeneration,
+    continueIterativeSession,
   };
 }
