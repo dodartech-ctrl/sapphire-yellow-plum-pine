@@ -1,9 +1,9 @@
 import { i as __require, t as __commonJSMin } from "../_runtime.mjs";
 import { t as require_src } from "./debug+[...].mjs";
 import { t as require_dist$1 } from "./agent-base.mjs";
-// node_modules/https-proxy-agent/dist/parse-proxy-response.js
-var require_parse_proxy_response = /* @__PURE__ */ __commonJSMin(((exports, module, this$2) => {
-	var __importDefault = this$2 && this$2.__importDefault || function(mod) {
+//#region node_modules/https-proxy-agent/dist/parse-proxy-response.js
+var require_parse_proxy_response = /* @__PURE__ */ __commonJSMin(((exports) => {
+	var __importDefault = exports && exports.__importDefault || function(mod) {
 		return mod && mod.__esModule ? mod : { "default": mod };
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -85,9 +85,10 @@ var require_parse_proxy_response = /* @__PURE__ */ __commonJSMin(((exports, modu
 	}
 	exports.parseProxyResponse = parseProxyResponse;
 }));
-// node_modules/https-proxy-agent/dist/index.js
-var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
-	var __createBinding = this$1 && this$1.__createBinding || (Object.create ? (function(o, m, k, k2) {
+//#endregion
+//#region node_modules/https-proxy-agent/dist/index.js
+var require_dist = /* @__PURE__ */ __commonJSMin(((exports) => {
+	var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
 		if (k2 === void 0) k2 = k;
 		var desc = Object.getOwnPropertyDescriptor(m, k);
 		if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) desc = {
@@ -101,7 +102,7 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 		if (k2 === void 0) k2 = k;
 		o[k2] = m[k];
 	}));
-	var __setModuleDefault = this$1 && this$1.__setModuleDefault || (Object.create ? (function(o, v) {
+	var __setModuleDefault = exports && exports.__setModuleDefault || (Object.create ? (function(o, v) {
 		Object.defineProperty(o, "default", {
 			enumerable: true,
 			value: v
@@ -109,7 +110,7 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 	}) : function(o, v) {
 		o["default"] = v;
 	});
-	var __importStar = this$1 && this$1.__importStar || function(mod) {
+	var __importStar = exports && exports.__importStar || function(mod) {
 		if (mod && mod.__esModule) return mod;
 		var result = {};
 		if (mod != null) {
@@ -118,7 +119,7 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 		__setModuleDefault(result, mod);
 		return result;
 	};
-	var __importDefault = this$1 && this$1.__importDefault || function(mod) {
+	var __importDefault = exports && exports.__importDefault || function(mod) {
 		return mod && mod.__esModule ? mod : { "default": mod };
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -231,4 +232,5 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 		return ret;
 	}
 }));
+//#endregion
 export { require_dist as t };

@@ -10,7 +10,7 @@ import { Buffer } from "node:buffer";
 import { deprecate, promisify, types } from "node:util";
 import { format } from "node:url";
 import { isIP } from "node:net";
-// node_modules/node-fetch/src/errors/base.js
+//#region node_modules/node-fetch/src/errors/base.js
 var FetchBaseError;
 var init_base = __esmMin((() => {
 	FetchBaseError = class extends Error {
@@ -27,7 +27,8 @@ var init_base = __esmMin((() => {
 		}
 	};
 }));
-// node_modules/node-fetch/src/errors/fetch-error.js
+//#endregion
+//#region node_modules/node-fetch/src/errors/fetch-error.js
 var FetchError;
 var init_fetch_error = __esmMin((() => {
 	init_base();
@@ -46,7 +47,8 @@ var init_fetch_error = __esmMin((() => {
 		}
 	};
 }));
-// node_modules/node-fetch/src/utils/is.js
+//#endregion
+//#region node_modules/node-fetch/src/utils/is.js
 var NAME, isURLSearchParameters, isBlob, isAbortSignal, isDomainOrSubdomain, isSameProtocol;
 var init_is = __esmMin((() => {
 	NAME = Symbol.toStringTag;
@@ -68,7 +70,8 @@ var init_is = __esmMin((() => {
 		return new URL(original).protocol === new URL(destination).protocol;
 	};
 }));
-// node_modules/node-fetch/src/body.js
+//#endregion
+//#region node_modules/node-fetch/src/body.js
 /**
 * Body.js
 *
@@ -261,7 +264,8 @@ var init_body = __esmMin((() => {
 		else await pipeline$1(body, dest);
 	};
 }));
-// node_modules/node-fetch/src/headers.js
+//#endregion
+//#region node_modules/node-fetch/src/headers.js
 /**
 * Headers.js
 *
@@ -427,7 +431,8 @@ var init_headers = __esmMin((() => {
 		return result;
 	}, {}));
 }));
-// node_modules/node-fetch/src/utils/is-redirect.js
+//#endregion
+//#region node_modules/node-fetch/src/utils/is-redirect.js
 var redirectStatus, isRedirect;
 var init_is_redirect = __esmMin((() => {
 	redirectStatus = /* @__PURE__ */ new Set([
@@ -441,7 +446,8 @@ var init_is_redirect = __esmMin((() => {
 		return redirectStatus.has(code);
 	};
 }));
-// node_modules/node-fetch/src/response.js
+//#endregion
+//#region node_modules/node-fetch/src/response.js
 var INTERNALS$1, Response;
 var init_response = __esmMin((() => {
 	init_headers();
@@ -557,7 +563,8 @@ var init_response = __esmMin((() => {
 		clone: { enumerable: true }
 	});
 }));
-// node_modules/node-fetch/src/utils/get-search.js
+//#endregion
+//#region node_modules/node-fetch/src/utils/get-search.js
 var getSearch;
 var init_get_search = __esmMin((() => {
 	getSearch = (parsedURL) => {
@@ -567,7 +574,8 @@ var init_get_search = __esmMin((() => {
 		return parsedURL.href[lastOffset - hash.length] === "?" ? "?" : "";
 	};
 }));
-// node_modules/node-fetch/src/utils/referrer.js
+//#endregion
+//#region node_modules/node-fetch/src/utils/referrer.js
 /**
 * @external URL
 * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/URL|URL}
@@ -711,7 +719,8 @@ var init_referrer = __esmMin((() => {
 	]);
 	DEFAULT_REFERRER_POLICY = "strict-origin-when-cross-origin";
 }));
-// node_modules/node-fetch/src/request.js
+//#endregion
+//#region node_modules/node-fetch/src/request.js
 /**
 * Request.js
 *
@@ -861,7 +870,8 @@ var init_request = __esmMin((() => {
 		};
 	};
 }));
-// node_modules/node-fetch/src/errors/abort-error.js
+//#endregion
+//#region node_modules/node-fetch/src/errors/abort-error.js
 var AbortError;
 var init_abort_error = __esmMin((() => {
 	init_base();
@@ -871,7 +881,8 @@ var init_abort_error = __esmMin((() => {
 		}
 	};
 }));
-// node_modules/node-fetch/src/index.js
+//#endregion
+//#region node_modules/node-fetch/src/index.js
 /**
 * Index.js
 *
@@ -879,7 +890,15 @@ var init_abort_error = __esmMin((() => {
 *
 * All spec algorithm step numbers are based on https://fetch.spec.whatwg.org/commit-snapshots/ae716822cb3a61843226cd090eefc6589446c1d2/.
 */
-var src_exports = /* @__PURE__ */ __exportAll({ default: () => fetch });
+var src_exports = /* @__PURE__ */ __exportAll({
+	AbortError: () => AbortError,
+	FetchError: () => FetchError,
+	Headers: () => Headers,
+	Request: () => Request,
+	Response: () => Response,
+	default: () => fetch,
+	isRedirect: () => isRedirect
+});
 /**
 * Fetch function
 *
@@ -1129,7 +1148,8 @@ var init_src = __esmMin((() => {
 		"https:"
 	]);
 }));
-// node_modules/node-fetch/src/utils/multipart-parser.js
+//#endregion
+//#region node_modules/node-fetch/src/utils/multipart-parser.js
 var multipart_parser_exports = /* @__PURE__ */ __exportAll({ toFormData: () => toFormData });
 function _fileName(headerValue) {
 	const m = headerValue.match(/\bfilename=("(.*?)"|([^()<>@,;:\\"/[\]?={}\s\t]+))($|;\s)/i);
@@ -1424,4 +1444,5 @@ var init_multipart_parser = __esmMin((() => {
 		}
 	};
 }));
+//#endregion
 export { src_exports as n, init_src as t };

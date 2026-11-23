@@ -15715,9 +15715,9 @@ var _inverseMatrix$3 = /*@__PURE__*/ new Matrix4();
 var _ray$3 = /*@__PURE__*/ new Ray();
 var _sphere$6 = /*@__PURE__*/ new Sphere();
 var _sphereHitAt = /*@__PURE__*/ new Vector3();
-var _vA$2 = /*@__PURE__*/ new Vector3();
-var _vB$2 = /*@__PURE__*/ new Vector3();
-var _vC$2 = /*@__PURE__*/ new Vector3();
+var _vA$1 = /*@__PURE__*/ new Vector3();
+var _vB$1 = /*@__PURE__*/ new Vector3();
+var _vC$1 = /*@__PURE__*/ new Vector3();
 var _tempA = /*@__PURE__*/ new Vector3();
 var _morphA = /*@__PURE__*/ new Vector3();
 var _intersectionPoint = /*@__PURE__*/ new Vector3();
@@ -15981,13 +15981,13 @@ function checkIntersection$1(object, material, raycaster, ray, pA, pB, pC, point
 	};
 }
 function checkGeometryIntersection(object, material, raycaster, ray, uv, uv1, normal, a, b, c) {
-	object.getVertexPosition(a, _vA$2);
-	object.getVertexPosition(b, _vB$2);
-	object.getVertexPosition(c, _vC$2);
-	const intersection = checkIntersection$1(object, material, raycaster, ray, _vA$2, _vB$2, _vC$2, _intersectionPoint);
+	object.getVertexPosition(a, _vA$1);
+	object.getVertexPosition(b, _vB$1);
+	object.getVertexPosition(c, _vC$1);
+	const intersection = checkIntersection$1(object, material, raycaster, ray, _vA$1, _vB$1, _vC$1, _intersectionPoint);
 	if (intersection) {
 		const barycoord = new Vector3();
-		Triangle.getBarycoord(_intersectionPoint, _vA$2, _vB$2, _vC$2, barycoord);
+		Triangle.getBarycoord(_intersectionPoint, _vA$1, _vB$1, _vC$1, barycoord);
 		if (uv) intersection.uv = Triangle.getInterpolatedAttribute(uv, a, b, c, barycoord, new Vector2());
 		if (uv1) intersection.uv1 = Triangle.getInterpolatedAttribute(uv1, a, b, c, barycoord, new Vector2());
 		if (normal) {
@@ -16001,7 +16001,7 @@ function checkGeometryIntersection(object, material, raycaster, ray, uv, uv1, no
 			normal: new Vector3(),
 			materialIndex: 0
 		};
-		Triangle.getNormal(_vA$2, _vB$2, _vC$2, face.normal);
+		Triangle.getNormal(_vA$1, _vB$1, _vC$1, face.normal);
 		intersection.face = face;
 		intersection.barycoord = barycoord;
 	}
@@ -27370,7 +27370,8 @@ if (typeof window !== "undefined") {
 	if (window.__THREE__) warn("WARNING: Multiple instances of Three.js being imported.");
 	else window.__THREE__ = "187";
 }
-// node_modules/three/build/three.module.js
+//#endregion
+//#region node_modules/three/build/three.module.js
 /**
 * @license
 * Copyright 2010-2026 Three.js Authors
@@ -38153,7 +38154,8 @@ var WebGLRenderer = class {
 		gl.unpackColorSpace = ColorManagement._getUnpackColorSpace();
 	}
 };
-// node_modules/three/examples/jsm/exporters/GLTFExporter.js
+//#endregion
+//#region node_modules/three/examples/jsm/exporters/GLTFExporter.js
 /**
 * The KHR_mesh_quantization extension allows these extra attribute component types
 *
@@ -40238,7 +40240,8 @@ GLTFExporter.Utils = {
 		return dstAttribute;
 	}
 };
-// node_modules/three/examples/jsm/controls/OrbitControls.js
+//#endregion
+//#region node_modules/three/examples/jsm/controls/OrbitControls.js
 /**
 * Fires when the camera has been transformed by the controls.
 *
@@ -41365,7 +41368,8 @@ function interceptControlUp(event) {
 		});
 	}
 }
-// node_modules/three/examples/jsm/utils/BufferGeometryUtils.js
+//#endregion
+//#region node_modules/three/examples/jsm/utils/BufferGeometryUtils.js
 /**
 * Converts the given geometry to the `TrianglesDrawMode` draw mode, which
 * corresponds to the `gl.TRIANGLES` primitive in WebGL. The conversion only
@@ -41419,7 +41423,8 @@ function toTrianglesDrawMode(geometry, drawMode) {
 		return geometry;
 	}
 }
-// node_modules/three/examples/jsm/utils/SkeletonUtils.js
+//#endregion
+//#region node_modules/three/examples/jsm/utils/SkeletonUtils.js
 /**
 * Clones the given 3D object and its descendants, ensuring that any `SkinnedMesh` instances are
 * correctly associated with their bones. Bones are also cloned, and must be descendants of the
@@ -41454,7 +41459,8 @@ function parallelTraverse(a, b, callback) {
 	callback(a, b);
 	for (let i = 0; i < a.children.length; i++) parallelTraverse(a.children[i], b.children[i], callback);
 }
-// node_modules/three/examples/jsm/loaders/GLTFLoader.js
+//#endregion
+//#region node_modules/three/examples/jsm/loaders/GLTFLoader.js
 /**
 * A loader for the glTF 2.0 format.
 *
@@ -43989,7 +43995,8 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
 		return primitiveDef.targets !== void 0 ? addMorphTargets(geometry, primitiveDef.targets, parser) : geometry;
 	});
 }
-// node_modules/three/examples/jsm/loaders/OBJLoader.js
+//#endregion
+//#region node_modules/three/examples/jsm/loaders/OBJLoader.js
 var _object_pattern = /^[og]\s*(.+)?/;
 var _material_library_pattern = /^mtllib /;
 var _material_use_pattern = /^usemtl /;
@@ -44451,7 +44458,8 @@ var OBJLoader = class extends Loader {
 		return container;
 	}
 };
-// node_modules/three/examples/jsm/libs/fflate.module.js
+//#endregion
+//#region node_modules/three/examples/jsm/libs/fflate.module.js
 /*!
 fflate - fast JavaScript compression/decompression
 <https://101arrowz.github.io/fflate>
@@ -44779,7 +44787,8 @@ var td = typeof TextDecoder != "undefined" && /*#__PURE__*/ new TextDecoder();
 try {
 	td.decode(et, { stream: true });
 } catch (e) {}
-// node_modules/three/examples/jsm/curves/NURBSUtils.js
+//#endregion
+//#region node_modules/three/examples/jsm/curves/NURBSUtils.js
 /**
 * @module NURBSUtils
 * @three_import import * as NURBSUtils from 'three/addons/curves/NURBSUtils.js';
@@ -45014,7 +45023,8 @@ function calcRationalCurveDerivatives(Pders) {
 function calcNURBSDerivatives(p, U, P, u, nd) {
 	return calcRationalCurveDerivatives(calcBSplineDerivatives(p, U, P, u, nd));
 }
-// node_modules/three/examples/jsm/curves/NURBSCurve.js
+//#endregion
+//#region node_modules/three/examples/jsm/curves/NURBSCurve.js
 /**
 * This class represents a NURBS curve.
 *
@@ -45128,7 +45138,8 @@ var NURBSCurve = class extends Curve {
 		return this;
 	}
 };
-// node_modules/three/examples/jsm/loaders/FBXLoader.js
+//#endregion
+//#region node_modules/three/examples/jsm/loaders/FBXLoader.js
 var FBXLoader_exports = /* @__PURE__ */ __exportAll({ FBXLoader: () => FBXLoader });
 var fbxTree;
 var connections;
@@ -47375,7 +47386,8 @@ function slice(a, b, from, to) {
 	for (let i = from, j = 0; i < to; i++, j++) a[j] = b[i];
 	return a;
 }
-// node_modules/three/examples/jsm/loaders/STLLoader.js
+//#endregion
+//#region node_modules/three/examples/jsm/loaders/STLLoader.js
 var STLLoader_exports = /* @__PURE__ */ __exportAll({ STLLoader: () => STLLoader });
 /**
 * A loader for the STL format, as created by Solidworks and other CAD programs.
@@ -47609,4 +47621,5 @@ var STLLoader = class extends Loader {
 		return isBinary(binData) ? parseBinary(binData) : parseASCII(ensureString(data));
 	}
 };
+//#endregion
 export { MeshStandardMaterial as A, Vector3 as B, LineBasicMaterial as C, MeshDepthMaterial as D, MeshBasicMaterial as E, SRGBColorSpace as F, Scene as I, SphereGeometry as L, PlaneGeometry as M, Raycaster as N, MeshNormalMaterial as O, RepeatWrapping as P, TextureLoader as R, Line as S, Mesh as T, DirectionalLight as _, OrbitControls as a, Group as b, WebGLRenderer as c, BoxHelper as d, BufferGeometry as f, CylinderGeometry as g, Color as h, GLTFLoader as i, PerspectiveCamera as j, MeshPhysicalMaterial as k, Box3 as l, CircleGeometry as m, FBXLoader_exports as n, GLTFExporter as o, CanvasTexture as p, OBJLoader as r, PMREMGenerator as s, STLLoader_exports as t, BoxGeometry as u, FogExp2 as v, MathUtils as w, HemisphereLight as x, GridHelper as y, Vector2 as z };

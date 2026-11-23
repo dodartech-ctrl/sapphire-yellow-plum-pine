@@ -4,7 +4,7 @@ import { n as lib_esm_exports, t as init_lib_esm } from "./fast-png+iobuffer+pak
 import { n as init_html2canvas_esm, t as html2canvas_esm_exports } from "./html2canvas.mjs";
 import { t as require_purify_cjs } from "./dompurify.mjs";
 import { t as require_lib } from "./canvg+[...].mjs";
-// node_modules/jspdf/dist/jspdf.node.min.js
+//#region node_modules/jspdf/dist/jspdf.node.min.js
 var require_jspdf_node_min = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	/** @license
 	*
@@ -18145,4 +18145,5 @@ var require_jspdf_node_min = /* @__PURE__ */ __commonJSMin(((exports, module) =>
 		}, e;
 	}(), exports.AcroForm = yt, exports.AcroFormAppearance = vt, exports.AcroFormButton = lt, exports.AcroFormCheckBox = pt, exports.AcroFormChoiceField = ot, exports.AcroFormComboBox = ct, exports.AcroFormEditBox = ut, exports.AcroFormListBox = st, exports.AcroFormPasswordField = mt, exports.AcroFormPushButton = ht, exports.AcroFormRadioButton = ft, exports.AcroFormTextField = gt, exports.GState = P, exports.ShadingPattern = F, exports.TilingPattern = I, exports.default = C, exports.jsPDF = C;
 }));
+//#endregion
 export { require_jspdf_node_min as t };

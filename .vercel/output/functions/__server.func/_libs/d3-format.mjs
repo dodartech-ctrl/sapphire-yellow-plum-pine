@@ -1,5 +1,5 @@
-// node_modules/d3-format/dist/d3-format.mjs
-function formatDecimal(x) {
+//#region node_modules/d3-format/src/formatDecimal.js
+function formatDecimal_default(x) {
 	return Math.abs(x = Math.round(x)) >= 1e21 ? x.toLocaleString("en").replace(/,/g, "") : x.toString(10);
 }
 function formatDecimalParts(x, p) {
@@ -7,10 +7,14 @@ function formatDecimalParts(x, p) {
 	var i = (x = p ? x.toExponential(p - 1) : x.toExponential()).indexOf("e"), coefficient = x.slice(0, i);
 	return [coefficient.length > 1 ? coefficient[0] + coefficient.slice(2) : coefficient, +x.slice(i + 1)];
 }
-function exponent(x) {
+//#endregion
+//#region node_modules/d3-format/src/exponent.js
+function exponent_default(x) {
 	return x = formatDecimalParts(Math.abs(x)), x ? x[1] : NaN;
 }
-function formatGroup(grouping, thousands) {
+//#endregion
+//#region node_modules/d3-format/src/formatGroup.js
+function formatGroup_default(grouping, thousands) {
 	return function(value, width) {
 		var i = value.length, t = [], j = 0, g = grouping[0], length = 0;
 		while (i > 0 && g > 0) {
@@ -22,13 +26,17 @@ function formatGroup(grouping, thousands) {
 		return t.reverse().join(thousands);
 	};
 }
-function formatNumerals(numerals) {
+//#endregion
+//#region node_modules/d3-format/src/formatNumerals.js
+function formatNumerals_default(numerals) {
 	return function(value) {
 		return value.replace(/[0-9]/g, function(i) {
 			return numerals[+i];
 		});
 	};
 }
+//#endregion
+//#region node_modules/d3-format/src/formatSpecifier.js
 var re = /^(?:(.)?([<>=^]))?([+\-( ])?([$#])?(0)?(\d+)?(,)?(\.\d+)?(~)?([a-z%])?$/i;
 function formatSpecifier(specifier) {
 	if (!(match = re.exec(specifier))) throw new Error("invalid format: " + specifier);
@@ -62,7 +70,9 @@ function FormatSpecifier(specifier) {
 FormatSpecifier.prototype.toString = function() {
 	return this.fill + this.align + this.sign + this.symbol + (this.zero ? "0" : "") + (this.width === void 0 ? "" : Math.max(1, this.width | 0)) + (this.comma ? "," : "") + (this.precision === void 0 ? "" : "." + Math.max(0, this.precision | 0)) + (this.trim ? "~" : "") + this.type;
 };
-function formatTrim(s) {
+//#endregion
+//#region node_modules/d3-format/src/formatTrim.js
+function formatTrim_default(s) {
 	out: for (var n = s.length, i = 1, i0 = -1, i1; i < n; ++i) switch (s[i]) {
 		case ".":
 			i0 = i1 = i;
@@ -77,37 +87,47 @@ function formatTrim(s) {
 	}
 	return i0 > 0 ? s.slice(0, i0) + s.slice(i1 + 1) : s;
 }
+//#endregion
+//#region node_modules/d3-format/src/formatPrefixAuto.js
 var prefixExponent;
-function formatPrefixAuto(x, p) {
+function formatPrefixAuto_default(x, p) {
 	var d = formatDecimalParts(x, p);
 	if (!d) return prefixExponent = void 0, x.toPrecision(p);
 	var coefficient = d[0], exponent = d[1], i = exponent - (prefixExponent = Math.max(-8, Math.min(8, Math.floor(exponent / 3))) * 3) + 1, n = coefficient.length;
 	return i === n ? coefficient : i > n ? coefficient + new Array(i - n + 1).join("0") : i > 0 ? coefficient.slice(0, i) + "." + coefficient.slice(i) : "0." + new Array(1 - i).join("0") + formatDecimalParts(x, Math.max(0, p + i - 1))[0];
 }
-function formatRounded(x, p) {
+//#endregion
+//#region node_modules/d3-format/src/formatRounded.js
+function formatRounded_default(x, p) {
 	var d = formatDecimalParts(x, p);
 	if (!d) return x + "";
 	var coefficient = d[0], exponent = d[1];
 	return exponent < 0 ? "0." + new Array(-exponent).join("0") + coefficient : coefficient.length > exponent + 1 ? coefficient.slice(0, exponent + 1) + "." + coefficient.slice(exponent + 1) : coefficient + new Array(exponent - coefficient.length + 2).join("0");
 }
-var formatTypes = {
+//#endregion
+//#region node_modules/d3-format/src/formatTypes.js
+var formatTypes_default = {
 	"%": (x, p) => (x * 100).toFixed(p),
 	"b": (x) => Math.round(x).toString(2),
 	"c": (x) => x + "",
-	"d": formatDecimal,
+	"d": formatDecimal_default,
 	"e": (x, p) => x.toExponential(p),
 	"f": (x, p) => x.toFixed(p),
 	"g": (x, p) => x.toPrecision(p),
 	"o": (x) => Math.round(x).toString(8),
-	"p": (x, p) => formatRounded(x * 100, p),
-	"r": formatRounded,
-	"s": formatPrefixAuto,
+	"p": (x, p) => formatRounded_default(x * 100, p),
+	"r": formatRounded_default,
+	"s": formatPrefixAuto_default,
 	"X": (x) => Math.round(x).toString(16).toUpperCase(),
 	"x": (x) => Math.round(x).toString(16)
 };
-function identity(x) {
+//#endregion
+//#region node_modules/d3-format/src/identity.js
+function identity_default(x) {
 	return x;
 }
+//#endregion
+//#region node_modules/d3-format/src/locale.js
 var map = Array.prototype.map;
 var prefixes = [
 	"y",
@@ -128,16 +148,16 @@ var prefixes = [
 	"Z",
 	"Y"
 ];
-function formatLocale(locale) {
-	var group = locale.grouping === void 0 || locale.thousands === void 0 ? identity : formatGroup(map.call(locale.grouping, Number), locale.thousands + ""), currencyPrefix = locale.currency === void 0 ? "" : locale.currency[0] + "", currencySuffix = locale.currency === void 0 ? "" : locale.currency[1] + "", decimal = locale.decimal === void 0 ? "." : locale.decimal + "", numerals = locale.numerals === void 0 ? identity : formatNumerals(map.call(locale.numerals, String)), percent = locale.percent === void 0 ? "%" : locale.percent + "", minus = locale.minus === void 0 ? "−" : locale.minus + "", nan = locale.nan === void 0 ? "NaN" : locale.nan + "";
+function locale_default(locale) {
+	var group = locale.grouping === void 0 || locale.thousands === void 0 ? identity_default : formatGroup_default(map.call(locale.grouping, Number), locale.thousands + ""), currencyPrefix = locale.currency === void 0 ? "" : locale.currency[0] + "", currencySuffix = locale.currency === void 0 ? "" : locale.currency[1] + "", decimal = locale.decimal === void 0 ? "." : locale.decimal + "", numerals = locale.numerals === void 0 ? identity_default : formatNumerals_default(map.call(locale.numerals, String)), percent = locale.percent === void 0 ? "%" : locale.percent + "", minus = locale.minus === void 0 ? "−" : locale.minus + "", nan = locale.nan === void 0 ? "NaN" : locale.nan + "";
 	function newFormat(specifier, options) {
 		specifier = formatSpecifier(specifier);
 		var fill = specifier.fill, align = specifier.align, sign = specifier.sign, symbol = specifier.symbol, zero = specifier.zero, width = specifier.width, comma = specifier.comma, precision = specifier.precision, trim = specifier.trim, type = specifier.type;
 		if (type === "n") comma = true, type = "g";
-		else if (!formatTypes[type]) precision === void 0 && (precision = 12), trim = true, type = "g";
+		else if (!formatTypes_default[type]) precision === void 0 && (precision = 12), trim = true, type = "g";
 		if (zero || fill === "0" && align === "=") zero = true, fill = "0", align = "=";
 		var prefix = (options && options.prefix !== void 0 ? options.prefix : "") + (symbol === "$" ? currencyPrefix : symbol === "#" && /[boxX]/.test(type) ? "0" + type.toLowerCase() : ""), suffix = (symbol === "$" ? currencySuffix : /[%p]/.test(type) ? percent : "") + (options && options.suffix !== void 0 ? options.suffix : "");
-		var formatType = formatTypes[type], maybeSuffix = /[defgprs%]/.test(type);
+		var formatType = formatTypes_default[type], maybeSuffix = /[defgprs%]/.test(type);
 		precision = precision === void 0 ? 6 : /[gprs]/.test(type) ? Math.max(1, Math.min(21, precision)) : Math.max(0, Math.min(20, precision));
 		function format(value) {
 			var valuePrefix = prefix, valueSuffix = suffix, i, n, c;
@@ -148,7 +168,7 @@ function formatLocale(locale) {
 				value = +value;
 				var valueNegative = value < 0 || 1 / value < 0;
 				value = isNaN(value) ? nan : formatType(Math.abs(value), precision);
-				if (trim) value = formatTrim(value);
+				if (trim) value = formatTrim_default(value);
 				if (valueNegative && +value === 0 && sign !== "+") valueNegative = false;
 				valuePrefix = (valueNegative ? sign === "(" ? sign : minus : sign === "-" || sign === "(" ? "" : sign) + valuePrefix;
 				valueSuffix = (type === "s" && !isNaN(value) && prefixExponent !== void 0 ? prefixes[8 + prefixExponent / 3] : "") + valueSuffix + (valueNegative && sign === "(" ? ")" : "");
@@ -184,7 +204,7 @@ function formatLocale(locale) {
 		return format;
 	}
 	function formatPrefix(specifier, value) {
-		var e = Math.max(-8, Math.min(8, Math.floor(exponent(value) / 3))) * 3, k = Math.pow(10, -e), f = newFormat((specifier = formatSpecifier(specifier), specifier.type = "f", specifier), { suffix: prefixes[8 + e / 3] });
+		var e = Math.max(-8, Math.min(8, Math.floor(exponent_default(value) / 3))) * 3, k = Math.pow(10, -e), f = newFormat((specifier = formatSpecifier(specifier), specifier.type = "f", specifier), { suffix: prefixes[8 + e / 3] });
 		return function(value) {
 			return f(k * value);
 		};
@@ -194,6 +214,8 @@ function formatLocale(locale) {
 		formatPrefix
 	};
 }
+//#endregion
+//#region node_modules/d3-format/src/defaultLocale.js
 var locale;
 var format;
 var formatPrefix;
@@ -203,19 +225,26 @@ defaultLocale({
 	currency: ["$", ""]
 });
 function defaultLocale(definition) {
-	locale = formatLocale(definition);
+	locale = locale_default(definition);
 	format = locale.format;
 	formatPrefix = locale.formatPrefix;
 	return locale;
 }
-function precisionFixed(step) {
-	return Math.max(0, -exponent(Math.abs(step)));
+//#endregion
+//#region node_modules/d3-format/src/precisionFixed.js
+function precisionFixed_default(step) {
+	return Math.max(0, -exponent_default(Math.abs(step)));
 }
-function precisionPrefix(step, value) {
-	return Math.max(0, Math.max(-8, Math.min(8, Math.floor(exponent(value) / 3))) * 3 - exponent(Math.abs(step)));
+//#endregion
+//#region node_modules/d3-format/src/precisionPrefix.js
+function precisionPrefix_default(step, value) {
+	return Math.max(0, Math.max(-8, Math.min(8, Math.floor(exponent_default(value) / 3))) * 3 - exponent_default(Math.abs(step)));
 }
-function precisionRound(step, max) {
+//#endregion
+//#region node_modules/d3-format/src/precisionRound.js
+function precisionRound_default(step, max) {
 	step = Math.abs(step), max = Math.abs(max) - step;
-	return Math.max(0, exponent(max) - exponent(step)) + 1;
+	return Math.max(0, exponent_default(max) - exponent_default(step)) + 1;
 }
-export { precisionPrefix as a, precisionFixed as i, formatPrefix as n, precisionRound as o, formatSpecifier as r, format as t };
+//#endregion
+export { formatPrefix as a, format as i, precisionPrefix_default as n, formatSpecifier as o, precisionFixed_default as r, precisionRound_default as t };

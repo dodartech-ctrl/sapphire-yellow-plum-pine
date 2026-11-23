@@ -1,4 +1,4 @@
-// node_modules/@radix-ui/primitive/dist/index.mjs
+//#region node_modules/@radix-ui/primitive/dist/index.mjs
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", {
 	value,
@@ -40,4 +40,5 @@ function isFrame(element) {
 	return element.tagName === "IFRAME";
 }
 __name(isFrame, "isFrame");
+//#endregion
 export { composeEventHandlers as t };

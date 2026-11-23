@@ -1,7 +1,7 @@
 import { i as __require, t as __commonJSMin } from "../_runtime.mjs";
-// node_modules/agent-base/dist/helpers.js
-var require_helpers = /* @__PURE__ */ __commonJSMin(((exports, module, this$2) => {
-	var __createBinding = this$2 && this$2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+//#region node_modules/agent-base/dist/helpers.js
+var require_helpers = /* @__PURE__ */ __commonJSMin(((exports) => {
+	var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
 		if (k2 === void 0) k2 = k;
 		var desc = Object.getOwnPropertyDescriptor(m, k);
 		if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) desc = {
@@ -15,7 +15,7 @@ var require_helpers = /* @__PURE__ */ __commonJSMin(((exports, module, this$2) =
 		if (k2 === void 0) k2 = k;
 		o[k2] = m[k];
 	}));
-	var __setModuleDefault = this$2 && this$2.__setModuleDefault || (Object.create ? (function(o, v) {
+	var __setModuleDefault = exports && exports.__setModuleDefault || (Object.create ? (function(o, v) {
 		Object.defineProperty(o, "default", {
 			enumerable: true,
 			value: v
@@ -23,7 +23,7 @@ var require_helpers = /* @__PURE__ */ __commonJSMin(((exports, module, this$2) =
 	}) : function(o, v) {
 		o["default"] = v;
 	});
-	var __importStar = this$2 && this$2.__importStar || function(mod) {
+	var __importStar = exports && exports.__importStar || function(mod) {
 		if (mod && mod.__esModule) return mod;
 		var result = {};
 		if (mod != null) {
@@ -34,7 +34,7 @@ var require_helpers = /* @__PURE__ */ __commonJSMin(((exports, module, this$2) =
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.req = exports.json = exports.toBuffer = void 0;
-	var http = __importStar(__require("http"));
+	var http$1 = __importStar(__require("http"));
 	var https = __importStar(__require("https"));
 	async function toBuffer(stream) {
 		let length = 0;
@@ -58,7 +58,7 @@ var require_helpers = /* @__PURE__ */ __commonJSMin(((exports, module, this$2) =
 	}
 	exports.json = json;
 	function req(url, opts = {}) {
-		const req = ((typeof url === "string" ? url : url.href).startsWith("https:") ? https : http).request(url, opts);
+		const req = ((typeof url === "string" ? url : url.href).startsWith("https:") ? https : http$1).request(url, opts);
 		const promise = new Promise((resolve, reject) => {
 			req.once("response", resolve).once("error", reject).end();
 		});
@@ -67,9 +67,10 @@ var require_helpers = /* @__PURE__ */ __commonJSMin(((exports, module, this$2) =
 	}
 	exports.req = req;
 }));
-// node_modules/agent-base/dist/index.js
-var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
-	var __createBinding = this$1 && this$1.__createBinding || (Object.create ? (function(o, m, k, k2) {
+//#endregion
+//#region node_modules/agent-base/dist/index.js
+var require_dist = /* @__PURE__ */ __commonJSMin(((exports) => {
+	var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
 		if (k2 === void 0) k2 = k;
 		var desc = Object.getOwnPropertyDescriptor(m, k);
 		if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) desc = {
@@ -83,7 +84,7 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 		if (k2 === void 0) k2 = k;
 		o[k2] = m[k];
 	}));
-	var __setModuleDefault = this$1 && this$1.__setModuleDefault || (Object.create ? (function(o, v) {
+	var __setModuleDefault = exports && exports.__setModuleDefault || (Object.create ? (function(o, v) {
 		Object.defineProperty(o, "default", {
 			enumerable: true,
 			value: v
@@ -91,7 +92,7 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 	}) : function(o, v) {
 		o["default"] = v;
 	});
-	var __importStar = this$1 && this$1.__importStar || function(mod) {
+	var __importStar = exports && exports.__importStar || function(mod) {
 		if (mod && mod.__esModule) return mod;
 		var result = {};
 		if (mod != null) {
@@ -100,8 +101,8 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 		__setModuleDefault(result, mod);
 		return result;
 	};
-	var __exportStar = this$1 && this$1.__exportStar || function(m, exports) {
-		for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+	var __exportStar = exports && exports.__exportStar || function(m, exports$1) {
+		for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports$1, p)) __createBinding(exports$1, m, p);
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.Agent = void 0;
@@ -191,4 +192,5 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module, this$1) => {
 	};
 	exports.Agent = Agent;
 }));
+//#endregion
 export { require_dist as t };
