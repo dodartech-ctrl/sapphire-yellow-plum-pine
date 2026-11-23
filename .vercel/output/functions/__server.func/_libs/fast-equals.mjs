@@ -1,4 +1,4 @@
-// node_modules/fast-equals/dist/es/index.mjs
+//#region node_modules/fast-equals/dist/es/index.mjs
 var { getOwnPropertyNames, getOwnPropertySymbols } = Object;
 var { hasOwnProperty } = Object.prototype;
 /**
@@ -55,13 +55,7 @@ function sameValueZeroEqual(a, b) {
 var PREACT_VNODE = "__v";
 var PREACT_OWNER = "__o";
 var REACT_OWNER = "_owner";
-/**
-* Above this many keys, out-of-position keys are checked with `propertyIsEnumerable` rather than by
-* scanning the other object's keys. Measured in V8: scanning wins up to 50 keys and loses from 100.
-*/
-var MAX_SCANNED_PROPERTIES = 64;
 var { getOwnPropertyDescriptor, keys } = Object;
-var { propertyIsEnumerable } = Object.prototype;
 /**
 * Identify the element type of TypedArrays across realms and subclasses.
 */
@@ -95,58 +89,15 @@ function areDatesEqual(a, b) {
 }
 /**
 * Whether the errors passed are equal in value.
-*
-* @note
-* `name`, `message` and `stack` are own properties but are not enumerable, so they are compared
-* explicitly. `cause` and `errors` are compared by value rather than by reference, matching how
-* every other nested value in the comparison is treated. They are compared exactly once, regardless
-* of whether they were assigned (enumerable) or set by the constructor (non-enumerable). Other own
-* enumerable properties (which custom `Error` subclasses commonly add) are compared afterward.
-*
-* The own property comparison is inlined rather than extracted, which measured faster in V8 when
-* recursing through `cause`. Keep the bytecode under V8's 460-byte TurboFan inlining limit (383 bytes
-* at time of writing; check with `node --print-bytecode --print-bytecode-filter=areErrorsEqual`), or
-* this stops being inlined into its callers.
 */
 function areErrorsEqual(a, b, state) {
-	if (a.name !== b.name || a.message !== b.message || a.stack !== b.stack) return false;
-	const causeA = a.cause;
-	const causeB = b.cause;
-	if (causeA !== causeB && !state.equals(causeA, causeB, "cause", "cause", a, b, state)) return false;
-	const errorsA = a.errors;
-	const errorsB = b.errors;
-	if (errorsA !== errorsB && !state.equals(errorsA, errorsB, "errors", "errors", a, b, state)) return false;
-	const propertiesA = keys(a);
-	const propertiesB = keys(b);
-	let index = propertiesA.length;
-	if (!index && !propertiesB.length) return true;
-	let compared = 0;
-	let property;
-	while (index-- > 0) {
-		property = propertiesA[index];
-		if (property === "cause" || property === "errors") continue;
-		if (property !== propertiesB[index] && !propertyIsEnumerable.call(b, property) || !state.equals(a[property], b[property], property, property, a, b, state)) return false;
-		++compared;
-	}
-	const remaining = propertiesB.length - compared;
-	return !remaining || remaining === (propertyIsEnumerable.call(b, "cause") ? 1 : 0) + (propertyIsEnumerable.call(b, "errors") ? 1 : 0);
+	return a.name === b.name && a.message === b.message && a.stack === b.stack && state.equals(a.cause, b.cause, "cause", "cause", a, b, state);
 }
 /**
 * Whether the functions passed are equal in value.
 */
 function areFunctionsEqual(a, b) {
 	return a === b;
-}
-/**
-* Whether the errors passed are equal in value.
-*
-* @note
-* `name`, `message` and `stack` are own properties but are not enumerable, so they are compared
-* explicitly. `cause` and `errors` are own properties, so `areObjectsEqualStrict` compares them along
-* with every other own property; they are not compared explicitly to avoid comparing them twice.
-*/
-function areErrorsEqualStrict(a, b, state) {
-	return a.name === b.name && a.message === b.message && a.stack === b.stack && areObjectsEqualStrict(a, b, state);
 }
 /**
 * Whether the `Map`s are equal in value.
@@ -193,16 +144,9 @@ var areNumbersEqual = sameValueZeroEqual;
 */
 function areObjectsEqual(a, b, state) {
 	const properties = keys(a);
-	const propertiesB = keys(b);
 	let index = properties.length;
-	if (propertiesB.length !== index) return false;
-	const isScannable = index <= MAX_SCANNED_PROPERTIES;
-	let property;
-	while (index-- > 0) {
-		property = properties[index];
-		if (isReactProperty(a, b, property)) continue;
-		if (property !== propertiesB[index] && !(isScannable ? propertiesB.includes(property) : propertyIsEnumerable.call(b, property)) || !state.equals(a[property], b[property], property, property, a, b, state)) return false;
-	}
+	if (keys(b).length !== index) return false;
+	while (index-- > 0) if (!isPropertyEqual(a, b, state, properties[index])) return false;
 	return true;
 }
 /**
@@ -217,7 +161,7 @@ function areObjectsEqualStrict(a, b, state) {
 	let descriptorB;
 	while (index-- > 0) {
 		property = properties[index];
-		if (!isReactProperty(a, b, property) && (!hasOwn(b, property) || !state.equals(a[property], b[property], property, property, a, b, state))) return false;
+		if (!isPropertyEqual(a, b, state, property)) return false;
 		descriptorA = getOwnPropertyDescriptor(a, property);
 		descriptorB = getOwnPropertyDescriptor(b, property);
 		if ((descriptorA || descriptorB) && (!descriptorA || !descriptorB || descriptorA.configurable !== descriptorB.configurable || descriptorA.enumerable !== descriptorB.enumerable || descriptorA.writable !== descriptorB.writable)) return false;
@@ -309,8 +253,9 @@ function areSearchParamsEqual(a, b) {
 function sortSearchParams(serialized) {
 	return serialized.split("&").sort().join("&");
 }
-function isReactProperty(a, b, property) {
-	return (property === REACT_OWNER || property === PREACT_OWNER || property === PREACT_VNODE) && !!(a.$$typeof || b.$$typeof);
+function isPropertyEqual(a, b, state, property) {
+	if ((property === REACT_OWNER || property === PREACT_OWNER || property === PREACT_VNODE) && (a.$$typeof || b.$$typeof)) return true;
+	return hasOwn(b, property) && state.equals(a[property], b[property], property, property, a, b, state);
 }
 var ARRAY_BUFFER_TAG = "[object ArrayBuffer]";
 var ARGUMENTS_TAG = "[object Arguments]";
@@ -399,7 +344,7 @@ function createEqualityComparatorConfig({ circular, createCustomConfig, strict }
 		areArraysEqual: strict ? areObjectsEqualStrict : areArraysEqual,
 		areDataViewsEqual,
 		areDatesEqual,
-		areErrorsEqual: strict ? areErrorsEqualStrict : areErrorsEqual,
+		areErrorsEqual: strict ? combineComparators(areErrorsEqual, areObjectsEqualStrict) : combineComparators(areErrorsEqual, areObjectsEqual),
 		areFunctionsEqual,
 		areMapsEqual: strict ? combineComparators(areMapsEqual, areObjectsEqualStrict) : areMapsEqual,
 		areNumbersEqual,
@@ -511,4 +456,5 @@ function createCustomEqual(options = {}) {
 		strict
 	});
 }
+//#endregion
 export { deepEqual as t };

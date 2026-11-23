@@ -1,6 +1,6 @@
 import { n as __esmMin } from "../_runtime.mjs";
 import { a as init_fetch_blob, i as Blob, n as File, r as init_file } from "./fetch-blob+[...].mjs";
-// node_modules/formdata-polyfill/esm.min.js
+//#region node_modules/formdata-polyfill/esm.min.js
 /*! formdata-polyfill. MIT License. Jimmy Wärting <https://jimmy.warting.se/opensource> */
 /** @param {FormData} F */
 function formDataToBlob(F, B = Blob) {
@@ -82,4 +82,5 @@ var init_esm_min = __esmMin((() => {
 		}
 	};
 }));
+//#endregion
 export { formDataToBlob as n, init_esm_min as r, FormData as t };

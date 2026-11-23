@@ -1,5 +1,5 @@
 import { n as __esmMin } from "../_runtime.mjs";
-// node_modules/data-uri-to-buffer/dist/index.js
+//#region node_modules/data-uri-to-buffer/dist/index.js
 /**
 * Returns a `Buffer` instance from the given data URI `uri`.
 *
@@ -35,4 +35,5 @@ function dataUriToBuffer(uri) {
 	return buffer;
 }
 var init_dist = __esmMin((() => {}));
+//#endregion
 export { init_dist as n, dataUriToBuffer as t };

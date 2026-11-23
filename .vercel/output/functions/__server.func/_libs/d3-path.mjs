@@ -1,4 +1,4 @@
-// node_modules/d3-path/dist/d3-path.mjs
+//#region node_modules/d3-path/src/path.js
 var pi = Math.PI;
 var tau = 2 * pi;
 var epsilon = 1e-6;
@@ -17,26 +17,11 @@ function appendRound(digits) {
 		for (let i = 1, n = strings.length; i < n; ++i) this._ += Math.round(arguments[i] * k) / k + strings[i];
 	};
 }
-function equal(x0, y0, x1, y1) {
-	return x0 === x1 && y0 === y1;
-}
-function equalRound(digits) {
-	const d = Math.floor(digits);
-	if (!(d <= 15)) return equal;
-	const k = 10 ** d;
-	const r = function(value) {
-		return Math.round(value * k);
-	};
-	return function(x0, y0, x1, y1) {
-		return r(x0) === r(x1) && r(y0) === r(y1);
-	};
-}
 var Path = class {
 	constructor(digits) {
 		this._x0 = this._y0 = this._x1 = this._y1 = null;
 		this._ = "";
 		this._append = digits == null ? append : appendRound(digits);
-		this._equal = digits == null ? equal : equalRound(digits);
 	}
 	moveTo(x, y) {
 		this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}`;
@@ -78,16 +63,7 @@ var Path = class {
 		if (!r) return;
 		if (da < 0) da = da % tau + tau;
 		if (da > tauEpsilon) this._append`A${r},${r},0,1,${cw},${x - dx},${y - dy}A${r},${r},0,1,${cw},${this._x1 = x0},${this._y1 = y0}`;
-		else if (da > epsilon) {
-			const x1 = x + r * Math.cos(a1);
-			const y1 = y + r * Math.sin(a1);
-			if (da >= pi && this._equal(x0, y0, x1, y1)) {
-				da /= 2;
-				let a00 = a0 + da;
-				this._append`A${r},${r},0,${+(da >= pi)},${cw},${x + r * Math.cos(a00)},${y + r * Math.sin(a00)}`;
-			}
-			this._append`A${r},${r},0,${+(da >= pi)},${cw},${this._x1 = x1},${this._y1 = y1}`;
-		}
+		else if (da > epsilon) this._append`A${r},${r},0,${+(da >= pi)},${cw},${this._x1 = x + r * Math.cos(a1)},${this._y1 = y + r * Math.sin(a1)}`;
 	}
 	rect(x, y, w, h) {
 		this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}h${w = +w}v${+h}h${-w}Z`;
@@ -100,4 +76,5 @@ function path() {
 	return new Path();
 }
 path.prototype = Path.prototype;
+//#endregion
 export { Path as t };
