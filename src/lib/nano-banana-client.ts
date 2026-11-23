@@ -90,9 +90,9 @@ export interface NanoBananaStudioConfig {
 }
 
 export const DEFAULT_NANO_BANANA_CONFIG: NanoBananaStudioConfig = {
-  requestedModel: "auto",
+  requestedModel: "nano_banana_2_1",
   generationMode: "text_to_image",
-  resolution: "2K",
+  resolution: "1K",
   aspectRatio: "16:9",
   buildingType: "modern_villa",
   architecturalStyle: "contemporary",

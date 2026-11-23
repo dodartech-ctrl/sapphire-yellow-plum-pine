@@ -40,17 +40,52 @@ import {
   resolveRuntimeModelOverride,
   type OrchestrationResponseClient,
 } from "@/lib/nano-banana-client";
+import { compileSentencePrompt } from "@/lib/presets-catalog";
+import { rewritePromptForUploadedImage } from "@/lib/preset-transform";
+import { formatPaiseShort } from "@/lib/budget-guard";
 import { useOriel } from "@/lib/store";
 
 let queueStopRequested = false;
 let renderSequence = 0;
 
+function resolveEffectiveStudioPrompt(
+  st: ReturnType<typeof useOriel.getState>,
+  rawOverride?: string,
+): string {
+  const baseText = (rawOverride ?? st.idea).trim();
+  const hasMatrixPills = st.activePresetIds.length > 0 || st.negativePresetIds.length > 0;
+  let merged = baseText;
+  if (hasMatrixPills) {
+    const compiled = compileSentencePrompt({
+      baseIdea: baseText,
+      activePresetIds: st.activePresetIds,
+      negativePresetIds: st.negativePresetIds,
+      presetStrengths: st.presetStrengths,
+      questionPicks: st.questionPicks,
+      design: st.design,
+      engine: st.engine,
+      preserveClause: st.designContract.lockedPreserve ? st.designContract.preserveClause : undefined,
+    });
+    merged = compiled.sentence;
+  }
+  return rewritePromptForUploadedImage(merged || `${st.design.look} ${st.design.vertical} architectural finish`, {
+    hasUpload: Boolean(st.upload),
+    design: st.design,
+    preserveClause: st.designContract.lockedPreserve ? st.designContract.preserveClause : undefined,
+  });
+}
+
 async function compactPayloadDataUrl(value: string | null | undefined, maxLength = 2_200_000): Promise<string | undefined> {
-  if (!value || !value.startsWith("data:image/")) return undefined;
-  if (value.length <= maxLength || typeof document === "undefined") return value;
+  if (!value) return undefined;
+  const isDataImage = value.startsWith("data:image/");
+  if (isDataImage && (value.length <= maxLength || typeof document === "undefined")) return value;
+  if (typeof document === "undefined") return undefined;
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
+      if (!isDataImage && !value.startsWith("blob:")) {
+        el.crossOrigin = "anonymous";
+      }
       el.onload = () => resolve(el);
       el.onerror = () => reject(new Error("decode failed"));
       el.src = value;
@@ -61,12 +96,13 @@ async function compactPayloadDataUrl(value: string | null | undefined, maxLength
     canvas.width = Math.max(1, Math.round((img.naturalWidth || 1280) * scale));
     canvas.height = Math.max(1, Math.round((img.naturalHeight || 720) * scale));
     const ctx = canvas.getContext("2d");
-    if (!ctx) return value;
+    if (!ctx) return isDataImage ? value : undefined;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const compacted = canvas.toDataURL("image/jpeg", 0.84);
+    const compacted = canvas.toDataURL("image/jpeg", 0.86);
+    if (!isDataImage) return compacted;
     return compacted.length < value.length ? compacted : value;
   } catch {
-    return value;
+    return isDataImage ? value : undefined;
   }
 }
 
@@ -116,12 +152,13 @@ export function useGenerate() {
   async function buildConditioningPayload() {
     const st = useOriel.getState();
     const activeStyle = st.houseStyles.find((h) => h.id === st.engine.houseStyleId);
+    const hasUploadedPhoto = Boolean(st.upload);
     const [depthImage, normalImage, clayImage, annotatorImage, styleRefImage, materialRefImage, lightingRefImage] =
       await Promise.all([
-        compactPayloadDataUrl(st.conditioningChannels.depth),
-        compactPayloadDataUrl(st.conditioningChannels.normal),
-        compactPayloadDataUrl(st.conditioningChannels.clay),
-        compactPayloadDataUrl(st.conditioningChannels.annotator),
+        hasUploadedPhoto ? Promise.resolve(undefined) : compactPayloadDataUrl(st.conditioningChannels.depth),
+        hasUploadedPhoto ? Promise.resolve(undefined) : compactPayloadDataUrl(st.conditioningChannels.normal),
+        hasUploadedPhoto ? Promise.resolve(undefined) : compactPayloadDataUrl(st.conditioningChannels.clay),
+        hasUploadedPhoto ? Promise.resolve(undefined) : compactPayloadDataUrl(st.conditioningChannels.annotator),
         compactPayloadDataUrl(st.engine.refMatrix.massing.url ?? st.engine.ipAdapterRefUrl),
         compactPayloadDataUrl(st.engine.refMatrix.material.url),
         compactPayloadDataUrl(st.engine.refMatrix.lighting.url),
@@ -150,12 +187,13 @@ export function useGenerate() {
       return;
     }
     const { studyId, templateId, sourceId } = resolveRefs();
+    const resolvedPrompt = resolveEffectiveStudioPrompt(st);
     const note =
       mode === "variation"
-        ? `${st.idea} Offer one distinct alternative. Keep the same brief.`.trim()
-        : st.idea;
+        ? `${resolvedPrompt} Offer one distinct material or lighting variation while preserving the exact same geometry.`.trim()
+        : resolvedPrompt;
     st.setBusy(true);
-    st.pushChat("you", note || `${st.design.vertical} plate`);
+    st.pushChat("you", st.idea.trim() || `${st.design.vertical} plate`);
     try {
       const [compactImage, compactSketch, compactMask, conditioning] = await Promise.all([
         compactPayloadDataUrl(st.upload),
@@ -180,12 +218,21 @@ export function useGenerate() {
           scene3d: st.scene3d,
           nanoBananaModel: resolveRuntimeModelOverride(st.nanoBanana.requestedModel),
           nanoBananaResolution:
-            st.nanoBanana.resolution === "1K" || st.nanoBanana.resolution === "2K" || st.nanoBanana.resolution === "4K"
+            st.nanoBanana.resolution === "512" ||
+            st.nanoBanana.resolution === "1K" ||
+            st.nanoBanana.resolution === "2K" ||
+            st.nanoBanana.resolution === "4K"
               ? st.nanoBanana.resolution
-              : undefined,
+              : "1K",
+          budgetCostMode: st.budget.costMode,
+          budgetCapPaise: st.budget.capPaise,
+          budgetMaxPerImagePaise: st.budget.maxPerImagePaise,
         },
       });
       st.setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        st.setBudgetState(result.budget);
+      }
       if (!st.engine.seedLocked && typeof result.seed === "number") {
         st.setEngineField("seed", result.seed);
       }
@@ -221,16 +268,17 @@ export function useGenerate() {
         text: result.summary ?? (note || "Rendered architectural plate"),
       });
       window.dispatchEvent(new CustomEvent("oriel-view", { detail: "result" }));
+      const costTag = formatPaiseShort(result.costPaise);
       st.pushChat(
         "studio",
         result.fallback
-          ? `Studio preview plate ready (Seed #${result.seed}).`
-          : `Plate is ready. ${result.credits.toLocaleString()} credits left.`,
+          ? `Free (0p) Studio preview ready (Seed #${result.seed}).`
+          : `Nano Banana 2.1 plate ready (${costTag} billed · ${result.credits.toLocaleString()} CR left).`,
       );
       if ("warning" in result && typeof result.warning === "string" && result.warning) {
         toast.message(result.warning);
       } else {
-        toast.success(result.fallback ? "Studio preview plate rendered" : "Plate rendered");
+        toast.success(result.fallback ? "Free (₹0) Studio preview rendered" : `Plate rendered (${costTag})`);
       }
       if (pathname !== "/") void navigate({ to: "/" });
     } catch (error) {
@@ -282,11 +330,12 @@ export function useGenerate() {
         compactPayloadDataUrl(st.sketchDataUrl),
         buildConditioningPayload(),
       ]);
+      const gridPrompt = resolveEffectiveStudioPrompt(st);
       const result = await generateVariations({
         data: {
           templateId,
           studyId,
-          idea: st.idea,
+          idea: gridPrompt,
           image: compactImage,
           sketchImage: compactSketch,
           ...conditioning,
@@ -296,9 +345,23 @@ export function useGenerate() {
           frame: st.frame,
           engine: st.engine,
           scene3d: st.scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(st.nanoBanana.requestedModel),
+          nanoBananaResolution:
+            st.nanoBanana.resolution === "512" ||
+            st.nanoBanana.resolution === "1K" ||
+            st.nanoBanana.resolution === "2K" ||
+            st.nanoBanana.resolution === "4K"
+              ? st.nanoBanana.resolution
+              : "1K",
+          budgetCostMode: st.budget.costMode,
+          budgetCapPaise: st.budget.capPaise,
+          budgetMaxPerImagePaise: st.budget.maxPerImagePaise,
         },
       });
       st.setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        st.setBudgetState(result.budget);
+      }
       const iteration = renderSequence++;
       let urls = result.urls;
       if (result.fallback) {
@@ -388,6 +451,7 @@ export function useGenerate() {
           : inpaintNote || (engine.iopaintTask === "erase" ? "Clean object removal" : idea);
 
       const conditioning = await buildConditioningPayload();
+      const curBudget = useOriel.getState().budget;
       const result = await inpaintPlate({
         data: {
           idea: effectiveNote,
@@ -401,9 +465,17 @@ export function useGenerate() {
           frame,
           engine,
           scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(useOriel.getState().nanoBanana.requestedModel),
+          nanoBananaResolution: "1K",
+          budgetCostMode: curBudget.costMode,
+          budgetCapPaise: curBudget.capPaise,
+          budgetMaxPerImagePaise: curBudget.maxPerImagePaise,
         },
       });
       setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        useOriel.getState().setBudgetState(result.budget);
+      }
 
       let finalUrl = result.url;
       if (result.fallback) {
@@ -630,6 +702,7 @@ export function useGenerate() {
     const { sourceId } = resolveRefs();
     setBusy(true);
     try {
+      const curBudget = useOriel.getState().budget;
       const result = await enhancePlate({
         data: {
           idea,
@@ -640,9 +713,17 @@ export function useGenerate() {
           frame,
           engine: nextEngine,
           scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(useOriel.getState().nanoBanana.requestedModel),
+          nanoBananaResolution: "1K",
+          budgetCostMode: curBudget.costMode,
+          budgetCapPaise: curBudget.capPaise,
+          budgetMaxPerImagePaise: curBudget.maxPerImagePaise,
         },
       });
       setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        useOriel.getState().setBudgetState(result.budget);
+      }
       const finalUrl = result.fallback
         ? await runTiledUpscalePass(targetBase, nextFactor, engine.esrganModel, engine.esrganDenoise, engine.esrganFaceEnhance)
         : result.url;
@@ -684,6 +765,7 @@ export function useGenerate() {
     setBusy(true);
     try {
       const conditioning = await buildConditioningPayload();
+      const curBudget = useOriel.getState().budget;
       const result = await relightPlate({
         data: {
           idea,
@@ -695,9 +777,17 @@ export function useGenerate() {
           frame,
           engine: nextEngine,
           scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(useOriel.getState().nanoBanana.requestedModel),
+          nanoBananaResolution: "1K",
+          budgetCostMode: curBudget.costMode,
+          budgetCapPaise: curBudget.capPaise,
+          budgetMaxPerImagePaise: curBudget.maxPerImagePaise,
         },
       });
       setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        useOriel.getState().setBudgetState(result.budget);
+      }
       const finalUrl = result.fallback ? await runRelightWeatherPass(targetBase, preset) : result.url;
       setPlate({
         url: finalUrl,
@@ -733,6 +823,7 @@ export function useGenerate() {
     const { sourceId } = resolveRefs();
     setBusy(true);
     try {
+      const curBudget = useOriel.getState().budget;
       const result = await outpaintPlate({
         data: {
           idea,
@@ -743,9 +834,17 @@ export function useGenerate() {
           frame,
           engine: nextEngine,
           scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(useOriel.getState().nanoBanana.requestedModel),
+          nanoBananaResolution: "1K",
+          budgetCostMode: curBudget.costMode,
+          budgetCapPaise: curBudget.capPaise,
+          budgetMaxPerImagePaise: curBudget.maxPerImagePaise,
         },
       });
       setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        useOriel.getState().setBudgetState(result.budget);
+      }
       const finalUrl = result.fallback ? await runClientOutpaintCanvas(targetBase, ratio) : result.url;
       setPlate({
         url: finalUrl,
@@ -977,9 +1076,12 @@ export function useGenerate() {
         (v) => v && v !== "Unchanged" && v !== "None" && v !== "Keep",
       );
 
-      const promptText =
-        (options?.promptOverride ?? st.idea).trim() ||
-        `Transform architectural scene into ${nb.architecturalStyle.replace(/_/g, " ")} ${nb.buildingType.replace(/_/g, " ")} with ${st.design.light.toLowerCase()} lighting.`;
+      const promptText = resolveEffectiveStudioPrompt(
+        st,
+        options?.promptOverride ??
+          (st.idea.trim() ||
+            `Transform architectural scene into ${nb.architecturalStyle.replace(/_/g, " ")} ${nb.buildingType.replace(/_/g, " ")} with ${st.design.light.toLowerCase()} lighting.`),
+      );
 
       const res = await callNanoBananaApi(endpoint, {
         projectId: "default-studio",

@@ -11,6 +11,7 @@ import {
   Sparkles,
   Sun,
   Unlock,
+  Upload,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -18,8 +19,9 @@ import { ResilientPlateImage } from "@/components/resilient-plate-image";
 import { Viewport3D } from "@/components/viewport-3d";
 import { ATELIER_VERTICAL_HERO } from "@/lib/atelier-studio";
 import type { CameraPreset3D } from "@/lib/engines";
-import { RATIOS, frameAspect } from "@/lib/frame";
+import { RATIOS, frameAspect, frameEdge } from "@/lib/frame";
 import { NANO_BANANA_MODEL_OPTIONS } from "@/lib/nano-banana-client";
+import { readImage } from "@/lib/read-image";
 import { useOriel } from "@/lib/store";
 import { useGenerate } from "@/lib/use-generate";
 import { cn } from "@/lib/utils";
@@ -27,6 +29,7 @@ import { cn } from "@/lib/utils";
 type SplitViewportStageProps = {
   onOpenGateModal: () => void;
   onOpenStage: (stage: "source" | "3d" | "sketch" | "cv" | "sam2" | "mask" | "result" | "grid" | "compare" | "360" | "nodes") => void;
+  onUploadFile?: (file: File | undefined) => void;
   heroFit?: boolean;
   showOpticsDock?: boolean;
   hideTopBar?: boolean;
@@ -36,6 +39,7 @@ type SplitViewportStageProps = {
 export function SplitViewportStage({
   onOpenGateModal,
   onOpenStage,
+  onUploadFile,
   heroFit = false,
   showOpticsDock = false,
   hideTopBar = false,
@@ -58,16 +62,35 @@ export function SplitViewportStage({
   const updateDesignContract = useOriel((s) => s.updateDesignContract);
   const fidelityReport = useOriel((s) => s.fidelityReport);
   const applyWorkflowPreset = useOriel((s) => s.applyWorkflowPreset);
+  const budget = useOriel((s) => s.budget);
+  const nanoBanana = useOriel((s) => s.nanoBanana);
   const { busy } = useGenerate();
 
   const [internalContractOpen, setInternalContractOpen] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const resolvedContractOpen = contractOpen ?? internalContractOpen;
   const containerRef = useRef<HTMLDivElement>(null);
+  const sceneFileRef = useRef<HTMLInputElement>(null);
   const draggingRef = useRef(false);
 
   const aspect = frameAspect(frame.ratio);
   const heroSample = ATELIER_VERTICAL_HERO[design.vertical];
   const activeAiUrl = plate?.url ?? upload ?? heroSample.src;
+
+  async function handleSceneUpload(file: File | undefined) {
+    if (!file) return;
+    if (onUploadFile) {
+      onUploadFile(file);
+      return;
+    }
+    try {
+      const dataUrl = await readImage(file, frameEdge(frame.resolution));
+      setUpload(dataUrl);
+      toast.success("Scene photo uploaded — edits & presets will apply directly on it");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not read that file.");
+    }
+  }
 
   function onPointerMove(e: React.PointerEvent) {
     if (!draggingRef.current || !containerRef.current) return;
@@ -258,13 +281,13 @@ export function SplitViewportStage({
             style={splitViewMode === "split" ? { flexBasis: `${splitRatio}%` } : { flexBasis: "100%" }}
             className="relative min-h-[230px] flex-1 overflow-hidden bg-[#050f1b]"
           >
-            <div className="pointer-events-none absolute top-3 left-3 z-20 flex items-center gap-1.5">
-              <div className="flex items-center gap-1.5 rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/85 px-2.5 py-1 text-[10px] backdrop-blur-md">
+            <div className="pointer-events-none absolute top-2 left-2 z-20 flex items-center gap-1.5">
+              <div className="flex items-center gap-1 rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/85 px-2 py-0.5 text-[9.5px] backdrop-blur-md">
                 <span className="font-semibold tracking-wider text-[#e8eff3]">3D WIRE / CLAY</span>
-                <span className="text-[#a9bdc9]">• {scene3d.preset.toUpperCase()}</span>
+                <span className="hidden text-[#a9bdc9] sm:inline">• {scene3d.preset.toUpperCase()}</span>
               </div>
-              <div className="hidden items-center gap-1 rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/85 px-2.5 py-1 text-[10px] text-[#cfe3f0] backdrop-blur-md xl:flex">
-                <Camera className="size-3 text-[#e8c98a]" />
+              <div className="hidden items-center gap-1 rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/85 px-2 py-0.5 text-[9.5px] text-[#cfe3f0] backdrop-blur-md 2xl:flex">
+                <Camera className="size-2.5 text-[#e8c98a]" />
                 <span>{scene3d.focalLength}mm • {scene3d.cameraPreset}</span>
               </div>
             </div>
@@ -309,8 +332,33 @@ export function SplitViewportStage({
         {splitViewMode !== "3d-solo" ? (
           <div
             style={splitViewMode === "split" ? { flexBasis: `${100 - splitRatio}%` } : { flexBasis: "100%" }}
-            className="relative min-h-[230px] flex-1 overflow-hidden bg-[#08131f]"
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              void handleSceneUpload(e.dataTransfer.files?.[0]);
+            }}
+            className={cn(
+              "relative min-h-[230px] flex-1 overflow-hidden bg-[#08131f]",
+              dragActive ? "ring-2 ring-[#e8c98a] ring-inset" : "",
+            )}
           >
+            <input
+              ref={sceneFileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,.glb,.gltf,.obj,.fbx"
+              data-testid="scene-upload-input"
+              className="sr-only"
+              onChange={(event) => {
+                void handleSceneUpload(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+
             <ResilientPlateImage
               src={activeAiUrl}
               alt={plate?.idea || "Photorealistic Nordic architectural plate"}
@@ -322,17 +370,31 @@ export function SplitViewportStage({
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050f1b]/90 via-transparent to-[#050f1b]/55" />
 
-            {/* Top Badges */}
+            {/* Top Badges + Quick Upload Pill */}
             <div className="pointer-events-none absolute top-2.5 right-2.5 left-2.5 z-10 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/80 px-2.5 py-1 backdrop-blur-xl">
                 <span className="size-2 rounded-full bg-[#e8c98a] shadow-[0_0_8px_#e8c98a]" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#e8eff3]">
-                  {plate?.url ? "Live AI Diffusion" : "Reference Preview"}
+                  {plate?.url ? "Live AI Diffusion" : upload ? "Uploaded Scene" : "Reference Preview"}
                 </span>
               </div>
-              <span className="rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/80 px-2.5 py-1 text-[10px] font-semibold text-[#cfe3f0] backdrop-blur-xl">
-                4K Denoising • {frame.ratio}
-              </span>
+              <div className="pointer-events-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  data-testid="scene-upload-top-btn"
+                  onClick={() => sceneFileRef.current?.click()}
+                  title="Upload photo or 3D GLB/OBJ directly into Scene"
+                  className="inline-flex h-6.5 items-center gap-1 rounded-full border border-[#e8c98a]/45 bg-[#050f1b]/85 px-2.5 text-[10px] font-semibold text-[#e8c98a] backdrop-blur-xl transition hover:bg-[#e8c98a] hover:text-[#1b1407]"
+                >
+                  <Upload className="size-3" />
+                  <span>{upload ? "Replace" : "Upload"}</span>
+                </button>
+                <span className="hidden rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/80 px-2.5 py-1 text-[10px] font-semibold text-[#cfe3f0] backdrop-blur-xl sm:inline">
+                  {budget.costMode === "free-only"
+                    ? "Free ₹0"
+                    : `${budget.costMode === "paise-eco" ? "1K Eco" : nanoBanana.resolution}`} • {frame.ratio}
+                </span>
+              </div>
             </div>
 
             {/* Bottom Caption + Actions */}
@@ -346,6 +408,15 @@ export function SplitViewportStage({
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  data-testid="scene-upload-btn"
+                  onClick={() => sceneFileRef.current?.click()}
+                  title="Upload photo, sketch, or 3D model into Scene"
+                  className="inline-flex h-8 items-center gap-1 rounded-full border border-[#e8c98a]/50 bg-[#050f1b]/85 px-2.5 text-[10px] font-semibold text-[#e8c98a] backdrop-blur-md transition hover:bg-[#e8c98a] hover:text-[#1b1407]"
+                >
+                  <Upload className="size-3" /> Upload
+                </button>
                 <button
                   type="button"
                   onClick={() => onOpenStage("mask")}
@@ -579,13 +650,13 @@ export function CameraOpticsBar() {
   return (
     <div
       data-testid="camera-optics-bar"
-      className="arctic-glass no-scrollbar flex shrink-0 items-center justify-between gap-2 overflow-x-auto rounded-xl border border-[#d1c5b8]/45 px-2.5 py-1 text-[10.5px] dark:border-[#a9bdc9]/20"
+      className="arctic-glass no-scrollbar flex shrink-0 items-center justify-between gap-1.5 overflow-x-auto rounded-lg border border-[#d1c5b8]/45 px-2 py-0.5 text-[10px] dark:border-[#a9bdc9]/20"
     >
       {/* Left: Camera Lens + Angle Preset + 2-Pt Tilt */}
-      <div className="flex shrink-0 items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#725b38] dark:text-[#e8c98a]">
-          <Camera className="size-3" />
-          <span className="hidden sm:inline">Camera &amp; Optics</span>
+      <div className="flex shrink-0 items-center gap-1">
+        <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[#725b38] dark:text-[#e8c98a]">
+          <Camera className="size-2.5" />
+          <span className="hidden xl:inline">Optics</span>
         </span>
 
         <div
@@ -604,7 +675,7 @@ export function CameraOpticsBar() {
                 toast.success(`Lens set to ${mm}mm`);
               }}
               className={cn(
-                "h-5.5 rounded-full px-1.5 font-mono text-[9.5px] font-semibold transition",
+                "h-5 rounded-full px-1.5 font-mono text-[9px] font-semibold transition",
                 scene3d.focalLength === mm
                   ? "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
                   : "text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]",
@@ -623,7 +694,7 @@ export function CameraOpticsBar() {
             toast.success(`Camera angle: ${nextCam.label}`);
           }}
           title="Cycle camera angle preset"
-          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-[#d1c5b8]/45 bg-white/75 px-2 text-[10px] font-medium text-[#1b1c1a] transition hover:border-[#725b38] dark:border-[#a9bdc9]/20 dark:bg-[#16202d] dark:text-[#e8eff3] dark:hover:border-[#e8c98a]"
+          className="inline-flex h-5.5 shrink-0 items-center gap-1 rounded-full border border-[#d1c5b8]/45 bg-white/75 px-1.5 text-[9.5px] font-medium text-[#1b1c1a] transition hover:border-[#725b38] dark:border-[#a9bdc9]/20 dark:bg-[#16202d] dark:text-[#e8eff3] dark:hover:border-[#e8c98a]"
         >
           <span className="text-[#7f766a] dark:text-[#a9bdc9]">View:</span>
           <span className="font-semibold">{currentCam.label}</span>
@@ -636,13 +707,13 @@ export function CameraOpticsBar() {
           onClick={() => setScene3DField("twoPointTilt", !scene3d.twoPointTilt)}
           title="Toggle 2-point architectural vertical shift"
           className={cn(
-            "inline-flex h-6 shrink-0 items-center rounded-full border px-2 font-mono text-[9.5px] font-semibold transition",
+            "inline-flex h-5.5 shrink-0 items-center rounded-full border px-1.5 font-mono text-[9px] font-semibold transition",
             scene3d.twoPointTilt
               ? "border-[#c5a880] bg-[#c5a880]/20 text-[#513d1d] dark:border-[#e8c98a]/50 dark:bg-[#584411]/45 dark:text-[#e8c98a]"
               : "border-[#d1c5b8]/45 bg-white/70 text-[#4d463c] dark:border-[#a9bdc9]/20 dark:bg-[#16202d] dark:text-[#a9bdc9]",
           )}
         >
-          2-Pt Tilt
+          2-Pt
         </button>
       </div>
 
@@ -711,11 +782,15 @@ export function CameraOpticsBar() {
           type="button"
           data-testid="optics-res-btn"
           onClick={() => {
+            const budgetState = useOriel.getState().budget;
             const nextRes = nanoBanana.resolution === "1K" ? "2K" : nanoBanana.resolution === "2K" ? "4K" : "1K";
             updateNanoBanana({ resolution: nextRes });
             setFrame({ ...frame, resolution: nextRes === "1K" ? "1k" : "2k" });
+            if (budgetState.costMode === "paise-eco" && nextRes !== "1K") {
+              toast.message("Paise Eco guard active — live renders clamp to 1K (≤85p). Open ₹100 Cap to unlock 2K/4K.");
+            }
           }}
-          title="Cycle output resolution (1K / 2K / 4K)"
+          title="Cycle output resolution (1K Eco / 2K / 4K)"
           className="inline-flex h-6 shrink-0 items-center rounded-full border border-[#d1c5b8]/45 bg-white/75 px-2 font-mono text-[10px] font-semibold text-[#725b38] transition hover:border-[#725b38] dark:border-[#a9bdc9]/20 dark:bg-[#16202d] dark:text-[#e8c98a]"
         >
           {nanoBanana.resolution}

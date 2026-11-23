@@ -1286,15 +1286,21 @@ export function Viewport3D({ aspect: _aspect, compactSplit = false, onCaptureSna
       data-testid="viewport-3d"
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleCadDrop}
-      className="w-full overflow-hidden bg-[#181613]"
+      className={cn("w-full overflow-hidden bg-[#181613]", compactSplit ? "flex h-full min-h-0 flex-col" : "")}
     >
       {/* Main 3D Stage + Docked Sidebar Inspector Panel (zero floating center overlays) */}
-      <div className={cn("grid grid-cols-1", inspectorOpen ? "lg:grid-cols-[1fr_296px]" : "lg:grid-cols-1")}>
+      <div
+        className={cn(
+          "grid grid-cols-1",
+          compactSplit ? "min-h-0 flex-1" : "",
+          inspectorOpen ? "lg:grid-cols-[1fr_296px]" : "lg:grid-cols-1",
+        )}
+      >
         {/* Unobstructed Three.js WebGL Canvas Area */}
         <div
           className={cn(
             "relative w-full min-w-0 overflow-hidden bg-[#181613]",
-            compactSplit ? "h-[280px] md:h-[430px]" : "h-[340px] lg:h-[492px]",
+            compactSplit ? "h-[240px] md:h-full md:min-h-[260px]" : "h-[340px] lg:h-[492px]",
           )}
         >
           {contextLost ? (
@@ -1319,30 +1325,30 @@ export function Viewport3D({ aspect: _aspect, compactSplit = false, onCaptureSna
           <input ref={cadInputRef} type="file" accept=".glb,.gltf,.obj,.fbx" className="sr-only" onChange={handleCadInput} />
 
           {/* Discrete top-right Inspector + Rig toggles */}
-          <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+          <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
             <button
               type="button"
               onClick={() => setInspectorOpen((v) => !v)}
               className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-[11px] font-medium shadow-md transition",
+                "inline-flex h-6.5 shrink-0 items-center gap-1 rounded-full border px-2 text-[10px] font-medium shadow-md transition",
                 inspectorOpen
                   ? "border-[#d4b06a] bg-[#2a1c0c] text-[#e7c27a]"
-                  : "border-white/15 bg-[#14110f]/90 text-[#f6efe4] hover:border-[#d4b06a] hover:text-[#e7c27a]",
+                  : "border-white/15 bg-[#14110f]/88 text-[#f6efe4] hover:border-[#d4b06a] hover:text-[#e7c27a]",
               )}
               aria-expanded={inspectorOpen}
               aria-label={inspectorOpen ? "Hide 3D scene inspector" : "Show 3D scene inspector"}
             >
-              <SlidersHorizontal className="size-3" />
+              <SlidersHorizontal className="size-2.5" />
               <span>Inspector</span>
             </button>
             <button
               type="button"
               onClick={() => setHudOpen((v) => !v)}
-              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-[#14110f]/90 px-3 text-[11px] font-medium text-[#f6efe4] shadow-md hover:border-[#d4b06a] hover:text-[#e7c27a]"
+              className="inline-flex h-6.5 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-[#14110f]/88 px-2 text-[10px] font-medium text-[#f6efe4] shadow-md hover:border-[#d4b06a] hover:text-[#e7c27a]"
               aria-expanded={hudOpen}
               aria-label={hudOpen ? "Collapse 3D rig controls" : "Expand 3D rig controls"}
             >
-              {hudOpen ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+              {hudOpen ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
               <span>{hudOpen ? "Hide Rig" : "3D Rig"}</span>
             </button>
           </div>
@@ -1355,7 +1361,7 @@ export function Viewport3D({ aspect: _aspect, compactSplit = false, onCaptureSna
             aria-label="3D Scene Inspector"
             className={cn(
               "flex flex-col gap-2.5 overflow-y-auto border-t border-white/10 bg-[#14110f] p-2.5 text-xs text-[#f6efe4] lg:border-t-0 lg:border-l",
-              compactSplit ? "lg:h-[430px]" : "lg:h-[492px]",
+              compactSplit ? "lg:h-full" : "lg:h-[492px]",
             )}
           >
           {/* Solar Positioning Vector Section */}

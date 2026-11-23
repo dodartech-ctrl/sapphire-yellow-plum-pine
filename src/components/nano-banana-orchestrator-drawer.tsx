@@ -8,6 +8,7 @@ import {
   FileCheck2,
   GitBranch,
   History,
+  IndianRupee,
   Layers,
   Lock,
   MessageSquareQuote,
@@ -42,6 +43,11 @@ import {
   RENDER_STYLES,
   type GeometryConstraints,
 } from "@/schemas/nano-banana.schema";
+import {
+  estimatePerImageCostPaise,
+  formatInrExact,
+  formatPaiseShort,
+} from "@/lib/budget-guard";
 import { useOriel } from "@/lib/store";
 import { useGenerate } from "@/lib/use-generate";
 import { cn } from "@/lib/utils";
@@ -93,6 +99,7 @@ export function NanoBananaOrchestratorDrawer({
 
   const nanoBanana = useOriel((s) => s.nanoBanana);
   const updateNanoBanana = useOriel((s) => s.updateNanoBanana);
+  const budget = useOriel((s) => s.budget);
   const lastOrchestration = useOriel((s) => s.lastOrchestration);
   const setPlate = useOriel((s) => s.setPlate);
   const idea = useOriel((s) => s.idea);
@@ -328,6 +335,42 @@ export function NanoBananaOrchestratorDrawer({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {tab === "configure" ? (
               <>
+                {/* INR Spend Cap & Paise Cost Guard Strip */}
+                <section className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/8 px-3 py-2 text-xs dark:border-emerald-400/30 dark:bg-emerald-500/10">
+                  <div className="flex items-center gap-2">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300">
+                      <IndianRupee className="size-3.5" />
+                    </span>
+                    <div className="leading-tight">
+                      <div className="font-semibold text-[#2a241d] dark:text-[#eef3f7]">
+                        {budget.costMode === "free-only"
+                          ? "Free Preview Mode (₹0 / image)"
+                          : budget.costMode === "paise-eco"
+                            ? `Paise Eco Guard · ~${formatPaiseShort(
+                                estimatePerImageCostPaise(
+                                  nanoBanana.requestedModel,
+                                  nanoBanana.resolution,
+                                ),
+                              )} / image`
+                            : "Studio Pro Mode"}
+                      </div>
+                      <div className="font-mono text-[10px] text-[#5c5347] dark:text-[#a9bdc9]">
+                        Spent {formatInrExact(budget.spentPaise)} of {formatInrExact(budget.capPaise)} cap
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      window.dispatchEvent(new CustomEvent("oriel-open-budget"));
+                    }}
+                    className="rounded-full border border-emerald-600/35 bg-white/85 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-800 transition hover:bg-emerald-50 dark:border-emerald-400/35 dark:bg-[#0e1520] dark:text-emerald-200 dark:hover:bg-[#162231]"
+                  >
+                    Manage ₹ Cap
+                  </button>
+                </section>
+
                 {/* Model Routing Selector */}
                 <section className="space-y-2">
                   <div className="flex items-center justify-between">

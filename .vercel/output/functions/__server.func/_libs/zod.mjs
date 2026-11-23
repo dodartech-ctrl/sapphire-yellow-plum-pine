@@ -2240,6 +2240,70 @@ var $ZodUnion = /*@__PURE__*/ $constructor("$ZodUnion", (inst, def) => {
 		});
 	};
 });
+function discriminatorMap(def) {
+	const map = /* @__PURE__ */ new Map();
+	for (const option of def.options) {
+		const values = option._zod.propValues?.[def.discriminator];
+		if (!values || values.size === 0) throw new Error(`Invalid discriminated union option at index "${def.options.indexOf(option)}"`);
+		for (const value of values) if (map.has(value)) {
+			if (value !== void 0) throw new Error(`Duplicate discriminator value "${String(value)}"`);
+			map.set(value, null);
+		} else map.set(value, option);
+	}
+	return map;
+}
+var $ZodDiscriminatedUnion = /*@__PURE__*/ $constructor("$ZodDiscriminatedUnion", (inst, def) => {
+	def.inclusive = false;
+	$ZodUnion.init(inst, def);
+	const _super = inst._zod.parse;
+	defineLazyInternal(inst, "propValues", (zod) => {
+		const propValues = {};
+		let undefinedCount = 0;
+		for (const option of zod.def.options) {
+			const pv = option._zod.propValues;
+			if (!pv || Object.keys(pv).length === 0) throw new Error(`Invalid discriminated union option at index "${zod.def.options.indexOf(option)}"`);
+			if (pv[zod.def.discriminator]?.has(void 0)) undefinedCount++;
+			for (const [k, v] of Object.entries(pv)) {
+				if (!Object.prototype.hasOwnProperty.call(propValues, k)) assignProp(propValues, k, /* @__PURE__ */ new Set());
+				for (const val of v) propValues[k].add(val);
+			}
+		}
+		if (!zod.def.unionFallback && undefinedCount > 1) propValues[zod.def.discriminator]?.delete(void 0);
+		return propValues;
+	});
+	def.options.forEach((option, i) => {
+		const propShape = rawShape(option._zod.def);
+		if (propShape && !Object.prototype.hasOwnProperty.call(propShape, def.discriminator)) throw new Error(`Invalid discriminated union option at index "${i}"`);
+	});
+	const disc = cached(() => discriminatorMap(def));
+	inst._zod.parse = (payload, ctx) => {
+		const input = payload.value;
+		if (!isObject(input)) {
+			payload.issues.push({
+				code: "invalid_type",
+				expected: "object",
+				input,
+				inst
+			});
+			return payload;
+		}
+		const value = input?.[def.discriminator];
+		const opt = disc.value.get(value);
+		if (opt && (value !== void 0 || ctx.direction !== "backward")) return opt._zod.run(payload, ctx);
+		if (def.unionFallback || ctx.direction === "backward") return _super(payload, ctx);
+		payload.issues.push({
+			code: "invalid_union",
+			errors: [],
+			note: "No matching discriminator",
+			discriminator: def.discriminator,
+			options: Array.from(disc.value.keys()).filter((value) => disc.value.get(value) !== null),
+			input,
+			path: [def.discriminator],
+			inst
+		});
+		return payload;
+	};
+});
 var $ZodIntersection = /*@__PURE__*/ $constructor("$ZodIntersection", (inst, def) => {
 	$ZodType.init(inst, def);
 	inst._zod.parse = (payload, ctx) => {
@@ -4996,6 +5060,18 @@ function union(options, params) {
 		...normalizeParams(params)
 	});
 }
+var ZodDiscriminatedUnion = /*@__PURE__*/ $constructor("ZodDiscriminatedUnion", (inst, def) => {
+	ZodUnion.init(inst, def);
+	$ZodDiscriminatedUnion.init(inst, def);
+});
+function discriminatedUnion(discriminator, options, params) {
+	return new ZodDiscriminatedUnion({
+		type: "union",
+		options,
+		discriminator,
+		...normalizeParams(params)
+	});
+}
 var ZodIntersection = /*@__PURE__*/ $constructor("ZodIntersection", (inst, def) => {
 	$ZodIntersection.init(inst, def);
 	ZodType.init(inst, def);
@@ -5226,4 +5302,22 @@ function refine(fn, _params = {}) {
 function superRefine(fn, params) {
 	return /* @__PURE__ */ _superRefine(fn, params);
 }
-export { number as a, union as c, literal as i, ZodError as l, array as n, object as o, boolean as r, string as s, _enum as t };
+// node_modules/zod/v4/classic/compat.js
+/** @deprecated Use the raw string literal codes instead, e.g. "invalid_type". */
+var ZodIssueCode = {
+	invalid_type: "invalid_type",
+	too_big: "too_big",
+	too_small: "too_small",
+	invalid_format: "invalid_format",
+	not_multiple_of: "not_multiple_of",
+	unrecognized_keys: "unrecognized_keys",
+	invalid_union: "invalid_union",
+	invalid_key: "invalid_key",
+	invalid_element: "invalid_element",
+	invalid_value: "invalid_value",
+	custom: "custom"
+};
+/** @deprecated Do not use. Stub definition, only included for zod-to-json-schema compatibility. */
+var ZodFirstPartyTypeKind;
+ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {});
+export { discriminatedUnion as a, object as c, unknown as d, ZodError as f, boolean as i, string as l, _enum as n, literal as o, array as r, number as s, ZodIssueCode as t, union as u };

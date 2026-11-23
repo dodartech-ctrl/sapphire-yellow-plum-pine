@@ -14,7 +14,8 @@ import {
 
 test("toGeminiAspectRatio and parseDataUrl validate Studio ratios and inline images", () => {
   assert.equal(toGeminiAspectRatio("16:9"), "16:9");
-  assert.equal(toGeminiAspectRatio("3:2"), "4:3");
+  assert.equal(toGeminiAspectRatio("3:2"), "3:2");
+  assert.equal(toGeminiAspectRatio("4:3"), "4:3");
   assert.equal(toGeminiAspectRatio("9:16"), "9:16");
   assert.equal(toGeminiAspectRatio("1:1"), "1:1");
 
