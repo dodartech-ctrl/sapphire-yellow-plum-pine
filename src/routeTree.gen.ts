@@ -19,9 +19,11 @@ import { Route as MethodRouteImport } from './routes/method'
 import { Route as NodesRouteImport } from './routes/nodes'
 import { Route as PlansRouteImport } from './routes/plans'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ReviseRouteImport } from './routes/revise'
 import { Route as StudiesRouteImport } from './routes/studies'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as ApiNvidiaVisionRouteImport } from './routes/api/nvidia-vision'
+import { Route as ReviewShareIdRouteImport } from './routes/review.$shareId'
 import { Route as ApiGeminiVisionRouteImport } from './routes/api/gemini/vision'
 import { Route as ApiV1ImagesEditRouteImport } from './routes/api/v1/images/edit'
 import { Route as ApiV1ImagesGenerateRouteImport } from './routes/api/v1/images/generate'
@@ -87,6 +89,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReviseRoute = ReviseRouteImport.update({
+  id: '/revise',
+  path: '/revise',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudiesRoute = StudiesRouteImport.update({
   id: '/studies',
   path: '/studies',
@@ -100,6 +107,11 @@ const StudioRoute = StudioRouteImport.update({
 const ApiNvidiaVisionRoute = ApiNvidiaVisionRouteImport.update({
   id: '/api/nvidia-vision',
   path: '/api/nvidia-vision',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewShareIdRoute = ReviewShareIdRouteImport.update({
+  id: '/review/$shareId',
+  path: '/review/$shareId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGeminiVisionRoute = ApiGeminiVisionRouteImport.update({
@@ -191,9 +203,11 @@ export interface FileRoutesByFullPath {
   '/nodes': typeof NodesRoute
   '/plans': typeof PlansRoute
   '/projects': typeof ProjectsRoute
+  '/revise': typeof ReviseRoute
   '/studies': typeof StudiesRoute
   '/studio': typeof StudioRoute
   '/api/nvidia-vision': typeof ApiNvidiaVisionRoute
+  '/review/$shareId': typeof ReviewShareIdRoute
   '/api/gemini/vision': typeof ApiGeminiVisionRoute
   '/api/v1/images/edit': typeof ApiV1ImagesEditRoute
   '/api/v1/images/generate': typeof ApiV1ImagesGenerateRoute
@@ -220,9 +234,11 @@ export interface FileRoutesByTo {
   '/nodes': typeof NodesRoute
   '/plans': typeof PlansRoute
   '/projects': typeof ProjectsRoute
+  '/revise': typeof ReviseRoute
   '/studies': typeof StudiesRoute
   '/studio': typeof StudioRoute
   '/api/nvidia-vision': typeof ApiNvidiaVisionRoute
+  '/review/$shareId': typeof ReviewShareIdRoute
   '/api/gemini/vision': typeof ApiGeminiVisionRoute
   '/api/v1/images/edit': typeof ApiV1ImagesEditRoute
   '/api/v1/images/generate': typeof ApiV1ImagesGenerateRoute
@@ -250,9 +266,11 @@ export interface FileRoutesById {
   '/nodes': typeof NodesRoute
   '/plans': typeof PlansRoute
   '/projects': typeof ProjectsRoute
+  '/revise': typeof ReviseRoute
   '/studies': typeof StudiesRoute
   '/studio': typeof StudioRoute
   '/api/nvidia-vision': typeof ApiNvidiaVisionRoute
+  '/review/$shareId': typeof ReviewShareIdRoute
   '/api/gemini/vision': typeof ApiGeminiVisionRoute
   '/api/v1/images/edit': typeof ApiV1ImagesEditRoute
   '/api/v1/images/generate': typeof ApiV1ImagesGenerateRoute
@@ -281,9 +299,11 @@ export interface FileRouteTypes {
     | '/nodes'
     | '/plans'
     | '/projects'
+    | '/revise'
     | '/studies'
     | '/studio'
     | '/api/nvidia-vision'
+    | '/review/$shareId'
     | '/api/gemini/vision'
     | '/api/v1/images/edit'
     | '/api/v1/images/generate'
@@ -310,9 +330,11 @@ export interface FileRouteTypes {
     | '/nodes'
     | '/plans'
     | '/projects'
+    | '/revise'
     | '/studies'
     | '/studio'
     | '/api/nvidia-vision'
+    | '/review/$shareId'
     | '/api/gemini/vision'
     | '/api/v1/images/edit'
     | '/api/v1/images/generate'
@@ -339,9 +361,11 @@ export interface FileRouteTypes {
     | '/nodes'
     | '/plans'
     | '/projects'
+    | '/revise'
     | '/studies'
     | '/studio'
     | '/api/nvidia-vision'
+    | '/review/$shareId'
     | '/api/gemini/vision'
     | '/api/v1/images/edit'
     | '/api/v1/images/generate'
@@ -369,9 +393,11 @@ export interface RootRouteChildren {
   NodesRoute: typeof NodesRoute
   PlansRoute: typeof PlansRoute
   ProjectsRoute: typeof ProjectsRoute
+  ReviseRoute: typeof ReviseRoute
   StudiesRoute: typeof StudiesRoute
   StudioRoute: typeof StudioRoute
   ApiNvidiaVisionRoute: typeof ApiNvidiaVisionRoute
+  ReviewShareIdRoute: typeof ReviewShareIdRoute
   ApiGeminiVisionRoute: typeof ApiGeminiVisionRoute
   ApiV1ImagesEditRoute: typeof ApiV1ImagesEditRoute
   ApiV1ImagesGenerateRoute: typeof ApiV1ImagesGenerateRoute
@@ -460,6 +486,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/revise': {
+      id: '/revise'
+      path: '/revise'
+      fullPath: '/revise'
+      preLoaderRoute: typeof ReviseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studies': {
       id: '/studies'
       path: '/studies'
@@ -479,6 +512,13 @@ declare module '@tanstack/react-router' {
       path: '/api/nvidia-vision'
       fullPath: '/api/nvidia-vision'
       preLoaderRoute: typeof ApiNvidiaVisionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/review/$shareId': {
+      id: '/review/$shareId'
+      path: '/review/$shareId'
+      fullPath: '/review/$shareId'
+      preLoaderRoute: typeof ReviewShareIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/gemini/vision': {
@@ -593,9 +633,11 @@ const rootRouteChildren: RootRouteChildren = {
   NodesRoute: NodesRoute,
   PlansRoute: PlansRoute,
   ProjectsRoute: ProjectsRoute,
+  ReviseRoute: ReviseRoute,
   StudiesRoute: StudiesRoute,
   StudioRoute: StudioRoute,
   ApiNvidiaVisionRoute: ApiNvidiaVisionRoute,
+  ReviewShareIdRoute: ReviewShareIdRoute,
   ApiGeminiVisionRoute: ApiGeminiVisionRoute,
   ApiV1ImagesEditRoute: ApiV1ImagesEditRoute,
   ApiV1ImagesGenerateRoute: ApiV1ImagesGenerateRoute,

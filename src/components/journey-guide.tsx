@@ -1,4 +1,5 @@
-import { Check, ChevronDown, ChevronUp, CircleHelp } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Check, ChevronDown, ChevronUp, CircleHelp, GitCompareArrows } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { currentJourneyStep, journeyProgress, STUDIO_PLAIN, type JourneyAction } from "@/lib/journey";
 import { NAMED_STUDIOS } from "@/lib/prd-studio-data";
@@ -158,6 +159,14 @@ export function JourneyGuide({
             </p>
           )}
 
+          <Link
+            to="/revise"
+            data-testid="journey-revise-link"
+            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-[#725b38] hover:underline dark:text-[#e8c98a]"
+          >
+            <GitCompareArrows className="size-3.5" /> Already have an approved render a client wants changed? Open Revision Studio
+          </Link>
+          <br />
           <button
             type="button"
             onClick={() => setShowHow((value) => !value)}

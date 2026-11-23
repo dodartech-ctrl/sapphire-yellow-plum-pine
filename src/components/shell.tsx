@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Lock,
   Menu,
+  GitCompareArrows,
   MessageSquare,
   Moon,
   PanelLeftClose,
@@ -61,6 +62,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/method": "ArchViz Method",
   "/library": "Templates Library",
   "/projects": "Saved Projects",
+  "/revise": "Revision Studio",
   "/assets": "Assets & GLB Library",
   "/plans": "Plans & Credits",
 };
@@ -303,6 +305,10 @@ export function Shell() {
         <Link to="/library" search={{ scope: "interior" }} title="Templates" aria-label="Templates" onClick={onPicked} className={linkClass(pathname === "/library")}>
           <Library className="size-4 shrink-0" />
           {!compact ? <span className="truncate">Templates</span> : null}
+        </Link>
+        <Link to="/revise" title="Revision Studio" aria-label="Revision Studio" onClick={onPicked} className={linkClass(pathname === "/revise")}>
+          <GitCompareArrows className="size-4 shrink-0" />
+          {!compact ? <span className="truncate">Revision Studio</span> : null}
         </Link>
         <Link to="/projects" title="Projects" aria-label="Projects" onClick={onPicked} className={linkClass(pathname === "/projects")}>
           <Folder className="size-4 shrink-0" />
@@ -816,7 +822,7 @@ export function Shell() {
             <Outlet />
           </StudioHeadSlotContext.Provider>
         </div>
-        {pathname === "/" || pathname === "/explore" || pathname === "/builder" || pathname === "/gallery" || pathname === "/nodes" ? null : <Composer />}
+        {pathname === "/" || pathname === "/explore" || pathname === "/builder" || pathname === "/gallery" || pathname === "/nodes" || pathname === "/revise" ? null : <Composer />}
       </div>
 
       <SearchDialog open={open} onOpenChange={setOpen} />

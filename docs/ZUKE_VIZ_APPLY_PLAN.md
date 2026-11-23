@@ -1,5 +1,8 @@
 # Applying the ZUKE VIZ research to Oriel: execution plan
 
+> **Status (first build):** Phases 1 to 4 (Release 1, Revision Studio) are built
+> and verified locally; see section 9 for exactly what is done and what is not.
+
 Source: the uploaded ZUKE VIZ pack (50-site competitor study, 50-site API
 architecture study, feature directory, product specification, module blueprint).
 Status of each Oriel item below comes from a code inventory (file and table
@@ -190,3 +193,47 @@ Feasibility planning is tested separately with planning teams.
 2. Update `PRODUCT.md` and the two skills for Revision Studio.
 3. Phase 1 intake screen with two named views and the revision-brief checklist,
    behind the existing journey guide with a sample kitchen.
+
+## 9. Build status and honest limits
+
+**Built and verified (dev and production build, desktop and phone width):**
+project intake with duplicate detection and preserved originals; revision brief
+checklist (unknown stays blank, "keep" items never become targets); finish board
+(role, supplier, SKU, grain, swatch); linked named surfaces with per-view masks,
+click-select, brush, polygon, undo, protected-over-editable, "not visible in this
+view"; quote with ceiling and scope coverage; idempotent job registry; offline
+finish preview plus a server AI edit route composited into the permitted mask
+only; lossless pixel-diff gate with original / result / changed-pixel inspector;
+per-view accept, reject and retry that leaves sibling views untouched; immutable
+content-hashed version sets, branch and restore; private client review link with
+before/after, pinned comments and append-only sign-off bound to the set id;
+export of approved images, JSON record and a one-page PDF; cost history with
+failed attempts and designer minutes. 21 unit tests cover the guarantees
+(`npm run test:app`).
+
+**Phase 0:** done by defaults (Revision Studio leads as an added workflow;
+accounts stay off, projects are browser-local, only review links use the
+database). The provider "adapter" is the existing `inpaintPlate` route plus the
+composite step, not a separate interface.
+
+**Not done, or limited (do not treat as complete):**
+- The **real AI route is untested** here (no provider key). If the model result
+  cannot be read or the model is unavailable, the offline preview is used and the
+  card says so.
+- **Not 100% of the plan.** Phase 5 (pilot with paying studios, the paid-demand
+  and unit-economics gates) needs real customers. Phases 6 and 7 (Release 2
+  polish, Blender handoff, GLB, video, tours, feasibility) are not started.
+- **Projects are in this browser only.** Clearing site data loses them. No
+  accounts, no team seats, no server-side project history.
+- **Review links** have no expiry, revoke or rate limit; anyone with the link can
+  view and respond. The set is verified on the server, but images are not re-hashed.
+- **The pixel gate runs on a working copy** (longest edge 1280px, lossless PNG).
+  Originals are stored untouched, but delivered images are working resolution.
+- **Linking across views is manual** (you mark each view); there is no automatic
+  cross-view object matching.
+- **Idempotency is a client-side registry.** The existing server wallet charge
+  has no idempotency key, so the same job started from two tabs could charge twice.
+- A reload marks any in-flight job failed so it can be retried; check the credit
+  balance afterwards, because the server may already have charged.
+- The offline preview recolours with the swatch colour and keeps the original
+  light and texture. It is a colour approximation, not a material render.

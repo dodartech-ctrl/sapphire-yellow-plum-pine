@@ -9,6 +9,12 @@ moves through it. Read this before adding or changing any feature. The
 **Oriel turns a photo, sketch or simple 3D massing into a photorealistic
 architectural visual, changing only what you ask to change.**
 
+**Lead workflow: Revision Studio** (`/revise`). A client asks to change a
+finish on a render you already delivered. Bring the approved views, mark exactly
+what may change and what must not, and get coordinated revisions plus a record of
+what the client approved. The concept studio below remains the way to start a
+new design; nothing was removed.
+
 ## 2. Who it is for
 
 | Person | Job they hire Oriel for | What "good" looks like |
@@ -16,6 +22,8 @@ architectural visual, changing only what you ask to change.**
 | **Architect / interior designer** | Test materials, light and mood on a real design before committing. | Structure and camera stay put; the change is exactly the one requested. |
 | **Developer / marketing lead** | Produce sales and lifestyle visuals (amenities, people, landscape) fast. | A client-ready image in minutes, with variations to choose from. |
 | **Visualizer / studio lead** | Run a repeatable pipeline and keep a consistent house style. | Saved setups, batch renders, a reviewable history. |
+
+| **Studio owner / client** | Approve a specific version and keep a record of it. | A private link, one clear Approve button, and an export that matches what was signed. |
 
 Primary persona for design decisions: the architect or designer who is **not**
 an AI expert. If they have to learn model vocabulary, the product failed.
@@ -51,6 +59,16 @@ Rules:
 3. Advanced tools (named studios, Node, 360, video) are reachable but never the
    first thing a beginner meets. They are explained in plain words.
 
+### Revision Studio journey (five screens)
+
+| Screen | The designer does | Guarantee |
+| --- | --- | --- |
+| 1. Add views | Upload approved renders, name each camera angle | Originals kept as uploaded; duplicate images refused |
+| 2. Confirm the change | Paste feedback, tick a checklist, add the finish board | Unknown fields stay blank; a "keep X" item is never an edit target |
+| 3. Mark what changes | Click or brush the surface per view, protect details | Protection always wins; occluded views can be skipped |
+| 4. Quote, revise, inspect | See the price ceiling, run per view, compare pixels | Zero changed pixels outside the editable area, or the preview cannot be accepted; double submit makes one job |
+| 5. Approve and deliver | Freeze a set, get client or designer sign-off, export | An approval belongs to one immutable set; export needs a valid approval |
+
 ## 5. Feature map (nothing is removed; everything has a home)
 
 | Area | Features | Journey step |
@@ -64,6 +82,7 @@ Rules:
 | Studios | MAS 2D (edit), SAM 3D (massing), KING 360 (panorama), KUM Video (storyboard to MP4), Node Studio (pipelines) | 1 to 6 for power users |
 | Review | Review pins, Share & Review, Studies, Gallery before/after | 5, 6 |
 | Keep | Projects, saved briefs, client PDF export, layered bundle export | 6 |
+| Revision Studio | Intake, revision brief checklist, finish board, editable and protected masks, pixel-diff gate, quote and idempotent jobs, per-view retry, immutable version sets and branches, private client review link and sign-off, approved export with change record, cost history | all (own five-screen flow) |
 | Account | Credits (50 per plate, refunded on failure), plans | all |
 
 ## 6. Principles
@@ -96,17 +115,20 @@ Rules:
 
 ## 9. Known gaps and next bets (ordered)
 
-1. **Per-category controls from the PRD:** flooring pattern/tile/joint width,
+Built since the first version: sample project, Revision Studio core (see
+`docs/ZUKE_VIZ_APPLY_PLAN.md` for exact status and limits).
+
+1. **Real AI path in Revision Studio is unverified** (no provider key was
+   available): it composites the model result inside the permitted mask only, but
+   needs a live test, then a second provider benchmarked on the same brief.
+2. **Server-side projects and accounts.** Projects live in the browser; clearing
+   site data loses them. Review links need expiry, revoke and rate limits.
+3. **Per-category controls from the PRD:** flooring pattern/tile/joint width,
    furniture position/rotation, lighting colour temperature/direction.
-2. **Structured edit instruction (PRD 3.3):** every property selection emits a
-   `{vertical, element, selection, target, preserve, action}` object that the
-   AI engine consumes, with region-scoped application.
-3. **Per-room configurations:** the room selector exists; show and switch the
-   saved settings per room within a project.
-4. **Variation explorer:** a persistent strip of alternatives and versions under
-   the stage (PRD workspace area 5).
-5. **Landscape and Amenities option parity** with the PRD tables.
-6. **Real accounts and server-side projects** (today: this browser only).
+4. **Structured edit instruction (PRD 3.3)** consumed by the AI engine.
+5. **Per-room configurations** shown and switchable within a project.
+6. **Variation explorer** strip under the stage.
+7. **Pilot and release gates** with real studios (cannot be passed by code alone).
 
 ## 8a. Definition of done for any feature
 
