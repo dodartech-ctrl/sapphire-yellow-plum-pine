@@ -19,6 +19,7 @@ import { Compare } from "@/components/compare";
 import { AgentDock } from "@/components/agent-dock";
 import { JourneyGuide } from "@/components/journey-guide";
 import type { JourneyAction } from "@/lib/journey";
+import { SAMPLE_PROJECTS } from "@/lib/sample-project";
 import { Composer } from "@/components/composer";
 import { CvPreprocessorStage } from "@/components/cv-preprocessor-stage";
 import { GroundedSAM2Tool } from "@/components/grounded-sam2-tool";
@@ -348,6 +349,28 @@ function WorkspacePage() {
     }
   }
 
+  /** One click: load a sample source, properties and prompt for the current vertical. */
+  async function loadSample() {
+    const sample = SAMPLE_PROJECTS[design.vertical];
+    try {
+      const response = await fetch(sample.src);
+      if (!response.ok) throw new Error("The sample image could not be loaded.");
+      const blob = await response.blob();
+      const file = new File([blob], "sample.jpg", { type: blob.type || "image/jpeg" });
+      const dataUrl = await readImage(file, frameEdge(frame.resolution));
+      const store = useOriel.getState();
+      store.setUpload(dataUrl);
+      for (const [id, value] of Object.entries(sample.picks)) store.setPick(id, value);
+      store.setIdea(sample.idea);
+      setEnhanceBarOpen(false);
+      setSplitHubEnabled(false);
+      setView("source");
+      toast.success(`Sample loaded: ${sample.title}. Press Render Plate to see it restyled.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load the sample.");
+    }
+  }
+
   function selectWorkflowIntent(intentId: WorkflowIntentId) {
     if (intentId === "render") {
       setEnhanceBarOpen(false);
@@ -523,7 +546,7 @@ function WorkspacePage() {
         ref={scrollSectionRef}
         className="studio-scroll relative flex min-w-0 flex-1 flex-col gap-3 px-3 pt-2.5 pb-6 md:px-5 lg:h-full lg:overflow-y-auto"
       >
-        <JourneyGuide compared={view === "compare"} onAction={runJourneyAction} />
+        <JourneyGuide compared={view === "compare"} onAction={runJourneyAction} onSample={() => void loadSample()} />
 
         {/* Screen-Fit Hero Workspace (Primary Stage + Chat Box + Quick-Jump Bar) */}
         <div
@@ -962,6 +985,14 @@ function WorkspacePage() {
                             className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/25 bg-[#08131f]/80 px-3.5 text-[11px] font-medium text-[#e8eff3] backdrop-blur-md hover:border-[#e8c98a] sm:h-9 sm:px-4 sm:text-xs"
                           >
                             <ImagePlus className="size-3.5 text-[#e8c98a]" /> Upload Photo / GLB
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="stage-sample-btn"
+                            onClick={() => void loadSample()}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/25 bg-[#08131f]/80 px-3.5 text-[11px] font-medium text-[#e8eff3] backdrop-blur-md hover:border-[#e8c98a] sm:h-9 sm:px-4 sm:text-xs"
+                          >
+                            <Sparkles className="size-3.5 text-[#e8c98a]" /> Try a sample
                           </button>
                         </div>
                       </div>

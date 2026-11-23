@@ -37,7 +37,7 @@ guide (`src/lib/journey.ts`, `src/components/journey-guide.tsx`) shows it.
 
 | # | Step | The user's question | Where it lives |
 | --- | --- | --- | --- |
-| 1 | **Bring your space** (optional) | "What am I working from?" | Studio stage: upload, paste, Sketch Pad, 3D Massing |
+| 1 | **Bring your space** (optional) | "What am I working from?" | Studio stage: upload, paste, Sketch Pad, 3D Massing, **Try a sample** (one click fills steps 1 to 3) |
 | 2 | **Choose what changes** | "What do I want different?" | Right panel: Presets, Scene & Optics; Assets; Library |
 | 3 | **Say it in a sentence** | "Anything the pickers can't say?" | Prompt bar; Brief Builder for a structured brief |
 | 4 | **Render** | "Show me." | Render Plate; 4-Up for variations |
@@ -105,9 +105,8 @@ Rules:
    saved settings per room within a project.
 4. **Variation explorer:** a persistent strip of alternatives and versions under
    the stage (PRD workspace area 5).
-5. **First-run sample project** so step 1 can be completed with one click.
-6. **Landscape and Amenities option parity** with the PRD tables.
-7. **Real accounts and server-side projects** (today: this browser only).
+5. **Landscape and Amenities option parity** with the PRD tables.
+6. **Real accounts and server-side projects** (today: this browser only).
 
 ## 8a. Definition of done for any feature
 

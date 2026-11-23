@@ -29,7 +29,15 @@ function writeCollapsed(value: boolean) {
  * next step is for, where on screen to do it, and a one-click action. It only
  * reads studio state; nothing in the studio is removed or hidden by it.
  */
-export function JourneyGuide({ compared, onAction }: { compared: boolean; onAction: (action: JourneyAction) => void }) {
+export function JourneyGuide({
+  compared,
+  onAction,
+  onSample,
+}: {
+  compared: boolean;
+  onAction: (action: JourneyAction) => void;
+  onSample: () => void;
+}) {
   const upload = useOriel((s) => s.upload);
   const sketch = useOriel((s) => s.sketchDataUrl);
   const design = useOriel((s) => s.design);
@@ -133,6 +141,16 @@ export function JourneyGuide({ compared, onAction }: { compared: boolean; onActi
               >
                 {current.actionLabel}
               </button>
+              {current.id === "start" ? (
+                <button
+                  type="button"
+                  data-testid="journey-sample-action"
+                  onClick={onSample}
+                  className="inline-flex h-9 shrink-0 items-center rounded-full border border-[#725b38]/50 px-4 text-xs font-semibold text-[#725b38] hover:bg-black/5 dark:border-[#cfe3f0]/40 dark:text-[#cfe3f0] dark:hover:bg-white/10"
+                >
+                  Try a sample project
+                </button>
+              ) : null}
             </div>
           ) : (
             <p className="text-xs text-[#4d463c] dark:text-[#a9bdc9]">
