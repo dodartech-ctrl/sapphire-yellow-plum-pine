@@ -22,6 +22,10 @@ docs) → **`app-data`** — mandatory before writing **or refusing** such
 integration, and when you think "can't access user data", "needs OAuth",
 "Grok Dashboard instead": it serves viewer connector data via the gate;
 **`neon`** / **`auth`** only per §0.5.
+Product direction, user journey, backlog and definition of done live in
+`/PRODUCT.md`; open **`ai-product`** (UX/journey/AI honesty) and
+**`ai-product-owner`** (scope, stories, priorities) before changing what the
+app does or how a user moves through it.
 
 **Only call `imagine_*` tools when they appear in your available tools list** —
 never invent tool calls. Without them ship art with **CSS, SVG, emoji, canvas

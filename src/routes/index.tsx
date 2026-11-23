@@ -1,4 +1,4 @@
-import { createFileRoute, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   Box,
   Crosshair,
@@ -17,6 +17,8 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Compare } from "@/components/compare";
 import { AgentDock } from "@/components/agent-dock";
+import { JourneyGuide } from "@/components/journey-guide";
+import type { JourneyAction } from "@/lib/journey";
 import { Composer } from "@/components/composer";
 import { CvPreprocessorStage } from "@/components/cv-preprocessor-stage";
 import { GroundedSAM2Tool } from "@/components/grounded-sam2-tool";
@@ -123,6 +125,7 @@ function WorkspacePage() {
   const [pubDiscipline, setPubDiscipline] = useState<PublishedGalleryProject["discipline"]>("Exterior");
   const [pubType, setPubType] = useState<PublishedGalleryProject["comparisonType"]>("Material Restyle");
 
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollSectionRef = useRef<HTMLElement>(null);
   const didAutoShowHydratedPlateRef = useRef(false);
@@ -264,6 +267,32 @@ function WorkspacePage() {
       return;
     }
     setView("compare");
+  }
+
+  function runJourneyAction(action: JourneyAction) {
+    switch (action) {
+      case "upload":
+        fileRef.current?.click();
+        return;
+      case "properties":
+        setInspectorCollapsed(false);
+        setRightTab("matrix");
+        document.getElementById("studio-properties")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      case "prompt":
+        document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Your idea"]')?.focus();
+        return;
+      case "render":
+        if (!busy) void generate();
+        return;
+      case "review":
+        if (canCompare) setView("compare");
+        else toast.message("Use 4-Up in the prompt bar to see four variations, or add a source photo to compare against.");
+        return;
+      case "keep":
+        void navigate({ to: "/projects" });
+        return;
+    }
   }
 
   function cycleTargetElement() {
@@ -494,6 +523,8 @@ function WorkspacePage() {
         ref={scrollSectionRef}
         className="studio-scroll relative flex min-w-0 flex-1 flex-col gap-3 px-3 pt-2.5 pb-6 md:px-5 lg:h-full lg:overflow-y-auto"
       >
+        <JourneyGuide compared={view === "compare"} onAction={runJourneyAction} />
+
         {/* Screen-Fit Hero Workspace (Primary Stage + Chat Box + Quick-Jump Bar) */}
         <div
           id="studio-hero-fit"
