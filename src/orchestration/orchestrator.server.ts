@@ -491,6 +491,26 @@ export class ArchitecturalImageOrchestrator {
           return { live: false, reason: fallbackReason, response: null };
         }
 
+        // Enforce server ₹100 INR spend cap & Paise Eco cost guard (skipped in ephemeral unit tests)
+        let billedPaiseForLive = 0;
+        let effectiveResolutionForCall = routing.normalizedResolution;
+        if (!this.skipPersistence) {
+          const { planServerBudgetRender, recordServerRenderOutcome } = await import("@/lib/budget-guard.server");
+          const { plan } = await planServerBudgetRender({
+            requestedModel: routing.providerModelId,
+            requestedResolution: routing.normalizedResolution,
+            imageCount: 1,
+          });
+          if (!plan.useCloud) {
+            fallbackUsed = true;
+            fallbackReason = plan.notice ?? "Free (₹0) Studio mode / ₹100 INR cap active — returned Studio preview composite.";
+            await recordServerRenderOutcome({ billedPaise: 0, liveImages: 0, freeImages: 1 }).catch(() => undefined);
+            return { live: false, reason: fallbackReason, response: null };
+          }
+          billedPaiseForLive = plan.totalCostPaise;
+          effectiveResolutionForCall = plan.effectiveResolution;
+        }
+
         const candidateModels: NanoBananaModelKey[] = [
           routing.primaryModelKey,
           ...routing.fallbackChain,
@@ -508,7 +528,7 @@ export class ArchitecturalImageOrchestrator {
                 modelKey: candidateKey,
                 prompt: `${compiledPrompt.system}\n\n${compiledPrompt.userPrompt}`,
                 negativeInstructions: compiledPrompt.negativePrompt,
-                resolution: routing.normalizedResolution,
+                resolution: effectiveResolutionForCall,
                 aspectRatio: routing.normalizedAspectRatio,
                 references: combinedRefs,
                 maskImageUrl: request.maskImageUrl,
@@ -540,6 +560,14 @@ export class ArchitecturalImageOrchestrator {
             totalAttempts += attempts;
             activeModelKey = candidateKey;
             activeProviderModelId = result.providerModelId;
+            if (!this.skipPersistence) {
+              const { recordServerRenderOutcome } = await import("@/lib/budget-guard.server");
+              await recordServerRenderOutcome({
+                billedPaise: billedPaiseForLive,
+                liveImages: result.assets.length,
+                freeImages: 0,
+              }).catch(() => undefined);
+            }
             if (idx > 0) {
               fallbackUsed = true;
               fallbackReason = `Primary model ${NANO_BANANA_MODELS[routing.primaryModelKey].displayName} failed (${errorMessages.join("; ")}); succeeded on fallback ${NANO_BANANA_MODELS[candidateKey].displayName}.`;

@@ -207,8 +207,39 @@ export function sanitizeDesign(input: Partial<DesignState> | undefined): DesignS
   };
 }
 
-export function assembleBrief(design: DesignState, idea: string, library?: string): string {
+export function assembleBrief(
+  design: DesignState,
+  idea: string,
+  library?: string,
+  options?: { hasUploadedImage?: boolean },
+): string {
   const clean = sanitizeDesign(design);
+  const hasUpload = Boolean(options?.hasUploadedImage);
+  const trimmedIdea = idea.trim();
+
+  if (hasUpload) {
+    const lines = [
+      "GOAL",
+      `In-place photorealistic edit on the attached uploaded source photograph. Finish quality: ${clean.range}. Refinement strength: ${clean.strength}. ${clean.detail}.`,
+      "",
+      "MUST PRESERVE (PIXEL-LOCKED)",
+      "Preserve the EXACT camera position, camera elevation/altitude, lens focal length, field of view, vanishing points, horizon line, crop boundaries, building silhouette, roof parapet, walls, openings, and site terrain pixel-for-pixel from the attached uploaded source image.",
+      "",
+      "CAMERA",
+      "LOCKED 1:1 TO ATTACHED UPLOADED IMAGE — do NOT change to eye-level, do NOT zoom, pan, tilt, rotate, crop, or straighten verticals.",
+      "",
+      "LIGHT / ATMOSPHERE",
+      `${clean.light} light. Mood: ${clean.mood}. Natural shadows consistent with the existing geometry.`,
+      "",
+      "RESTRICTIONS",
+      "Do NOT create a new building, room, or camera angle. Do NOT letterbox or change aspect ratio. Modify ONLY the surface materials, lighting, atmosphere, or local details explicitly named below.",
+    ];
+    if (trimmedIdea) {
+      lines.push("", "EDIT DIRECTIVE ON UPLOADED IMAGE", `${trimmedIdea} Apply ONLY these changes onto the attached uploaded image while keeping every pixel of camera perspective and unmentioned structure identical.`);
+    }
+    return lines.join("\n").slice(0, 4000);
+  }
+
   const groups = GROUPS[clean.vertical];
   const scoped = clean.target === "whole" ? groups : groups.filter((group) => group.id === clean.target);
   const changes = scoped.map((group) => `${group.label}: ${clean.picks[group.id]}`).join(". ");
@@ -243,7 +274,7 @@ export function assembleBrief(design: DesignState, idea: string, library?: strin
     "RESTRICTIONS",
     "Do not invent dimensions, brands, code compliance, or structural moves. Do not relocate unnamed openings. This is not a measured drawing.",
   ];
-  if (idea.trim()) lines.push("", "IDEA", `${idea.trim()} Change only what this idea names.`);
+  if (trimmedIdea) lines.push("", "IDEA", `${trimmedIdea} Change only what this idea names.`);
   if (library) lines.push("", "LIBRARY BRIEF", library);
   return lines.join("\n").slice(0, 4000);
 }

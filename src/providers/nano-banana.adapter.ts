@@ -307,8 +307,8 @@ export class NanoBananaProviderAdapter {
     maxRetries: number;
   } {
     const keys = resolveServerGeminiKeys();
-    const timeoutMs = Math.max(5000, Math.min(120000, Number(process.env.GEMINI_REQUEST_TIMEOUT) || 60000));
-    const maxRetries = Math.max(1, Math.min(5, Number(process.env.GEMINI_MAX_RETRIES) || 3));
+    const timeoutMs = Math.max(5000, Math.min(90000, Number(process.env.GEMINI_REQUEST_TIMEOUT) || 24000));
+    const maxRetries = Math.max(1, Math.min(4, Number(process.env.GEMINI_MAX_RETRIES) || 2));
     return {
       configured: Boolean(this.injectedClient) || keys.length > 0,
       provider: "google_gemini",
@@ -499,15 +499,38 @@ export class NanoBananaProviderAdapter {
 
     const imageConfig = this.buildImageConfig(input.modelKey, input.resolution, input.aspectRatio);
 
+    const { timeoutMs } = this.validateConfiguration();
+    const effectiveTimeout =
+      input.modelKey === "nano_banana_2_lite"
+        ? Math.min(timeoutMs, 16_000)
+        : input.resolution === "1K" || input.resolution === "512"
+          ? Math.min(timeoutMs, 22_000)
+          : timeoutMs;
+
     // IMPORTANT per Gemini API rules: never pass responseMimeType or responseSchema to Nano Banana image models.
-    const rawResponse = await this.executeWithClient((ai) =>
-      ai.models.generateContent({
-        model: runtimeModelId,
-        contents: { parts },
-        config: {
-          imageConfig,
-        },
-      }),
+    const rawResponse = await new Promise<Awaited<ReturnType<GeminiClientLike["models"]["generateContent"]>>>(
+      (resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(`Nano Banana ${runtimeModelId} timed out after ${Math.round(effectiveTimeout / 1000)}s.`));
+        }, effectiveTimeout);
+        this.executeWithClient((ai) =>
+          ai.models.generateContent({
+            model: runtimeModelId,
+            contents: { parts },
+            config: {
+              imageConfig,
+            },
+          }),
+        )
+          .then((res) => {
+            clearTimeout(timer);
+            resolve(res);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      },
     );
 
     const latencyMs = Math.max(1, Date.now() - startedAt);

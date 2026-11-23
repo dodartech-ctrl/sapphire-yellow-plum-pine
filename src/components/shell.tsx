@@ -1,6 +1,7 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
+  AlertTriangle,
   Bell,
   BookOpen,
   Bot,
@@ -31,7 +32,9 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BudgetCapModal } from "@/components/budget-cap-modal";
 import { Composer } from "@/components/composer";
+import { HeaderSpendChart } from "@/components/header-spend-chart";
 import { MarketCopilotDrawer } from "@/components/market-copilot-drawer";
 import {
   AgentZukeDrawer,
@@ -40,6 +43,16 @@ import {
   TrackedReviewModal,
 } from "@/components/review-mission-modals";
 import { NanoBananaOrchestratorDrawer } from "@/components/nano-banana-orchestrator-drawer";
+import { getStudioBudget, updateStudioBudget } from "@/lib/budget-fns";
+import {
+  BUDGET_WARNING_THRESHOLD_PCT,
+  estimateRemainingImages,
+  formatInrExact,
+  formatPaiseShort,
+  getBudgetWarningStatus,
+  resolveBudgetRenderPlan,
+} from "@/lib/budget-guard";
+import { resolveRuntimeModelOverride } from "@/lib/nano-banana-client";
 import { DISCIPLINES, SCOPE_LABEL, TEMPLATES } from "@/lib/catalog";
 import { CREDIT_MAX, getStudioCredits } from "@/lib/credits";
 import { StudioHeadSlotContext } from "@/lib/head-slot";
@@ -93,13 +106,22 @@ export function Shell() {
   const [agentOpen, setAgentOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [orchestratorOpen, setOrchestratorOpen] = useState(false);
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [dismissedWarningKey, setDismissedWarningKey] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(false);
+  const [studioMenuOpen, setStudioMenuOpen] = useState(false);
   const [headSlotEl, setHeadSlotEl] = useState<HTMLDivElement | null>(null);
   const contextRef = useRef<HTMLDivElement>(null);
+  const studioMenuRef = useRef<HTMLDivElement>(null);
+  const lastToastWarningKeyRef = useRef<string | null>(null);
 
   const appliedSuggestionIds = useOriel((state) => state.appliedSuggestionIds);
   const design = useOriel((state) => state.design);
   const credits = useOriel((state) => state.credits);
+  const budget = useOriel((state) => state.budget);
+  const setBudgetState = useOriel((state) => state.setBudgetState);
+  const updateBudgetConfig = useOriel((state) => state.updateBudgetConfig);
+  const nanoBanana = useOriel((state) => state.nanoBanana);
   const log = useOriel((state) => state.log);
   const clearLog = useOriel((state) => state.clearLog);
   const queue = useOriel((state) => state.queue);
@@ -129,6 +151,14 @@ export function Shell() {
     document.documentElement.classList.toggle("dark", themeMode === "dark");
     document.documentElement.style.colorScheme = themeMode;
   }, [themeMode]);
+
+  useEffect(() => {
+    function openBudget() {
+      setBudgetModalOpen(true);
+    }
+    window.addEventListener("oriel-open-budget", openBudget);
+    return () => window.removeEventListener("oriel-open-budget", openBudget);
+  }, []);
 
   function startNewProject() {
     if (plate?.url || upload || idea.trim()) {
@@ -163,7 +193,23 @@ export function Shell() {
     void getStudioCredits()
       .then((wallet) => setCredits(wallet.credits))
       .catch(() => undefined);
-  }, [hydrated, setCredits]);
+    void getStudioBudget()
+      .then((serverState) => {
+        const cur = useOriel.getState().budget;
+        const mergedSpent = Math.max(cur.spentPaise, serverState.spentPaise);
+        const mergedDaily =
+          serverState.dailySpend.length > 0 ? serverState.dailySpend : cur.dailySpend;
+        setBudgetState({
+          ...serverState,
+          capPaise: cur.capPaise,
+          costMode: cur.costMode,
+          maxPerImagePaise: cur.maxPerImagePaise,
+          spentPaise: mergedSpent,
+          dailySpend: mergedDaily,
+        });
+      })
+      .catch(() => undefined);
+  }, [hydrated, setCredits, setBudgetState]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -205,14 +251,20 @@ export function Shell() {
   }, []);
 
   useEffect(() => {
-    if (!contextOpen) return;
+    if (!contextOpen && !studioMenuOpen) return;
     function onPointerDown(event: PointerEvent) {
-      if (contextRef.current && !contextRef.current.contains(event.target as Node)) {
+      if (contextOpen && contextRef.current && !contextRef.current.contains(event.target as Node)) {
         setContextOpen(false);
+      }
+      if (studioMenuOpen && studioMenuRef.current && !studioMenuRef.current.contains(event.target as Node)) {
+        setStudioMenuOpen(false);
       }
     }
     function onEsc(event: KeyboardEvent) {
-      if (event.key === "Escape") setContextOpen(false);
+      if (event.key === "Escape") {
+        setContextOpen(false);
+        setStudioMenuOpen(false);
+      }
     }
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onEsc);
@@ -220,13 +272,112 @@ export function Shell() {
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onEsc);
     };
-  }, [contextOpen]);
+  }, [contextOpen, studioMenuOpen]);
 
   const activeVerticalLabel = VERTICALS.find((v) => v.id === design.vertical)?.label ?? "Studio";
+  const activeStudioMeta = NAMED_STUDIOS.find((st) => st.id === activeStudio) ?? NAMED_STUDIOS[0];
 
   const hasNotices = log.length > 0 || queue.length > 0;
   const activeRouteLabel = ROUTE_TITLES[pathname] ?? "Studio";
   const openIssueCount = trackedReviews.filter((r) => r.status === "open" || r.status === "in_progress" || r.status === "reopened").length;
+
+  const activeRuntimeModel = resolveRuntimeModelOverride(nanoBanana.requestedModel) ?? "gemini-nano-banana-2.1";
+  const activeBudgetPlan = resolveBudgetRenderPlan({
+    requestedModel: activeRuntimeModel,
+    requestedResolution: nanoBanana.resolution,
+    imageCount: 1,
+    budget,
+  });
+  const remainingPaise = Math.max(0, budget.capPaise - budget.spentPaise);
+  const budgetWarning = getBudgetWarningStatus(budget);
+  const warningActive = budget.costMode !== "free-only" && budgetWarning.level !== "ok";
+  const activeWarningKey = warningActive ? `${budget.capPaise}:${budgetWarning.level}` : null;
+  const remainingCompact =
+    remainingPaise % 100 === 0
+      ? `₹${Math.round(remainingPaise / 100)}`
+      : `₹${(remainingPaise / 100).toFixed(2)}`;
+  const activePerImgCompact = activeBudgetPlan.useCloud
+    ? `~${formatPaiseShort(activeBudgetPlan.perImagePaise)}`
+    : "₹0";
+  const remainingModelRenders = activeBudgetPlan.perImagePaise > 0
+    ? estimateRemainingImages(remainingPaise, activeBudgetPlan.perImagePaise)
+    : null;
+  const activeModelShort =
+    nanoBanana.requestedModel === "nano_banana_2_lite"
+      ? "NB Lite"
+      : nanoBanana.requestedModel === "nano_banana_pro"
+        ? "NB Pro"
+        : nanoBanana.requestedModel === "nano_banana_2"
+          ? "NB 2"
+          : "NB 2.1";
+
+  // Trigger a visual toast notification when spending reaches >=80% or 100% of cap
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!activeWarningKey || !warningActive) {
+      lastToastWarningKeyRef.current = null;
+      return;
+    }
+    if (lastToastWarningKeyRef.current === activeWarningKey) return;
+    lastToastWarningKeyRef.current = activeWarningKey;
+
+    if (budgetWarning.level === "reached") {
+      toast.error(`Budget Cap Reached (${formatInrExact(budget.spentPaise)} / ${formatInrExact(budget.capPaise)})`, {
+        id: "budget-cap-threshold-toast",
+        description: "Cloud spend hit 100% of your cap. Renders automatically switch to Free (₹0) Studio Preview.",
+        duration: 8000,
+        action: {
+          label: "Manage Cap",
+          onClick: () => setBudgetModalOpen(true),
+        },
+      });
+    } else if (budgetWarning.level === "warning") {
+      const estHint =
+        remainingModelRenders !== null
+          ? ` (~${remainingModelRenders} ${activeModelShort} renders left)`
+          : "";
+      toast.warning(
+        `Budget Warning: ${budgetWarning.usedPct}% of ${formatInrExact(budget.capPaise)} cap used`,
+        {
+          id: "budget-cap-threshold-toast",
+          description: `${formatInrExact(remainingPaise)} remaining${estHint}. Switch to NB 2 Lite (45p) or Free Preview anytime.`,
+          duration: 8000,
+          action: {
+            label: "Manage Cap",
+            onClick: () => setBudgetModalOpen(true),
+          },
+        },
+      );
+    }
+  }, [
+    hydrated,
+    activeWarningKey,
+    warningActive,
+    budgetWarning.level,
+    budgetWarning.usedPct,
+    budget.spentPaise,
+    budget.capPaise,
+    remainingPaise,
+    remainingModelRenders,
+    activeModelShort,
+  ]);
+
+  async function switchToFreeFromWarning() {
+    updateBudgetConfig({ costMode: "free-only" });
+    try {
+      const updated = await updateStudioBudget({
+        data: {
+          costMode: "free-only",
+          capPaise: budget.capPaise,
+          maxPerImagePaise: budget.maxPerImagePaise,
+        },
+      });
+      setBudgetState(updated);
+    } catch {
+      // Local state already updated
+    }
+    toast.success("Switched to Free (₹0) Studio Preview — zero cloud spend");
+  }
 
   function renderNavItems(compact: boolean, onPicked?: () => void) {
     const linkClass = (active: boolean) =>
@@ -333,18 +484,18 @@ export function Shell() {
       <aside
         className={cn(
           "relative z-20 hidden h-full shrink-0 flex-col overflow-hidden border-r border-[#d1c5b8]/45 bg-[#f5f3ef]/88 backdrop-blur-xl transition-[width] duration-200 lg:flex dark:border-[#a9bdc9]/20 dark:bg-[#050f1b]/82",
-          railCollapsed ? "w-[64px]" : "w-[216px]",
+          railCollapsed ? "w-[50px]" : "w-[200px]",
         )}
       >
-        <div className={cn("flex h-14 items-center border-b border-[#d1c5b8]/30 dark:border-[#a9bdc9]/15", railCollapsed ? "justify-center px-2" : "justify-between px-4")}>
-          <Link to="/" className="flex min-w-0 items-center gap-2.5">
+        <div className={cn("flex h-11 items-center border-b border-[#d1c5b8]/30 dark:border-[#a9bdc9]/15", railCollapsed ? "justify-center px-1.5" : "justify-between px-3")}>
+          <Link to="/" className="flex min-w-0 items-center gap-2">
             <Mark />
             {!railCollapsed ? (
               <span className="min-w-0">
-                <span className="block truncate font-display text-sm font-semibold uppercase tracking-wider text-[#1b1c1a] dark:text-[#e8eff3]">
+                <span className="block truncate font-display text-xs font-semibold uppercase tracking-wider text-[#1b1c1a] dark:text-[#e8eff3]">
                   Oriel · Zukeviz
                 </span>
-                <span className="block truncate font-display text-[10px] uppercase tracking-[0.16em] text-[#725b38] dark:text-[#e8c98a]">
+                <span className="block truncate font-display text-[9px] uppercase tracking-[0.14em] text-[#725b38] dark:text-[#e8c98a]">
                   Arctic Harbor
                 </span>
               </span>
@@ -352,7 +503,7 @@ export function Shell() {
           </Link>
         </div>
 
-        <nav className={cn("no-scrollbar flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pt-3", railCollapsed ? "px-2" : "px-2.5")} aria-label="Modules">
+        <nav className={cn("no-scrollbar flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pt-1.5", railCollapsed ? "px-1.5" : "px-2")} aria-label="Modules">
           {renderNavItems(railCollapsed)}
         </nav>
 
@@ -434,10 +585,34 @@ export function Shell() {
             <nav className="flex flex-1 flex-col gap-0.5" aria-label="Mobile Modules">
               {renderNavItems(false, () => setMobileNavOpen(false))}
             </nav>
+            <div className="mt-3 grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  setReviewModalOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[#d1c5b8]/50 bg-white px-2.5 py-2 text-xs font-medium text-[#4d463c] dark:border-[#a9bdc9]/25 dark:bg-[#121c29] dark:text-[#cfe3f0]"
+              >
+                <MessageSquare className="size-3.5" />
+                Review{openIssueCount > 0 ? ` (${openIssueCount})` : ""}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  setSettingsOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[#d1c5b8]/50 bg-white px-2.5 py-2 text-xs font-medium text-[#4d463c] dark:border-[#a9bdc9]/25 dark:bg-[#121c29] dark:text-[#cfe3f0]"
+              >
+                <Sliders className="size-3.5" />
+                Settings
+              </button>
+            </div>
             <Link
               to="/plans"
               onClick={() => setMobileNavOpen(false)}
-              className="mt-4 rounded-xl border border-[#d1c5b8]/50 bg-white px-3 py-2.5 text-xs dark:border-[#a9bdc9]/25 dark:bg-[#121c29]"
+              className="mt-2 rounded-xl border border-[#d1c5b8]/50 bg-white px-3 py-2.5 text-xs dark:border-[#a9bdc9]/25 dark:bg-[#121c29]"
             >
               <span className="flex items-center justify-between font-medium">
                 <span className="inline-flex items-center gap-1.5">
@@ -454,16 +629,16 @@ export function Shell() {
         {/* Unified Single Command Head Bar */}
         <header
           data-testid="studio-header"
-          className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-1.5 border-b border-[#d1c5b8]/35 bg-white/80 px-2.5 backdrop-blur-2xl shadow-[0_1px_8px_rgba(197,168,128,0.08)] md:px-3.5 dark:border-[#a9bdc9]/20 dark:bg-[#050f1b]/88 dark:shadow-[0_1px_12px_rgba(0,0,0,0.35)]"
+          className="relative z-30 flex h-11 shrink-0 items-center justify-between gap-1 border-b border-[#d1c5b8]/35 bg-white/80 px-2 backdrop-blur-2xl shadow-[0_1px_8px_rgba(197,168,128,0.08)] md:px-2.5 dark:border-[#a9bdc9]/20 dark:bg-[#050f1b]/88 dark:shadow-[0_1px_12px_rgba(0,0,0,0.35)]"
         >
-          {/* Left Zone: Nav Toggle + Context/Look Popover + Studio Switcher */}
+          {/* Left Zone: Nav Toggle + Discipline Context + Active Studio Switcher */}
           <div className="flex min-w-0 shrink-0 items-center gap-1.5">
             <button
               type="button"
               data-testid="mobile-menu-btn"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation menu"
-              className="grid size-8 shrink-0 place-items-center rounded-xl border border-[#d1c5b8]/60 bg-white text-[#1b1c1a] lg:hidden dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3]"
+              className="grid size-7.5 shrink-0 place-items-center rounded-xl border border-[#d1c5b8]/60 bg-white text-[#1b1c1a] lg:hidden dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3]"
             >
               <Menu className="size-4" />
             </button>
@@ -472,9 +647,9 @@ export function Shell() {
               data-testid="toggle-sidebar-rail-btn"
               onClick={() => setRailCollapsed((v) => !v)}
               aria-label={railCollapsed ? "Expand navigation rail" : "Collapse navigation rail"}
-              className="hidden size-8 shrink-0 place-items-center rounded-xl border border-[#d1c5b8]/50 bg-[#f5f3ef]/80 text-[#4d463c] transition hover:border-[#725b38] lg:grid dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0]"
+              className="hidden size-7.5 shrink-0 place-items-center rounded-xl border border-[#d1c5b8]/50 bg-[#f5f3ef]/80 text-[#4d463c] transition hover:border-[#725b38] lg:grid dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0]"
             >
-              {railCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              {railCollapsed ? <PanelLeftOpen className="size-3.5" /> : <PanelLeftClose className="size-3.5" />}
             </button>
 
             <div ref={contextRef} className="relative">
@@ -483,21 +658,13 @@ export function Shell() {
                 data-testid="header-context-btn"
                 aria-expanded={contextOpen}
                 onClick={() => setContextOpen((v) => !v)}
-                title="Switch Discipline, Studio, or Look Anchor"
-                className="inline-flex h-8 max-w-[155px] items-center gap-1.5 rounded-full border border-[#d1c5b8]/50 bg-[#efeeea]/85 px-2 text-[11px] font-medium text-[#1b1c1a] transition hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#121c29] dark:text-[#e8eff3] dark:hover:border-[#e8c98a]"
+                title="Switch Discipline or Look Anchor Bible"
+                className="inline-flex h-7.5 items-center gap-1 rounded-full border border-[#d1c5b8]/50 bg-[#efeeea]/85 px-2 text-[11px] font-medium text-[#1b1c1a] transition hover:border-[#725b38] sm:gap-1.5 sm:px-2.5 dark:border-[#a9bdc9]/25 dark:bg-[#121c29] dark:text-[#e8eff3] dark:hover:border-[#e8c98a]"
               >
-                <span className="lg:hidden">
-                  <Mark />
-                </span>
-                <span className="hidden font-display text-[10px] font-semibold tracking-[0.14em] text-[#725b38] uppercase lg:inline dark:text-[#e8c98a]">
+                <span className="hidden font-display text-[10px] font-semibold tracking-[0.14em] text-[#725b38] uppercase sm:inline dark:text-[#e8c98a]">
                   Oriel
                 </span>
-                <span className="truncate font-semibold">{activeVerticalLabel}</span>
-                {pathname === "/" ? (
-                  <span className="hidden max-w-[82px] truncate text-[10px] text-[#7f766a] sm:inline dark:text-[#a9bdc9]">
-                    · {design.look}
-                  </span>
-                ) : null}
+                <span className="font-semibold">{activeVerticalLabel}</span>
                 <ChevronDown className={cn("size-3 shrink-0 opacity-70 transition-transform", contextOpen ? "rotate-180" : "")} />
               </button>
 
@@ -536,7 +703,7 @@ export function Shell() {
                     </div>
                   </div>
 
-                  <div className="xl:hidden">
+                  <div className="sm:hidden">
                     <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#725b38] dark:text-[#e8c98a]">
                       Active Studio
                     </p>
@@ -586,41 +753,66 @@ export function Shell() {
               ) : null}
             </div>
 
-            {/* 5-Studio Named Switcher */}
-            <nav
-              data-testid="studio-switcher-bar"
-              aria-label="Named Studios"
-              className="hidden items-center gap-0.5 rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/85 p-0.5 xl:flex dark:border-[#a9bdc9]/20 dark:bg-[#121c29]/90"
-            >
-              {NAMED_STUDIOS.map((st) => {
-                const active = pathname === "/" && activeStudio === st.id;
-                const compactLabel = st.id === "kum-video" ? "KUM" : st.id === "node-studio" ? "Node" : st.shortLabel;
-                return (
-                  <button
-                    key={st.id}
-                    type="button"
-                    data-testid={`studio-tab-${st.id}`}
-                    title={st.subtitle}
-                    onClick={() => switchStudio(st.id)}
-                    className={cn(
-                      "rounded-full px-1.5 py-1 text-[10px] font-semibold transition",
-                      active
-                        ? "ice-cta"
-                        : "text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]",
-                    )}
-                  >
-                    {compactLabel}
-                  </button>
-                );
-              })}
-            </nav>
+            {/* Lean Active Studio Dropdown (Replaces Congested 5-Tab Bar) */}
+            <div ref={studioMenuRef} className="relative hidden sm:block" data-testid="studio-switcher-bar">
+              <button
+                type="button"
+                data-testid="studio-switcher-btn"
+                aria-expanded={studioMenuOpen}
+                onClick={() => setStudioMenuOpen((v) => !v)}
+                title={`Active Studio: ${activeStudioMeta.shortLabel} — ${activeStudioMeta.subtitle}`}
+                className="ice-cta inline-flex h-7.5 items-center gap-1 rounded-full px-2.5 text-[10.5px] font-semibold transition"
+              >
+                <span>{activeStudioMeta.shortLabel}</span>
+                <ChevronDown className={cn("size-3 opacity-80 transition-transform", studioMenuOpen ? "rotate-180" : "")} />
+              </button>
+
+              {studioMenuOpen ? (
+                <div
+                  data-testid="studio-switcher-popover"
+                  className="arctic-glass-z2 absolute top-10 left-0 z-50 w-60 space-y-1 rounded-2xl p-2 text-xs text-[#1b1c1a] shadow-2xl dark:text-[#e8eff3]"
+                >
+                  <p className="px-2 pt-0.5 pb-1 text-[9.5px] font-semibold uppercase tracking-wider text-[#725b38] dark:text-[#e8c98a]">
+                    Switch Named Studio
+                  </p>
+                  {NAMED_STUDIOS.map((st) => {
+                    const active = pathname === "/" && activeStudio === st.id;
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        data-testid={`studio-tab-${st.id}`}
+                        onClick={() => {
+                          switchStudio(st.id);
+                          setStudioMenuOpen(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-left transition",
+                          active
+                            ? "bg-[#c5a880]/25 font-semibold text-[#1b1c1a] dark:bg-[#202b38] dark:text-[#e8c98a]"
+                            : "text-[#4d463c] hover:bg-[#efeeea]/80 hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:bg-[#16202d] dark:hover:text-[#e8eff3]",
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-semibold">{st.shortLabel}</p>
+                          <p className="truncate text-[9.5px] opacity-75">{st.subtitle}</p>
+                        </div>
+                        {active ? (
+                          <span className="size-1.5 shrink-0 rounded-full bg-[#725b38] dark:bg-[#e8c98a]" />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* Center Zone: Unified Studio Controls Portal Slot (on /) or Active Route Pill */}
           <div
             id="studio-header-slot"
             ref={setHeadSlotEl}
-            className="flex min-w-0 flex-1 items-center justify-center overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex min-w-0 flex-1 items-center justify-center px-0.5"
           />
           {pathname !== "/" ? (
             <span className="hidden rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/75 px-3 py-1 text-[11px] font-medium text-[#4d463c] md:inline-flex dark:border-[#a9bdc9]/20 dark:bg-[#121c29] dark:text-[#cfe3f0]">
@@ -628,33 +820,16 @@ export function Shell() {
             </span>
           ) : null}
 
-          {/* Right Zone: Explore, AI Tools + Search, Review, Studio Settings & Governance, Theme, Notices, Share */}
+          {/* Right Zone: AI Tools Cluster + ₹100 Cap + Review + Share + Notices + Settings + Theme */}
           <div className="relative z-10 flex shrink-0 items-center gap-1">
-            <div className="inline-flex items-center gap-0.5 rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/85 p-0.5 dark:border-[#a9bdc9]/20 dark:bg-[#121c29]">
-              <Link
-                to="/explore"
-                search={{ tab: "all" }}
-                data-testid="header-explore-link"
-                aria-label="Open Explore Scenes & Studios"
-                title="Explore Scenes, Iterations & Studios"
-                className={cn(
-                  "hidden h-7 items-center gap-1 rounded-full px-2 text-[10px] font-semibold transition sm:inline-flex",
-                  pathname === "/explore"
-                    ? "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
-                    : "text-[#4d463c] hover:bg-white/80 hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:bg-[#202b38] dark:hover:text-[#e8eff3]",
-                )}
-              >
-                <Images className="size-3.5" />
-                <span className="hidden 2xl:inline">Explore</span>
-              </Link>
-
+            <div className="hidden items-center gap-0.5 rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/85 p-0.5 sm:inline-flex dark:border-[#a9bdc9]/20 dark:bg-[#121c29]">
               <button
                 type="button"
                 data-testid="open-orchestrator-btn"
                 onClick={() => setOrchestratorOpen(true)}
                 aria-label="Nano Banana Image Engine & AI Orchestrator"
-                title="Nano Banana Engine · 12-Stage Orchestrator & Quality Gate"
-                className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-[10px] font-semibold text-[#725b38] transition hover:bg-white/80 hover:text-[#1b1c1a] dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
+                title="Nano Banana 2.1 Engine · 12-Stage Orchestrator & Quality Gate"
+                className="inline-flex h-6.5 items-center gap-1 rounded-full px-1.5 text-[10px] font-semibold text-[#725b38] transition hover:bg-white/80 hover:text-[#1b1c1a] dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
               >
                 <Cpu className="size-3.5" />
                 <span className="hidden 2xl:inline">Engine</span>
@@ -666,7 +841,7 @@ export function Shell() {
                 onClick={() => setAgentOpen(true)}
                 aria-label="Agent Zuke Autonomous Mission Runner"
                 title="Agent Zuke Autonomous Mission Runner"
-                className="hidden h-7 items-center gap-1 rounded-full px-2 text-[10px] font-semibold text-[#1b1c1a] transition hover:bg-white/80 sm:inline-flex dark:text-[#e8c98a] dark:hover:bg-[#202b38]"
+                className="hidden h-6.5 items-center gap-1 rounded-full px-1.5 text-[10px] font-semibold text-[#1b1c1a] transition hover:bg-white/80 sm:inline-flex dark:text-[#e8c98a] dark:hover:bg-[#202b38]"
               >
                 <Bot className="size-3.5" />
                 <span className="hidden 2xl:inline">Agent</span>
@@ -678,54 +853,139 @@ export function Shell() {
                 onClick={() => setCopilotOpen(true)}
                 aria-label={`Market Copilot (${appliedSuggestionIds.length}/160 applied)`}
                 title={`Market Copilot (${appliedSuggestionIds.length}/160 suggestions)`}
-                className="inline-flex h-7 items-center gap-1 rounded-full bg-[#c5a880] px-2 text-[10px] font-semibold text-[#281800] shadow-xs transition hover:bg-[#b8976b] dark:bg-[#202b38] dark:text-[#cfe3f0]"
+                className="inline-flex h-6.5 items-center gap-1 rounded-full bg-[#c5a880] px-1.5 text-[10px] font-semibold text-[#281800] shadow-xs transition hover:bg-[#b8976b] dark:bg-[#202b38] dark:text-[#cfe3f0]"
               >
                 <Lightbulb className="size-3 text-[#281800] dark:text-[#e8c98a]" />
-                <span className="hidden 2xl:inline">Copilot</span>
                 <span className="font-mono text-[9px] tabular-nums opacity-85">
                   {appliedSuggestionIds.length}
                 </span>
               </button>
 
+              <Link
+                to="/explore"
+                data-testid="header-explore-link"
+                aria-label="Explore Visual Scenes & Presets"
+                title="Explore Visual Scenes & Presets"
+                className="hidden h-6.5 items-center gap-1 rounded-full px-1.5 text-[10px] text-[#4d463c] transition hover:bg-white/80 hover:text-[#1b1c1a] sm:inline-flex dark:text-[#a9bdc9] dark:hover:bg-[#202b38] dark:hover:text-[#e8eff3]"
+              >
+                <Images className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
+              </Link>
+
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-full px-1.5 text-[10px] text-[#4d463c] transition hover:bg-white/80 hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:bg-[#202b38] dark:hover:text-[#e8eff3]"
+                className="inline-flex h-6.5 items-center gap-1 rounded-full px-1.5 text-[10px] text-[#4d463c] transition hover:bg-white/80 hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:bg-[#202b38] dark:hover:text-[#e8eff3]"
                 aria-label="Search the library"
                 title="Search library (⌘K)"
               >
                 <Search className="size-3.5 text-[#725b38] dark:text-[#cfe3f0]" />
-                <kbd className="hidden rounded bg-[#eae8e4] px-1 py-0.5 font-mono text-[8.5px] 2xl:inline dark:bg-[#202b38] dark:text-[#a9bdc9]">⌘K</kbd>
               </button>
             </div>
 
-            <Link
-              to="/plans"
-              aria-label="Credits and Plans"
-              className="hidden h-7.5 items-center gap-1 rounded-full bg-[#c5a880]/20 px-2 font-mono text-[10px] font-medium tabular-nums text-[#513d1d] shadow-[inset_0_0_0_1px_rgba(197,168,128,0.4)] xl:inline-flex dark:bg-[#121c29] dark:text-[#e8c98a] dark:shadow-[inset_0_0_0_1px_rgba(232,201,138,0.3)]"
+            {/* Interactive Remaining INR Budget + Live Model Cost-Tracker + 80% Warning Indicator */}
+            <button
+              type="button"
+              data-testid="header-budget-cap-btn"
+              data-warning-level={budget.costMode === "free-only" ? "free" : budgetWarning.level}
+              onClick={() => setBudgetModalOpen(true)}
+              aria-label={`Remaining budget ${formatInrExact(remainingPaise)} of ${formatInrExact(budget.capPaise)} cap (${budgetWarning.usedPct}% used) · ${activeModelShort} ${activePerImgCompact} per image`}
+              title={`Remaining Budget: ${formatInrExact(remainingPaise)} of ${formatInrExact(budget.capPaise)} cap (${budgetWarning.usedPct}% used) · ${activeModelShort} (${activeBudgetPlan.effectiveResolution}): ${activePerImgCompact}/img${remainingModelRenders !== null ? ` (~${remainingModelRenders} imgs left)` : " (Free local preview)"}`}
+              className={cn(
+                "inline-flex h-7 items-center gap-1 rounded-full px-1.5 font-mono text-[9.5px] font-semibold tabular-nums transition sm:h-7.5 sm:px-2",
+                budget.costMode === "free-only"
+                  ? "border border-sky-500/40 bg-sky-500/12 text-sky-700 dark:text-sky-300"
+                  : budgetWarning.level === "reached"
+                    ? "border border-rose-500/55 bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                    : budgetWarning.level === "warning"
+                      ? "border border-amber-500/60 bg-amber-500/15 text-amber-800 hover:border-amber-500 dark:text-amber-300"
+                      : "border border-emerald-500/40 bg-emerald-500/12 text-emerald-700 hover:border-emerald-500/70 dark:text-emerald-300",
+              )}
               suppressHydrationWarning
             >
-              <span className="size-1.5 rounded-full bg-[#725b38] dark:bg-[#e8c98a] dark:shadow-[0_0_8px_#e8c98a]" />
-              {credits.toLocaleString()} CR
-            </Link>
+              {warningActive ? (
+                <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
+              ) : (
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full",
+                    budget.costMode === "free-only" ? "bg-sky-500" : "bg-emerald-500",
+                  )}
+                />
+              )}
+              <span data-testid="header-budget-remaining">
+                {remainingCompact}
+                <span className="hidden 2xl:inline"> left</span>
+              </span>
+              {warningActive ? (
+                <span
+                  data-testid="header-budget-warning-pct"
+                  className="hidden text-[9px] font-bold sm:inline"
+                >
+                  ({budgetWarning.usedPct}%)
+                </span>
+              ) : null}
+              <span className="opacity-45">·</span>
+              <span
+                data-testid="header-budget-est-cost"
+                className="text-[#513d1d] dark:text-[#e8c98a]"
+              >
+                {activePerImgCompact}
+              </span>
+            </button>
+
+            {/* Recharts Compact Daily Spending Bar Chart Widget */}
+            <HeaderSpendChart
+              budget={budget}
+              onOpenBudgetModal={() => setBudgetModalOpen(true)}
+            />
 
             <button
               type="button"
-              onClick={() => setThemeMode(themeMode === "dark" ? "light" : "dark")}
-              aria-label={themeMode === "dark" ? "Switch to Light Mode" : "Switch to Arctic Dark Mode"}
-              title={themeMode === "dark" ? "Switch to Atelier Light" : "Switch to Arctic Harbor Dark"}
-              data-testid="theme-toggle-btn"
-              className="grid size-7.5 shrink-0 place-items-center rounded-full border border-[#d1c5b8]/55 bg-white/80 text-[#4d463c] hover:text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8c98a]"
+              data-testid="header-review-btn"
+              onClick={() => setReviewModalOpen(true)}
+              aria-label="Tracked Review & Client Approval"
+              title="Tracked Review & Client Approval"
+              className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white/80 px-2 text-[10px] font-semibold text-[#1b1c1a] transition hover:border-[#725b38] sm:inline-flex sm:h-7.5 dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3] dark:hover:border-[#e8c98a]"
             >
-              {themeMode === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+              <MessageSquare className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
+              <span className="hidden 2xl:inline">Review</span>
+              {openIssueCount > 0 ? (
+                <span className="hidden rounded-full bg-[#c5a880]/25 px-1 py-0.2 font-mono text-[9px] text-[#513d1d] sm:inline dark:bg-[#202b38] dark:text-[#e8c98a]">
+                  {openIssueCount}
+                </span>
+              ) : null}
             </button>
 
-            <div className="relative">
+            <button
+              type="button"
+              data-testid="header-share-btn"
+              onClick={() => setReviewModalOpen(true)}
+              aria-label="Share Studio Review & Client Link"
+              title="Share Client Review & Presentation Link"
+              className="hidden size-7 shrink-0 place-items-center rounded-full border border-[#d1c5b8]/55 bg-white/80 text-[#4d463c] transition hover:border-[#725b38] hover:text-[#1b1c1a] 2xl:grid sm:size-7.5 dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:border-[#e8c98a]"
+            >
+              <Share2 className="size-3.5" />
+            </button>
+
+            <button
+              type="button"
+              data-testid="header-governance-btn"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Studio Settings & Governance"
+              title="Studio Settings & Governance"
+              className="hidden size-7 shrink-0 place-items-center rounded-full border border-[#d1c5b8]/55 bg-white/80 text-[#4d463c] transition hover:border-[#725b38] hover:text-[#1b1c1a] sm:grid sm:size-7.5 lg:hidden 2xl:grid dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:border-[#e8c98a]"
+            >
+              <Sliders className="size-3.5" />
+            </button>
+
+            <div className="relative hidden lg:block">
               <button
                 type="button"
+                data-testid="header-notices-btn"
                 onClick={() => setNoticesOpen((v) => !v)}
-                className="relative grid size-7.5 shrink-0 place-items-center rounded-full text-[#4d463c] transition hover:bg-[#eae8e4] dark:text-[#a9bdc9] dark:hover:bg-[#16202d]"
-                aria-label="Notices"
+                className="relative grid size-7.5 shrink-0 place-items-center rounded-full border border-[#d1c5b8]/45 bg-white/75 text-[#4d463c] transition hover:border-[#725b38] dark:border-[#a9bdc9]/20 dark:bg-[#16202d] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]"
+                aria-label="Studio Render Activity & Notices"
+                title="Studio Render Activity & Notices"
                 aria-expanded={noticesOpen}
               >
                 <Bell className="size-3.5" />
@@ -777,47 +1037,73 @@ export function Shell() {
 
             <button
               type="button"
-              data-testid="header-review-btn"
-              onClick={() => setReviewModalOpen(true)}
-              aria-label="Tracked Review & Client Approval"
-              title="Open Tracked Review & Issue Tracker"
-              className="inline-flex h-7.5 shrink-0 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white/80 px-2 text-[10px] font-semibold text-[#1b1c1a] transition hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3] dark:hover:border-[#e8c98a]"
+              onClick={() => setThemeMode(themeMode === "dark" ? "light" : "dark")}
+              aria-label={themeMode === "dark" ? "Switch to Light Mode" : "Switch to Arctic Dark Mode"}
+              title={themeMode === "dark" ? "Switch to Atelier Light" : "Switch to Arctic Harbor Dark"}
+              data-testid="theme-toggle-btn"
+              className="grid size-7 shrink-0 place-items-center rounded-full border border-[#d1c5b8]/55 bg-white/80 text-[#4d463c] hover:text-[#1b1c1a] sm:size-7.5 dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8c98a]"
             >
-              <MessageSquare className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
-              <span className="hidden xl:inline">Review</span>
-              {openIssueCount > 0 ? (
-                <span className="rounded-full bg-[#c5a880]/25 px-1.5 py-0.2 font-mono text-[9px] text-[#513d1d] dark:bg-[#202b38] dark:text-[#e8c98a]">
-                  {openIssueCount}
-                </span>
-              ) : null}
-            </button>
-
-            <button
-              type="button"
-              data-testid="header-governance-btn"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Studio Settings & Governance"
-              title="Studio Settings & Governance"
-              className="inline-flex h-7.5 shrink-0 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white/80 px-2 text-[10px] font-semibold text-[#4d463c] transition hover:border-[#725b38] hover:text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:border-[#e8c98a]"
-            >
-              <Sliders className="size-3.5" />
-              <span className="hidden 2xl:inline">Settings</span>
-            </button>
-
-            <button
-              type="button"
-              data-testid="share-review-btn"
-              onClick={() => setReviewModalOpen(true)}
-              className="ice-cta hidden h-7.5 items-center gap-1 rounded-full px-2.5 text-[10.5px] font-bold md:inline-flex"
-              title="Share & Client Approval Sheet"
-            >
-              <Share2 className="size-3" />
-              <span className="hidden 2xl:inline">Share</span>
+              {themeMode === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
             </button>
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3 lg:overflow-hidden lg:pb-2.5">
+        {/* Visual Budget Cap Warning Banner (>=80% or 100% spend threshold) */}
+        {hydrated && warningActive && activeWarningKey && dismissedWarningKey !== activeWarningKey ? (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="budget-80-warning-banner"
+            className={cn(
+              "relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-1.5 text-[11px]",
+              budgetWarning.level === "reached"
+                ? "border-rose-500/35 bg-rose-500/12 text-rose-900 dark:bg-rose-950/55 dark:text-rose-200"
+                : "border-amber-500/40 bg-amber-500/14 text-amber-950 dark:bg-amber-950/50 dark:text-amber-200",
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="font-semibold">
+                {budgetWarning.level === "reached"
+                  ? `Budget cap reached (${budgetWarning.usedPct}%)`
+                  : `${BUDGET_WARNING_THRESHOLD_PCT}% Budget Warning (${budgetWarning.usedPct}% used)`}
+              </span>
+              <span className="hidden opacity-60 sm:inline">·</span>
+              <span className="truncate font-mono text-[10.5px] tabular-nums">
+                {formatInrExact(budget.spentPaise)} of {formatInrExact(budget.capPaise)} spent ({formatInrExact(remainingPaise)} left)
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                data-testid="budget-warning-switch-free-btn"
+                onClick={() => void switchToFreeFromWarning()}
+                className="rounded-lg border border-current/25 bg-white/70 px-2 py-0.5 text-[10px] font-semibold transition hover:bg-white dark:bg-[#08131f]/75 dark:hover:bg-[#08131f]"
+              >
+                Switch to Free (₹0)
+              </button>
+              <button
+                type="button"
+                data-testid="budget-warning-manage-btn"
+                onClick={() => setBudgetModalOpen(true)}
+                className="rounded-lg bg-[#1b1c1a] px-2 py-0.5 text-[10px] font-semibold text-white transition hover:opacity-90 dark:bg-[#e8c98a] dark:text-[#1b1407]"
+              >
+                Manage Cap
+              </button>
+              <button
+                type="button"
+                data-testid="budget-warning-dismiss-btn"
+                onClick={() => setDismissedWarningKey(activeWarningKey)}
+                aria-label="Dismiss budget warning banner"
+                className="grid size-5 place-items-center rounded-md opacity-75 transition hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-1.5 lg:overflow-hidden lg:pb-1">
           <StudioHeadSlotContext.Provider value={headSlotEl}>
             <Outlet />
           </StudioHeadSlotContext.Provider>
@@ -832,6 +1118,7 @@ export function Shell() {
       <AgentZukeDrawer open={agentOpen} onClose={() => setAgentOpen(false)} />
       <GovernanceSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <NanoBananaOrchestratorDrawer open={orchestratorOpen} onClose={() => setOrchestratorOpen(false)} />
+      <BudgetCapModal open={budgetModalOpen} onClose={() => setBudgetModalOpen(false)} />
       {hydrated ? <Toaster theme={themeMode} position="top-center" /> : null}
     </div>
   );

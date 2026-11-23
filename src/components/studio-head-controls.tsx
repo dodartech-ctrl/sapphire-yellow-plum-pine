@@ -67,6 +67,9 @@ type StudioHeadControlsProps = {
   onToggleInspector: () => void;
   hasPlate: boolean;
   hasSource: boolean;
+  canCompare?: boolean;
+  onToggleCompare?: () => void;
+  onTriggerUpload?: () => void;
   busy: boolean;
   onRelightDusk: () => void;
   onOutpaintWide: () => void;
@@ -92,6 +95,9 @@ export function StudioHeadControls({
   onToggleInspector,
   hasPlate,
   hasSource,
+  canCompare = false,
+  onToggleCompare,
+  onTriggerUpload,
   busy,
   onRelightDusk,
   onOutpaintWide,
@@ -150,25 +156,25 @@ export function StudioHeadControls({
     (showingSplitHub ? "Split" : "Stage");
 
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-center gap-1 lg:gap-1.5">
-      {/* 5-Intent Journey Stepper (Compact Pill Rail) */}
+    <div className="flex min-w-0 items-center justify-center gap-1">
+      {/* Lean 5-Step Workflow Pill */}
       <nav
         aria-label="Architectural Workflow Stepper"
         data-testid="workflow-intent-bar"
         className="hidden shrink-0 items-center gap-0.5 rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/80 p-0.5 md:flex dark:border-[#a9bdc9]/20 dark:bg-[#121c29]/90"
       >
         {WORKFLOW_INTENTS.map((item) => {
-          const isActive = activeIntent === item.id;
+          const isActive = activeIntent === item.id && view !== "compare";
           const shortName =
-            item.id === "3d"
-              ? "3D"
-              : item.id === "edit"
-                ? "Edit"
-                : item.id === "enhance"
-                  ? "Enhance"
-                  : item.id === "spatial"
-                    ? "360°"
-                    : item.label;
+            item.id === "render"
+              ? "Scene"
+              : item.id === "3d"
+                ? "3D"
+                : item.id === "edit"
+                  ? "Edit"
+                  : item.id === "enhance"
+                    ? "Enhance"
+                    : "360°";
           return (
             <button
               key={item.id}
@@ -178,20 +184,56 @@ export function StudioHeadControls({
               title={item.hint}
               onClick={() => onSelectIntent(item.id)}
               className={cn(
-                "inline-flex h-6.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[10px] font-medium transition",
+                "inline-flex h-6.5 shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[10px] font-medium transition 2xl:px-2",
                 isActive
                   ? "bg-[#c5a880] font-semibold text-[#281800] shadow-xs dark:bg-[#cfe3f0] dark:text-[#08131f]"
                   : "text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]",
               )}
             >
-              <span className="font-mono text-[9px] opacity-75">{item.step}.</span>
-              <span>{shortName}</span>
+              {shortName}
             </button>
           );
         })}
       </nav>
 
-      {/* Active Viewport Mode Switcher (Split/3D/AI or MAS 2D Edit/Compose) */}
+      {/* Quick Scene Upload Trigger */}
+      {onTriggerUpload ? (
+        <button
+          type="button"
+          data-testid="header-upload-btn"
+          onClick={onTriggerUpload}
+          aria-label="Upload Photo or 3D GLB into Scene"
+          title="Upload Photo, Sketch, or 3D GLB/OBJ into Scene"
+          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white/85 px-2 text-[10px] font-semibold text-[#725b38] transition hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8c98a] dark:hover:border-[#e8c98a]"
+        >
+          <Upload className="size-3" />
+          <span className="hidden 2xl:inline">Upload</span>
+        </button>
+      ) : null}
+
+      {/* Always-Visible Compare Toggle */}
+      {onToggleCompare ? (
+        <button
+          type="button"
+          data-testid="header-compare-btn"
+          aria-pressed={view === "compare"}
+          onClick={onToggleCompare}
+          title={canCompare ? "Compare Uploaded Source vs Rendered Result" : "Compare Before/After (upload & render first)"}
+          className={cn(
+            "hidden h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-[10px] font-semibold transition md:inline-flex",
+            view === "compare"
+              ? "border-[#725b38] bg-[#c5a880] text-[#281800] shadow-xs dark:border-[#e8c98a] dark:bg-[#e8c98a] dark:text-[#1b1407]"
+              : canCompare
+                ? "border-[#d1c5b8]/55 bg-white/85 text-[#1b1c1a] hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:border-[#e8c98a]"
+                : "border-[#d1c5b8]/40 bg-white/60 text-[#7f766a] hover:border-[#725b38] dark:border-[#a9bdc9]/20 dark:bg-[#121c29] dark:text-[#7f9bb2]",
+          )}
+        >
+          <Columns2 className="size-3" />
+          <span className="hidden 2xl:inline">Compare</span>
+        </button>
+      ) : null}
+
+      {/* Restored Split / 3D / AI (and MAS 2D Edit/Compose) directly visible from xl (1280px+) */}
       {showingSplitHub ? (
         <div
           className="hidden shrink-0 items-center gap-0.5 rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/85 p-0.5 xl:flex dark:border-[#a9bdc9]/20 dark:bg-[#121c29]"
@@ -213,7 +255,7 @@ export function StudioHeadControls({
               data-testid={`split-mode-${mode.id}`}
               onClick={() => setSplitViewMode(mode.id)}
               className={cn(
-                "h-6.5 rounded-full px-2 text-[10px] font-semibold transition",
+                "h-6 rounded-full px-1.5 text-[9.5px] font-semibold transition",
                 splitViewMode === mode.id
                   ? "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
                   : "text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]",
@@ -232,7 +274,7 @@ export function StudioHeadControls({
               onOpenStage("mask");
             }}
             className={cn(
-              "h-6.5 rounded-full px-2 text-[10px] font-semibold transition",
+              "h-6 rounded-full px-2 text-[9.5px] font-semibold transition",
               mas2dMode === "edit"
                 ? "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
                 : "text-[#4d463c] dark:text-[#a9bdc9]",
@@ -247,7 +289,7 @@ export function StudioHeadControls({
               onOpenStage("sketch");
             }}
             className={cn(
-              "h-6.5 rounded-full px-2 text-[10px] font-semibold transition",
+              "h-6 rounded-full px-2 text-[9.5px] font-semibold transition",
               mas2dMode === "compose"
                 ? "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
                 : "text-[#4d463c] dark:text-[#a9bdc9]",
@@ -256,98 +298,77 @@ export function StudioHeadControls({
             Compose
           </button>
         </div>
-      ) : activeStudio === "sam-3d" ? (
-        <button
-          type="button"
-          onClick={onEnableSplitHub}
-          title="Return to 3D + AI Split Canvas"
-          className="hidden h-7.5 shrink-0 items-center gap-1 rounded-full border border-[#c5a880]/55 bg-[#c5a880]/15 px-2.5 text-[10px] font-semibold text-[#513d1d] transition hover:bg-[#c5a880]/25 xl:inline-flex dark:border-[#cfe3f0]/35 dark:bg-[#202b38] dark:text-[#cfe3f0]"
-        >
-          <Columns2 className="size-3" />
-          <span>Split 3D+AI</span>
-        </button>
       ) : null}
 
-      {/* Core Controls: Gate, Lock Mood, Wide Rail, & Unified Stage/Plate Command Deck */}
+      {/* Core Controls: Gate + Lock Seed + Wide Canvas + Unified Command Deck */}
       <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
           data-testid="open-fidelity-gate-btn"
           onClick={onOpenGateModal}
           title="Open Architectural Fidelity Gate"
-          className="inline-flex h-7.5 shrink-0 items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-700 transition hover:border-emerald-500/60 dark:text-emerald-300"
+          className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-700 transition hover:border-emerald-500/60 sm:inline-flex dark:text-emerald-300"
         >
-          <ShieldCheck className="size-3.5" />
+          <ShieldCheck className="size-3" />
           <span>{fidelityReport ? `${Math.round(fidelityReport.overallScore * 100)}%` : "Gate"}</span>
         </button>
 
+        {/* Restored Lock Seed Button */}
         <button
           type="button"
-          data-testid="freeze-mood-seed-btn"
+          data-testid="header-lock-seed-btn"
           aria-pressed={engine.seedLocked}
-          aria-label={engine.seedLocked ? "Unlock mood and seed" : "Lock mood and seed"}
-          title={engine.seedLocked ? `Mood & Seed #${engine.seed} Frozen` : "Lock Mood & Seed for revisions"}
           onClick={() => {
-            const nextLocked = !engine.seedLocked;
-            setEngineField("seedLocked", nextLocked);
-            if (nextLocked && engine.geometryLock < 90) {
-              setEngineField("geometryLock", 92);
-            }
-            toast.success(
-              nextLocked
-                ? `Mood & Seed #${engine.seed} locked for consistent revisions`
-                : "Seed unlocked for exploration",
-            );
+            setEngineField("seedLocked", !engine.seedLocked);
+            toast.success(engine.seedLocked ? "Seed unlocked for fresh variations" : `Seed #${engine.seed} locked`);
           }}
+          aria-label={engine.seedLocked ? "Unlock render seed" : "Lock render seed"}
+          title={engine.seedLocked ? `Seed #${engine.seed} locked — click to unlock` : `Lock seed #${engine.seed} for reproducible edits`}
           className={cn(
-            "inline-flex h-7.5 shrink-0 items-center gap-1 rounded-full border px-2 text-[10px] font-medium transition",
+            "hidden size-7 shrink-0 place-items-center rounded-full border transition lg:grid",
             engine.seedLocked
-              ? "border-[#c5a880] bg-[#c5a880]/20 text-[#513d1d] dark:border-[#e8c98a]/50 dark:bg-[#584411]/55 dark:text-[#e8c98a]"
-              : "border-[#d1c5b8]/55 bg-white/80 text-[#4d463c] hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#a9bdc9]",
+              ? "border-[#c5a880] bg-[#c5a880]/25 text-[#513d1d] dark:border-[#e8c98a] dark:bg-[#202b38] dark:text-[#e8c98a]"
+              : "border-[#d1c5b8]/55 bg-white/85 text-[#4d463c] hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]",
           )}
         >
-          {engine.seedLocked ? (
-            <Lock className="size-3 text-[#725b38] dark:text-[#e8c98a]" />
-          ) : (
-            <Unlock className="size-3" />
-          )}
-          <span className="hidden 2xl:inline">{engine.seedLocked ? "Frozen" : "Lock"}</span>
+          {engine.seedLocked ? <Lock className="size-3" /> : <Unlock className="size-3" />}
         </button>
 
+        {/* Restored Wide Canvas / Inspector Rail Toggle */}
         <button
           type="button"
-          data-testid="toggle-inspector-btn"
+          data-testid="header-toggle-inspector-btn"
+          aria-pressed={inspectorCollapsed}
           onClick={onToggleInspector}
-          aria-label={inspectorCollapsed ? "Show Scene & Optics panel" : "Hide Scene & Optics panel"}
-          title={inspectorCollapsed ? "Show Presets & Optics Rail" : "Wide Canvas (Hide Right Rail)"}
-          className="hidden h-7.5 shrink-0 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white/80 px-2 text-[10px] font-medium text-[#1b1c1a] transition hover:border-[#725b38] lg:inline-flex dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3]"
-        >
-          {inspectorCollapsed ? (
-            <PanelRightOpen className="size-3 text-[#725b38] dark:text-[#e8c98a]" />
-          ) : (
-            <PanelRightClose className="size-3 text-[#4d463c] dark:text-[#a9bdc9]" />
+          aria-label={inspectorCollapsed ? "Show Right Preset Matrix Rail" : "Expand Wide Canvas"}
+          title={inspectorCollapsed ? "Show Preset Matrix & Optics Rail" : "Collapse Rail for Wide Canvas"}
+          className={cn(
+            "hidden size-7 shrink-0 place-items-center rounded-full border transition lg:grid",
+            inspectorCollapsed
+              ? "border-[#725b38] bg-[#c5a880]/25 text-[#513d1d] dark:border-[#e8c98a] dark:bg-[#202b38] dark:text-[#e8c98a]"
+              : "border-[#d1c5b8]/55 bg-white/85 text-[#4d463c] hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:border-[#e8c98a]",
           )}
-          <span className="hidden 2xl:inline">{inspectorCollapsed ? "Rail" : "Wide"}</span>
+        >
+          {inspectorCollapsed ? <PanelRightOpen className="size-3.5" /> : <PanelRightClose className="size-3.5" />}
         </button>
 
-        {/* Unified Stage, Telemetry, Plate & MAS 2D Command Deck Popover */}
+        {/* Unified Stage, Telemetry, Lock, Rail & Plate Command Deck Popover */}
         <div ref={deckRef} className="relative">
           <button
             type="button"
             data-testid="studio-command-menu-btn"
             aria-expanded={deckOpen}
             onClick={() => setDeckOpen((v) => !v)}
-            title="Open Telemetry, Stages, Plate Actions & Palettes"
+            title="Open Stages, Palettes, Relight/Outpaint/Upscale & Export Deck"
             className={cn(
-              "inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[10.5px] font-semibold transition",
+              "inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold transition 2xl:px-2",
               deckOpen
                 ? "border-[#725b38] bg-[#c5a880]/25 text-[#1b1c1a] dark:border-[#e8c98a] dark:bg-[#202b38] dark:text-[#e8c98a]"
                 : "border-[#d1c5b8]/55 bg-white/85 text-[#1b1c1a] hover:border-[#725b38] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:border-[#e8c98a]",
             )}
           >
-            <span className="size-1.5 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.75)]" />
-            <span>{showingSplitHub ? "Deck" : stageLabel}</span>
-            {hasPlate ? <span className="hidden rounded bg-[#c5a880]/25 px-1 font-mono text-[9px] text-[#725b38] 2xl:inline dark:bg-[#584411]/60 dark:text-[#e8c98a]">Plate</span> : null}
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            <span className="hidden 2xl:inline">{showingSplitHub || view === "compare" ? "Deck" : stageLabel}</span>
             <ChevronDown className={cn("size-3 transition-transform", deckOpen ? "rotate-180" : "")} />
           </button>
 
@@ -405,6 +426,46 @@ export function StudioHeadControls({
                   >
                     <RefreshCw className="size-3" />
                     Sync
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="freeze-mood-seed-btn"
+                    aria-pressed={engine.seedLocked}
+                    onClick={() => {
+                      const nextLocked = !engine.seedLocked;
+                      setEngineField("seedLocked", nextLocked);
+                      if (nextLocked && engine.geometryLock < 90) {
+                        setEngineField("geometryLock", 92);
+                      }
+                      toast.success(
+                        nextLocked
+                          ? `Mood & Seed #${engine.seed} locked for consistent revisions`
+                          : "Seed unlocked for exploration",
+                      );
+                    }}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1 rounded-full border px-2 text-[10px] font-medium",
+                      engine.seedLocked
+                        ? "border-[#c5a880] bg-[#c5a880]/20 text-[#513d1d] dark:border-[#e8c98a] dark:text-[#e8c98a]"
+                        : "border-[#d1c5b8]/55 bg-white/80 text-[#4d463c] dark:border-[#a9bdc9]/25 dark:bg-[#202b38] dark:text-[#cfe3f0]",
+                    )}
+                    title="Lock Mood & Seed"
+                  >
+                    {engine.seedLocked ? <Lock className="size-3" /> : <Unlock className="size-3" />}
+                    {engine.seedLocked ? "Locked" : "Seed"}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="toggle-inspector-btn"
+                    onClick={() => {
+                      onToggleInspector();
+                      setDeckOpen(false);
+                    }}
+                    className="inline-flex h-7 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white/80 px-2 text-[10px] font-medium text-[#4d463c] hover:text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#202b38] dark:text-[#e8eff3]"
+                    title={inspectorCollapsed ? "Show Presets & Optics Rail" : "Wide Canvas (Hide Right Rail)"}
+                  >
+                    {inspectorCollapsed ? <PanelRightOpen className="size-3" /> : <PanelRightClose className="size-3" />}
+                    {inspectorCollapsed ? "Show Rail" : "Wide"}
                   </button>
                   {showingSplitHub ? (
                     <button

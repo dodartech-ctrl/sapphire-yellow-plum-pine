@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useEffect, useState } from "react";
 import { DEFAULT_FRAME, sanitizeFrame, type Frame } from "@/lib/frame";
+import { parseImageDimensionsFromDataUrl } from "@/lib/image-aspect";
 import { DEFAULT_PILLS, type PillKey, type Pills } from "@/lib/pills";
 import { DEFAULT_DESIGN, GROUPS, LOOKS, sanitizeDesign, type DesignState, type PanelTab, type VerticalId } from "@/lib/properties";
 import {
@@ -57,6 +58,7 @@ import {
   upsertMaterialAssignment,
   type MeshMaterialAssignment,
 } from "@/lib/solar-and-materials";
+import { buildIntentLookAppliedPrompt } from "@/lib/preset-transform";
 import type { ModelId } from "@/lib/types";
 import { buildTemplateCompiledNotes, type BriefTemplate } from "@/lib/brief-templates";
 import type { SharedBriefSnapshot } from "@/lib/brief-collab";
@@ -104,6 +106,12 @@ import {
   type NanoBananaStudioConfig,
   type OrchestrationResponseClient,
 } from "@/lib/nano-banana-client";
+import {
+  DEFAULT_BUDGET_STATE,
+  sanitizeBudgetState,
+  type BudgetCostMode,
+  type BudgetState,
+} from "@/lib/budget-guard";
 
 export type SavedBrief = {
   id: string;
@@ -236,6 +244,7 @@ type State = {
   agentMission: AgentMissionState;
   governance: GovernanceState;
   nanoBanana: NanoBananaStudioConfig;
+  budget: BudgetState;
   lastOrchestration: OrchestrationResponseClient | null;
   projects: Project[];
   chat: ChatLine[];
@@ -412,6 +421,9 @@ type State = {
   updateGovernance: (patch: Partial<GovernanceState>) => void;
   appendAuditEvent: (actor: string, action: string, target: string) => void;
   updateNanoBanana: (patch: Partial<NanoBananaStudioConfig>) => void;
+  setBudgetState: (next: BudgetState) => void;
+  updateBudgetConfig: (patch: { capPaise?: number; costMode?: BudgetCostMode; maxPerImagePaise?: number; autoFallbackOnCap?: boolean }) => void;
+  resetBudgetSpendLocal: () => void;
   setLastOrchestration: (res: OrchestrationResponseClient | null) => void;
 };
 
@@ -502,6 +514,7 @@ export const useOriel = create<State>()(
       agentMission: DEFAULT_AGENT_MISSION,
       governance: DEFAULT_GOVERNANCE_STATE,
       nanoBanana: DEFAULT_NANO_BANANA_CONFIG,
+      budget: DEFAULT_BUDGET_STATE,
       lastOrchestration: null,
       projects: [],
       chat: [],
@@ -615,12 +628,32 @@ export const useOriel = create<State>()(
         }),
       setUpload: (upload) =>
         set((state) => {
+          const uploadDims = parseImageDimensionsFromDataUrl(upload);
+          const nextFrame = uploadDims
+            ? sanitizeFrame({ ...state.frame, ratio: uploadDims.frameRatio })
+            : state.frame;
+          const nextNanoBanana = uploadDims
+            ? {
+                ...state.nanoBanana,
+                aspectRatio: uploadDims.geminiRatio,
+                generationMode:
+                  state.nanoBanana.generationMode === "text_to_image"
+                    ? ("image_to_image" as const)
+                    : state.nanoBanana.generationMode,
+              }
+            : state.nanoBanana;
+          const nextEngine = upload
+            ? sanitizeEngineState({
+                ...state.engine,
+                geometryLock: Math.max(90, state.engine.geometryLock),
+              })
+            : state.engine;
           const nextContract = buildDefaultDesignContract({
             hasUpload: Boolean(upload),
             hasSketch: Boolean(state.sketchDataUrl),
             vertical: state.design.vertical,
             look: state.design.look,
-            fidelity: state.engine.renderFidelity,
+            fidelity: nextEngine.renderFidelity,
           });
           void savePlateBundleToIdb({
             plate: state.plate,
@@ -629,7 +662,17 @@ export const useOriel = create<State>()(
             upload,
             savedAt: Date.now(),
           });
-          return { upload, designContract: nextContract };
+          return {
+            upload,
+            frame: nextFrame,
+            nanoBanana: nextNanoBanana,
+            engine: nextEngine,
+            radialOptics: upload
+              ? { ...state.radialOptics, diffusionLock: nextEngine.geometryLock }
+              : state.radialOptics,
+            conditioningChannels: upload ? {} : state.conditioningChannels,
+            designContract: nextContract,
+          };
         }),
       setSketchDataUrl: (sketchDataUrl) => set({ sketchDataUrl }),
       setMaskDataUrl: (maskDataUrl) => set({ maskDataUrl }),
@@ -1209,16 +1252,28 @@ export const useOriel = create<State>()(
             (item) => item.id === lookId || item.code.toLowerCase() === lookId.toLowerCase(),
           );
           if (!look) return state;
+          const hasUpload = Boolean(state.upload);
           const nextDesign = sanitizeDesign({
             ...state.design,
-            vertical: look.vertical,
+            vertical: hasUpload ? state.design.vertical : look.vertical,
             light: look.light as DesignState["light"],
             mood: look.mood as DesignState["mood"],
           });
+          const nextGeometryLock = hasUpload
+            ? look.fidelity === "Strict"
+              ? 92
+              : look.fidelity === "Balanced"
+                ? 82
+                : 72
+            : look.fidelity === "Strict"
+              ? 90
+              : look.fidelity === "Balanced"
+                ? 72
+                : 48;
           const nextEngine = sanitizeEngineState({
             ...state.engine,
             renderFidelity: look.fidelity === "Creative" ? "draft" : look.fidelity === "Strict" ? "editorial" : "photoreal",
-            geometryLock: look.fidelity === "Strict" ? 90 : look.fidelity === "Balanced" ? 72 : 48,
+            geometryLock: nextGeometryLock,
           });
           const presetLookup = new Map(PRESETS_200.map((p) => [p.id, p]));
           const positiveIds: string[] = [];
@@ -1227,10 +1282,16 @@ export const useOriel = create<State>()(
             if (presetLookup.get(pid)?.is_negative) negativeIds.push(pid);
             else positiveIds.push(pid);
           }
+          const appliedIdea = buildIntentLookAppliedPrompt(look, PRESETS_200, {
+            hasUpload,
+            design: nextDesign,
+            preserveClause: state.designContract.lockedPreserve ? state.designContract.preserveClause : undefined,
+          });
           return {
             intentLookId: look.id,
             design: nextDesign,
             engine: nextEngine,
+            idea: appliedIdea,
             activePresetIds: positiveIds,
             negativePresetIds: negativeIds,
             radialOptics: { ...state.radialOptics, diffusionLock: nextEngine.geometryLock },
@@ -1411,6 +1472,24 @@ export const useOriel = create<State>()(
               : state.nanoBanana.constraints,
           },
         })),
+      setBudgetState: (next) => set({ budget: sanitizeBudgetState(next) }),
+      updateBudgetConfig: (patch) =>
+        set((state) => ({
+          budget: sanitizeBudgetState({
+            ...state.budget,
+            ...patch,
+          }),
+        })),
+      resetBudgetSpendLocal: () =>
+        set((state) => ({
+          budget: sanitizeBudgetState({
+            ...state.budget,
+            spentPaise: 0,
+            lastCostPaise: 0,
+            liveImageCount: 0,
+            dailySpend: [],
+          }),
+        })),
       setLastOrchestration: (lastOrchestration) => set({ lastOrchestration }),
     }),
     {
@@ -1460,6 +1539,7 @@ export const useOriel = create<State>()(
         videoProject: state.videoProject,
         governance: state.governance,
         nanoBanana: state.nanoBanana,
+        budget: state.budget,
         history: state.history.filter(isPersistableCompactUrl).slice(0, 6),
         plate: state.plate && isPersistableCompactUrl(state.plate.url) ? state.plate : null,
         idea: state.idea,
@@ -1526,6 +1606,7 @@ export const useOriel = create<State>()(
                 },
               }
             : DEFAULT_NANO_BANANA_CONFIG,
+          budget: sanitizeBudgetState(saved.budget),
           lastOrchestration: null,
           busy: false,
           batchRunning: false,

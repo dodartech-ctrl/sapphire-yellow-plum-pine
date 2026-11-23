@@ -732,6 +732,7 @@ export function compileEngineBrief(
   options?: {
     hasSketch?: boolean;
     hasMask?: boolean;
+    hasUploadedImage?: boolean;
     inpaintNote?: string;
     variationIndex?: number;
     frame?: Frame;
@@ -741,11 +742,13 @@ export function compileEngineBrief(
     ? engine.seed + (options?.variationIndex ?? 0) * 137
     : ((engine.seed + 7919 + (options?.variationIndex ?? 0) * 313) % 9999999) + 1;
 
+  const hasUpload = Boolean(options?.hasUploadedImage);
   const presetLabel = WORKFLOW_PRESETS.find((p) => p.id === engine.workflowPreset)?.label ?? "Photoreal Plate";
   const ratio = options?.frame?.ratio ?? "16:9";
 
-  const preservationDirective =
-    engine.geometryLock >= 80
+  const preservationDirective = hasUpload
+    ? `PIXEL-TO-PIXEL REGISTRATION LOCK (${Math.max(85, engine.geometryLock)}%): Preserve the exact camera position, elevation, pitch, lens FOV, horizon line, vanishing points, crop framing, and building/terrain silhouette of the attached uploaded image without zooming, panning, tilting, or re-framing.`
+    : engine.geometryLock >= 80
       ? `STRICT GEOMETRY LOCK (${engine.geometryLock}%): Maintain exact structural silhouette, roof pitch, window openings, column rhythm, and 2-point perspective camera.`
       : engine.geometryLock >= 45
         ? `BALANCED GEOMETRY LOCK (${engine.geometryLock}%): Preserve overall spatial layout and key apertures while refining architectural relief.`
@@ -759,15 +762,19 @@ export function compileEngineBrief(
     ? buildIopaintDirective(engine, options?.inpaintNote || idea)
     : "";
 
-  const facadeDirective =
-    design.vertical === "exterior" || design.vertical === "landscape"
+  const facadeDirective = hasUpload
+    ? ""
+    : design.vertical === "exterior" || design.vertical === "landscape"
       ? `EXTERIOR FACADE (LookX): ${engine.facadeTypology}, adapted for ${engine.climateRegion} climate, style transfer weight ${engine.styleTransferWeight}%, ${engine.detailDensity} detail density.`
       : `INTERIOR STAGING (mnml.ai): ${design.picks.room ?? "Architectural volume"}, material override ${engine.materialOverride}%, ${engine.detailDensity} tactile detailing.`;
 
-  const sceneDirective = `3D ENVIRONMENT (D5 Rig): ${scene3d.preset} massing in ${scene3d.primaryMaterial}, rot ${scene3d.modelRotationY}° scale ${scene3d.modelScale}x, ${scene3d.focalLength}mm lens, ${scene3d.d5LightPreset} light (az ${scene3d.sunAzimuth}° el ${scene3d.sunElevation}°), haze ${scene3d.fogDensity}%.`;
+  const sceneDirective = hasUpload
+    ? ""
+    : `3D ENVIRONMENT (D5 Rig): ${scene3d.preset} massing in ${scene3d.primaryMaterial}, rot ${scene3d.modelRotationY}° scale ${scene3d.modelScale}x, ${scene3d.focalLength}mm lens, ${scene3d.d5LightPreset} light (az ${scene3d.sunAzimuth}° el ${scene3d.sunElevation}°), haze ${scene3d.fogDensity}%.`;
 
-  const annotatorDirective =
-    engine.annotatorMode !== "none"
+  const annotatorDirective = hasUpload
+    ? ""
+    : engine.annotatorMode !== "none"
       ? `CONTROLNET ANNOTATOR (lllyasviel): ${engine.annotatorMode.toUpperCase()} threshold ${engine.annotatorThreshold}%${engine.depthEnabled ? ` + Depth-Anything-V2 (weight ${engine.depthWeight}%)` : ""}.`
       : engine.depthEnabled
         ? `DEPTH CONDITIONING (Depth-Anything-V2): Monocular Z-depth lock weight ${engine.depthWeight}%.`
@@ -794,9 +801,10 @@ export function compileEngineBrief(
       ? `CANVAS OUTPAINT (${engine.outpaintRatio}): Extend frame seamlessly beyond original boundaries with coherent sky, paving, and surrounding architectural context.`
       : "";
 
-  const twoPointDirective = scene3d.twoPointTilt
-    ? "CAMERA PROJECTION: 2-Point Vertical Tilt Lock enabled (plumb verticals)."
-    : "";
+  const twoPointDirective =
+    !hasUpload && scene3d.twoPointTilt
+      ? "CAMERA PROJECTION: 2-Point Vertical Tilt Lock enabled (plumb verticals)."
+      : "";
 
   const samDirective = engine.samPrompt.trim()
     ? `GROUNDED-SAM TARGET: "${engine.samPrompt.trim()}" (sensitivity ${engine.samThreshold}%).`
@@ -807,10 +815,12 @@ export function compileEngineBrief(
       ? `CONCEPT VARIATION #${options.variationIndex + 1} (Midjourney Chaos ${engine.mjChaos}): Introduce distinct lighting nuance or material accent within the same architectural brief.`
       : "";
 
-  const mjTail = `--ar ${ratio} --s ${engine.mjStylize} --c ${engine.mjChaos} --seed ${seed}`;
+  const mjTail = hasUpload
+    ? `--seed ${seed}`
+    : `--ar ${ratio} --s ${engine.mjStylize} --c ${engine.mjChaos} --seed ${seed}`;
 
   const sections = [
-    `WORKFLOW: ${presetLabel} · Fidelity: ${engine.renderFidelity} · Upscaler: ${engine.esrganModel} (${engine.upscaleFactor}x)`,
+    `WORKFLOW: ${hasUpload ? "Pixel-Locked Upload Edit" : presetLabel} · Fidelity: ${engine.renderFidelity}`,
     preservationDirective,
     facadeDirective,
     sceneDirective,
@@ -829,7 +839,9 @@ export function compileEngineBrief(
 
   return {
     prompt: sections.join("\n"),
-    parametersSummary: `${presetLabel} · Geo ${engine.geometryLock}% · ${engine.annotatorMode !== "none" ? `${engine.annotatorMode.toUpperCase()} · ` : ""}${scene3d.focalLength}mm · --s ${engine.mjStylize} --seed ${seed}`,
+    parametersSummary: hasUpload
+      ? `Upload Pixel-Lock · Geo ${Math.max(85, engine.geometryLock)}% · --seed ${seed}`
+      : `${presetLabel} · Geo ${engine.geometryLock}% · ${engine.annotatorMode !== "none" ? `${engine.annotatorMode.toUpperCase()} · ` : ""}${scene3d.focalLength}mm · --s ${engine.mjStylize} --seed ${seed}`,
     seed,
   };
 }

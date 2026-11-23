@@ -1,5 +1,7 @@
 import {
+  AlertTriangle,
   Armchair,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -7,6 +9,7 @@ import {
   ImagePlus,
   Layers,
   Loader2,
+  Lock,
   MessageSquare,
   SlidersHorizontal,
   Sparkles,
@@ -15,15 +18,19 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { BatchRenderQueue } from "@/components/batch-render-queue";
 import { MidLayerBar } from "@/components/mid-layer-bar";
 import { appendSuggestionToIdea, getMidLayerPresetById } from "@/lib/archviz-dictionary";
 import { ATELIER_REFINEMENT_CHIPS } from "@/lib/atelier-studio";
+import { formatPaiseShort, resolveBudgetRenderPlan } from "@/lib/budget-guard";
 import { PLATE_COST } from "@/lib/credits";
 import { RATIOS, RESOLUTIONS, frameEdge } from "@/lib/frame";
 import { enhanceIdea } from "@/lib/generate";
+import { resolveRuntimeModelOverride } from "@/lib/nano-banana-client";
+import { compileSentencePrompt } from "@/lib/presets-catalog";
+import { rewritePromptForUploadedImage } from "@/lib/preset-transform";
 import { LIGHTS, LOOKS } from "@/lib/properties";
 import { readImage } from "@/lib/read-image";
 import { useHydrated, useOriel } from "@/lib/store";
@@ -44,17 +51,37 @@ export function Composer() {
   const setDesignField = useOriel((state) => state.setDesignField);
   const setPanel = useOriel((state) => state.setPanel);
   const midLayerPreset = useOriel((state) => state.midLayerPreset);
+  const activePresetIds = useOriel((state) => state.activePresetIds);
+  const negativePresetIds = useOriel((state) => state.negativePresetIds);
+  const presetStrengths = useOriel((state) => state.presetStrengths);
+  const questionPicks = useOriel((state) => state.questionPicks);
+  const designContract = useOriel((state) => state.designContract);
+  const clearPresets200 = useOriel((state) => state.clearPresets200);
+  const budget = useOriel((state) => state.budget);
+  const nanoBanana = useOriel((state) => state.nanoBanana);
   const queue = useOriel((state) => state.queue);
   const chat = useOriel((state) => state.chat);
   const { busy, generate, generateGrid } = useGenerate();
+
+  const liveRenderPlan = useMemo(
+    () =>
+      resolveBudgetRenderPlan({
+        requestedModel: resolveRuntimeModelOverride(nanoBanana.requestedModel) ?? "gemini-nano-banana-2.1",
+        requestedResolution: nanoBanana.resolution,
+        imageCount: engine.outputMode === "grid-4" ? 4 : 1,
+        budget,
+      }),
+    [nanoBanana.requestedModel, nanoBanana.resolution, engine.outputMode, budget],
+  );
 
   const [enhancing, setEnhancing] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [entourageOpen, setEntourageOpen] = useState(false);
   const [midLayerOpen, setMidLayerOpen] = useState(false);
   const [queueDrawerOpen, setQueueDrawerOpen] = useState(false);
-  const [threadOpen, setThreadOpen] = useState(true);
+  const [threadOpen, setThreadOpen] = useState(false);
   const [chatFocused, setChatFocused] = useState(false);
+  const [linterDetailsOpen, setLinterDetailsOpen] = useState(false);
 
   const hydrated = useHydrated();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -63,6 +90,40 @@ export function Composer() {
   const activeMidLayer = midLayerPreset ? getMidLayerPresetById(midLayerPreset) : null;
   const showQueue = queueDrawerOpen || queue.length > 0;
   const hasThread = chat.length > 0;
+  const activeMatrixCount = activePresetIds.length + negativePresetIds.length;
+
+  const compiled = useMemo(
+    () =>
+      compileSentencePrompt({
+        baseIdea: idea,
+        activePresetIds,
+        negativePresetIds,
+        presetStrengths,
+        questionPicks,
+        design,
+        engine,
+        preserveClause: designContract.lockedPreserve ? designContract.preserveClause : undefined,
+      }),
+    [idea, activePresetIds, negativePresetIds, presetStrengths, questionPicks, design, engine, designContract],
+  );
+
+  const lintErrors = compiled.issues.filter((i) => i.severity === "error");
+  const lintWarnings = compiled.issues.filter((i) => i.severity === "warn");
+
+  function handleCompilePresets() {
+    const nextPrompt = rewritePromptForUploadedImage(compiled.sentence, {
+      hasUpload: Boolean(upload),
+      design,
+      preserveClause: designContract.lockedPreserve ? designContract.preserveClause : undefined,
+    });
+    setIdea(nextPrompt);
+    ideaRef.current?.focus();
+    toast.success(
+      upload
+        ? "Compiled presets onto uploaded photo"
+        : "Compiled preset brief into prompt",
+    );
+  }
 
   // Preserve any prompt text typed during SSR -> React hydration
   useEffect(() => {
@@ -72,22 +133,16 @@ export function Composer() {
     }
   }, [setIdea]);
 
-  // Auto-expand textarea height smoothly as prompt text grows
+  // Auto-expand textarea height cleanly while preserving viewport space
   useEffect(() => {
     const el = ideaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const minH = chatFocused ? 46 : 38;
-    const nextH = Math.max(minH, Math.min(el.scrollHeight, 144));
+    const minH = 30;
+    const maxH = chatFocused ? 84 : 52;
+    const nextH = Math.max(minH, Math.min(el.scrollHeight, maxH));
     el.style.height = `${nextH}px`;
   }, [idea, chatFocused]);
-
-  // Auto-expand thread strip whenever new chat replies arrive
-  useEffect(() => {
-    if (chat.length > 0) {
-      setThreadOpen(true);
-    }
-  }, [chat.length]);
 
   useEffect(() => {
     function focusIdea() {
@@ -114,34 +169,43 @@ export function Composer() {
     }
   }
 
+  const latestChat = chat.length > 0 ? chat[chat.length - 1] : null;
+
   return (
-    <div className="shrink-0 space-y-2.5" data-testid="bottom-chat-dock">
-      {/* Studio Dialogue Thread (Visible when messages exist) */}
+    <div className="shrink-0 space-y-1.5" data-testid="bottom-chat-dock">
+      {/* Compact Studio Dialogue Thread (Single-line summary when collapsed; expands on click) */}
       {hasThread ? (
-        <div className="rounded-2xl border border-[#d1c5b8]/40 bg-white/75 px-3.5 py-2 backdrop-blur-xl shadow-xs dark:border-[#a9bdc9]/20 dark:bg-[#16202d]/80">
+        <div className="rounded-xl border border-[#d1c5b8]/40 bg-white/75 px-2.5 py-1 backdrop-blur-xl shadow-xs dark:border-[#a9bdc9]/20 dark:bg-[#16202d]/80">
           <button
             type="button"
             onClick={() => setThreadOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]"
+            className="flex w-full items-center gap-1.5 text-left text-[10.5px] font-medium text-[#4d463c] hover:text-[#1b1c1a] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]"
           >
-            <MessageSquare className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
-            <span>Studio Thread · {chat.length} msg</span>
-            {threadOpen ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
+            <MessageSquare className="size-3 shrink-0 text-[#725b38] dark:text-[#e8c98a]" />
+            <span className="shrink-0">Thread · {chat.length}</span>
+            {!threadOpen && latestChat ? (
+              <span className="min-w-0 flex-1 truncate font-normal opacity-80">
+                — {latestChat.text}
+              </span>
+            ) : (
+              <span className="flex-1" />
+            )}
+            {threadOpen ? <ChevronDown className="size-3 shrink-0" /> : <ChevronUp className="size-3 shrink-0" />}
           </button>
 
           {threadOpen ? (
-            <ul className="mt-1.5 flex flex-col gap-1">
-              {chat.slice(-2).map((line) => (
+            <ul className="mt-1 flex max-h-24 flex-col gap-1 overflow-y-auto">
+              {chat.slice(-4).map((line) => (
                 <li
                   key={line.id}
                   className={cn(
-                    "truncate rounded-xl px-2.5 py-1 text-xs",
+                    "truncate rounded-lg px-2 py-0.5 text-[11px]",
                     line.role === "you"
                       ? "bg-[#f5f3ef] font-medium text-[#1b1c1a] dark:bg-[#202b38] dark:text-[#e8eff3]"
                       : "bg-white text-[#4d463c] dark:bg-[#050f1b]/80 dark:text-[#cfe3f0]",
                   )}
                 >
-                  <span className="mr-1.5 font-mono text-[10px] uppercase text-[#725b38] dark:text-[#e8c98a]">
+                  <span className="mr-1.5 font-mono text-[9.5px] uppercase text-[#725b38] dark:text-[#e8c98a]">
                     {line.role === "you" ? "You" : "Oriel"}
                   </span>
                   {line.text}
@@ -160,19 +224,28 @@ export function Composer() {
         <BatchRenderQueue onClose={queue.length === 0 ? () => setQueueDrawerOpen(false) : undefined} />
       ) : null}
 
-      {/* Atelier / Arctic Harbor Frosted Glass Prompt Composer Card */}
+      {/* Compact Atelier / Arctic Harbor Prompt Composer Card */}
       <div role="region" aria-label="Render Prompt Composer">
         <div
           className={cn(
-            "arctic-glass rounded-3xl border p-3.5 sm:p-4 transition-[border-color,box-shadow] duration-150",
+            "arctic-glass rounded-2xl border px-2.5 py-2 transition-[border-color,box-shadow] duration-150",
             chatFocused ? "border-[#725b38]/60 ring-2 ring-[#c5a880]/25 dark:border-[#cfe3f0]/55 dark:ring-[#cfe3f0]/20" : "",
           )}
         >
-          {/* Tier 0: Inject Refinements + Keep Clause + Seed Readout */}
-          <div className="mb-2.5 flex items-center justify-between gap-2">
-            <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto py-0.5">
-              <span className="shrink-0 font-display text-[11px] font-medium uppercase tracking-widest text-[#725b38] dark:text-[#e8c98a]">
-                Inject Refinements:
+          {/* Tier 0: Upload Target Badge + Refinements + Unified L01-L08 Linter & Compile */}
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto">
+              {upload ? (
+                <span
+                  data-testid="composer-upload-lock-badge"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/12 px-2 py-0.5 text-[9.5px] font-semibold text-emerald-700 dark:text-emerald-300"
+                  title="All prompts and presets apply directly onto your uploaded image"
+                >
+                  <Lock className="size-2.5" /> Editing Upload
+                </span>
+              ) : null}
+              <span className="shrink-0 font-display text-[9.5px] font-semibold uppercase tracking-wider text-[#725b38] dark:text-[#e8c98a]">
+                Refinements:
               </span>
               {ATELIER_REFINEMENT_CHIPS.map((chip) => (
                 <button
@@ -182,31 +255,135 @@ export function Composer() {
                     setIdea(appendSuggestionToIdea(idea, chip));
                     ideaRef.current?.focus();
                   }}
-                  className="shrink-0 rounded-full bg-[#efeeea]/80 px-2.5 py-1 text-[11px] text-[#4d463c] transition hover:bg-[#c5a880]/25 hover:text-[#1b1c1a] dark:bg-[#202b38]/85 dark:text-[#cfe3f0] dark:hover:border-[#e8c98a] dark:hover:text-white"
+                  className="shrink-0 rounded-full bg-[#efeeea]/80 px-2 py-0.5 text-[10px] text-[#4d463c] transition hover:bg-[#c5a880]/25 hover:text-[#1b1c1a] dark:bg-[#202b38]/85 dark:text-[#cfe3f0] dark:hover:text-white"
                 >
                   + {chip}
                 </button>
               ))}
             </div>
-            <div className="hidden shrink-0 items-center gap-2 font-mono text-[11px] tabular-nums text-[#5a5e68] md:flex dark:text-[#a9bdc9]">
-              <span className="rounded-full bg-[#c5a880]/15 px-2 py-0.5 text-[10px] font-semibold text-[#725b38] dark:bg-[#584411]/60 dark:text-[#e8c98a]">
-                {engine.outputMode === "grid-4" ? 16 : PLATE_COST} CR
-              </span>
-              <span>Seed #{engine.seed}</span>
+            <div className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] tabular-nums text-[#5a5e68] dark:text-[#a9bdc9]">
+              {/* Unified L01-L08 Linter Pill (merged from right Preset Matrix) */}
+              <button
+                type="button"
+                data-testid="composer-linter-badge"
+                onClick={() => setLinterDetailsOpen((v) => !v)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-sans font-semibold transition",
+                  lintErrors.length > 0
+                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-300"
+                    : lintWarnings.length > 0
+                      ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                      : "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+                )}
+                title="L01–L08 Prompt & Preset Linter — click to inspect notes"
+              >
+                {compiled.issues.length === 0 ? (
+                  <>
+                    <CheckCircle2 className="size-2.5" /> L01–L08
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="size-2.5" /> {compiled.issues.length} {compiled.issues.length === 1 ? "note" : "notes"}
+                  </>
+                )}
+              </button>
+              {activeMatrixCount > 0 ? (
+                <button
+                  type="button"
+                  data-testid="composer-compile-presets-btn"
+                  onClick={handleCompilePresets}
+                  className="inline-flex items-center gap-1 rounded-full border border-[#c5a880]/60 bg-[#c5a880]/15 px-2 py-0.5 font-sans text-[9.5px] font-semibold text-[#513d1d] transition hover:bg-[#c5a880]/30 dark:border-[#e8c98a]/35 dark:bg-[#202b38] dark:text-[#e8c98a]"
+                  title="Compile selected Preset Matrix pills into the main prompt box"
+                >
+                  <Wand2 className="size-2.5" /> Compile ({activeMatrixCount})
+                </button>
+              ) : null}
+              <button
+                type="button"
+                data-testid="composer-cost-guard-pill"
+                onClick={() => window.dispatchEvent(new CustomEvent("oriel-open-budget"))}
+                title="Click to adjust ₹100 INR cap or switch Free / Paise Eco / Studio Pro"
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[9.5px] font-semibold transition",
+                  !liveRenderPlan.useCloud
+                    ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                    : "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-300",
+                )}
+              >
+                {liveRenderPlan.useCloud
+                  ? `~${formatPaiseShort(liveRenderPlan.totalCostPaise)}`
+                  : liveRenderPlan.blockedByCap
+                    ? "Cap · 0p"
+                    : "0p Free"}
+              </button>
+              <span className="hidden lg:inline">#{engine.seed}</span>
             </div>
           </div>
 
-          {/* Tier 1: Reference Image + Auto-Expanding Input + Engine Badge + Render Plate */}
-          <div className="flex flex-col gap-2 rounded-2xl bg-[#fbf9f5]/85 p-2 shadow-[inset_0_2px_6px_rgba(0,0,0,0.03)] sm:flex-row sm:items-end dark:bg-[#050f1b]/85 dark:border dark:border-[#a9bdc9]/20">
-            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          {/* Expandable L01-L08 Linter Details Tray */}
+          {linterDetailsOpen ? (
+            <div
+              data-testid="composer-linter-details"
+              className="mb-1.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#d1c5b8]/45 bg-[#fbf9f5]/90 px-2.5 py-1.5 text-[10.5px] dark:border-[#a9bdc9]/20 dark:bg-[#0c1623]"
+            >
+              <div className="min-w-0 flex-1 space-y-0.5">
+                {compiled.issues.length === 0 ? (
+                  <p className="font-medium text-emerald-700 dark:text-emerald-300">
+                    L01–L08 Clear · Prompt & active preset pills are conflict-free{upload ? " and locked onto your uploaded photo." : "."}
+                  </p>
+                ) : (
+                  compiled.issues.map((issue) => (
+                    <p
+                      key={issue.code + issue.message}
+                      className={cn(
+                        "leading-snug",
+                        issue.severity === "error"
+                          ? "text-rose-600 dark:text-rose-300"
+                          : "text-amber-700 dark:text-amber-300",
+                      )}
+                    >
+                      {issue.message}
+                    </p>
+                  ))
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {activeMatrixCount > 0 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCompilePresets}
+                      className="rounded-full bg-[#c5a880]/25 px-2 py-0.5 text-[10px] font-semibold text-[#513d1d] hover:bg-[#c5a880]/40 dark:bg-[#202b38] dark:text-[#e8c98a]"
+                    >
+                      Compile Brief
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearPresets200();
+                        toast.message("Cleared preset pills");
+                      }}
+                      className="rounded-full px-2 py-0.5 text-[10px] text-[#7f766a] hover:text-[#1b1c1a] dark:text-[#a9bdc9]"
+                    >
+                      Clear Pills
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Tier 1: Reference Image + Wide Prompt Input + Compact Render Actions */}
+          <div className="flex flex-col gap-1.5 rounded-xl bg-[#fbf9f5]/85 px-2 py-1.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.03)] sm:flex-row sm:items-center dark:border dark:border-[#a9bdc9]/20 dark:bg-[#050f1b]/85">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#e4e2de]/70 text-[#725b38] transition hover:bg-[#c5a880]/25 dark:bg-[#16202d] dark:text-[#e8c98a]"
+                className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#e4e2de]/70 text-[#725b38] transition hover:bg-[#c5a880]/25 dark:bg-[#16202d] dark:text-[#e8c98a]"
                 aria-label={upload ? "Replace reference image" : "Upload a reference image"}
                 title={upload ? "Replace reference image" : "Attach photo, plan, or massing image"}
               >
-                {upload ? <img src={upload} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="size-4.5 text-[#725b38] dark:text-[#e8c98a]" />}
+                {upload ? <img src={upload} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="size-4 text-[#725b38] dark:text-[#e8c98a]" />}
                 {upload ? (
                   <span
                     role="button"
@@ -256,31 +433,20 @@ export function Composer() {
                     }
                   }}
                   placeholder="Describe your architectural refinement, materials, or lighting atmosphere..."
-                  className="max-h-36 min-h-[38px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-sm font-light leading-snug text-[#1b1c1a] outline-none placeholder:text-[#7f766a] dark:text-[#e8eff3] dark:placeholder:text-[#5f7f98]"
+                  className="max-h-20 min-h-[30px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-xs font-normal leading-snug text-[#1b1c1a] outline-none placeholder:text-[#7f766a] dark:text-[#e8eff3] dark:placeholder:text-[#5f7f98]"
                   suppressHydrationWarning
                 />
               </label>
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-              {!toolsOpen ? (
-                <button
-                  type="button"
-                  onClick={() => setToolsOpen(true)}
-                  className="hidden h-9 items-center gap-1.5 rounded-xl bg-[#f5f3ef] px-2.5 text-[11px] font-medium text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] xl:inline-flex dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
-                  title="Active Aspect Ratio, Resolution & Lighting — click to edit"
-                >
-                  <Sun className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
-                  <span>{frame.ratio} · {design.light}</span>
-                </button>
-              ) : null}
+            <div className="flex shrink-0 items-center justify-end gap-1">
               <button
                 type="button"
                 onClick={() => setPanel("engine")}
-                className="hidden h-9 items-center gap-1.5 rounded-xl bg-[#f5f3ef] px-3 text-[11px] font-medium text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] sm:inline-flex dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
+                className="hidden h-8 items-center gap-1 rounded-lg bg-[#f5f3ef] px-2 text-[10.5px] font-medium text-[#4d463c] transition hover:bg-[#efeeea] hover:text-[#1b1c1a] 2xl:inline-flex dark:bg-[#16202d] dark:text-[#cfe3f0] dark:hover:bg-[#202b38]"
                 title="Active Engine Preset — click to configure in Inspector"
               >
-                <SlidersHorizontal className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
+                <SlidersHorizontal className="size-3 text-[#725b38] dark:text-[#e8c98a]" />
                 <span className="capitalize">{engine.workflowPreset.replace(/-/g, " ")}</span>
               </button>
               <button
@@ -288,20 +454,20 @@ export function Composer() {
                 data-testid="toggle-studio-tools-btn"
                 aria-expanded={toolsOpen}
                 onClick={() => setToolsOpen((v) => !v)}
-                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-[#d1c5b8]/45 bg-white px-2.5 text-xs font-medium text-[#4d463c] transition hover:border-[#725b38] hover:text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]"
-                title={toolsOpen ? "Collapse chat controls" : "Show all chat controls"}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#d1c5b8]/45 bg-white px-2 text-[11px] font-medium text-[#4d463c] transition hover:border-[#725b38] hover:text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#a9bdc9] dark:hover:text-[#e8eff3]"
+                title={toolsOpen ? "Collapse chat controls" : "Show all chat controls (Ratio, Resolution, Lighting, Entourage, Queue)"}
               >
-                <span className="hidden sm:inline">{toolsOpen ? "Compact" : "Controls"}</span>
-                {toolsOpen ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                <span className="hidden sm:inline">{toolsOpen ? "Hide" : "Controls"}</span>
+                {toolsOpen ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void generateGrid()}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#d1c5b8]/50 bg-white px-3 text-xs font-medium text-[#1b1c1a] transition hover:border-[#725b38] disabled:opacity-50 dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3]"
+                className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-[#d1c5b8]/50 bg-white px-2.5 text-[11px] font-medium text-[#1b1c1a] transition hover:border-[#725b38] disabled:opacity-50 dark:border-[#a9bdc9]/25 dark:bg-[#16202d] dark:text-[#e8eff3]"
                 title="Generate 4-up concept grid"
               >
-                <Grid2X2 className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" /> 4-Up
+                <Grid2X2 className="size-3 text-[#725b38] dark:text-[#e8c98a]" /> 4-Up
               </button>
               <button
                 type="button"
@@ -309,11 +475,11 @@ export function Composer() {
                 data-hydrated={hydrated ? "true" : "false"}
                 disabled={busy || credits < PLATE_COST}
                 onClick={triggerRender}
-                className="ice-cta inline-flex h-9.5 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 text-xs font-semibold tracking-wide disabled:opacity-60"
+                className="ice-cta inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-[11px] font-semibold tracking-wide disabled:opacity-60"
               >
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                 <span>{busy ? "Rendering..." : engine.outputMode === "grid-4" ? "Render 4-Up" : "Render Plate"}</span>
-                <kbd className="hidden rounded bg-[#08131f]/15 px-1.5 py-0.5 font-mono text-[10px] sm:inline">⌘↵</kbd>
+                <kbd className="hidden rounded bg-[#08131f]/15 px-1 py-0.2 font-mono text-[9.5px] xl:inline">⌘↵</kbd>
               </button>
             </div>
           </div>

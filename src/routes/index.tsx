@@ -133,7 +133,8 @@ function WorkspacePage() {
   const pins = GROUPS[design.vertical];
   const label = VERTICALS.find((item) => item.id === design.vertical)?.label ?? "Studio";
   const room = design.picks.room || design.picks.facade || design.picks.water || "Whole";
-  const canCompare = Boolean((upload || sketchDataUrl) && plate?.url);
+  const compareBeforeSrc = upload || sketchDataUrl || plate?.upload || null;
+  const canCompare = Boolean(compareBeforeSrc && plate?.url);
   const aspect = frameAspect(frame.ratio);
   const aspectNumber = frameAspectNumber(frame.ratio);
   const activeIntent = resolveIntentFromStage(view, enhanceBarOpen);
@@ -261,12 +262,14 @@ function WorkspacePage() {
     }
     if (!canCompare) {
       toast.message(
-        upload || sketchDataUrl
+        compareBeforeSrc
           ? "Generate a plate, then compare it with the source."
           : "Capture a 3D snapshot, sketch, or upload a photo first.",
       );
       return;
     }
+    setSelecting(false);
+    setSplitHubEnabled(false);
     setView("compare");
   }
 
@@ -530,6 +533,9 @@ function WorkspacePage() {
               onToggleInspector={() => setInspectorCollapsed((v) => !v)}
               hasPlate={Boolean(plate?.url)}
               hasSource={Boolean(upload)}
+              canCompare={canCompare}
+              onToggleCompare={showCompare}
+              onTriggerUpload={() => fileRef.current?.click()}
               busy={busy}
               onRelightDusk={() => void applyRelight("day-to-dusk")}
               onOutpaintWide={() => void applyOutpaint("21:9")}
@@ -544,17 +550,17 @@ function WorkspacePage() {
 
       <section
         ref={scrollSectionRef}
-        className="studio-scroll relative flex min-w-0 flex-1 flex-col gap-3 px-3 pt-2.5 pb-6 md:px-5 lg:h-full lg:overflow-y-auto"
+        className="studio-scroll relative flex min-w-0 flex-1 flex-col gap-1.5 px-2 pt-1.5 pb-1.5 md:px-2.5 lg:h-full lg:overflow-y-auto"
       >
         <JourneyGuide compared={view === "compare"} onAction={runJourneyAction} onSample={() => void loadSample()} />
 
-        {/* Screen-Fit Hero Workspace (Primary Stage + Chat Box + Quick-Jump Bar) */}
+        {/* Screen-Fit Hero Workspace (Primary Stage + Camera Strip + Compact Chat Box) */}
         <div
           id="studio-hero-fit"
           data-testid="studio-hero-fit"
           className={cn(
-            "flex shrink-0 flex-col gap-2",
-            useTallStage ? "lg:min-h-full" : "lg:h-full lg:min-h-[540px]",
+            "flex shrink-0 flex-col gap-1.5",
+            useTallStage ? "lg:min-h-full" : "lg:h-full lg:min-h-[480px]",
           )}
         >
           {/* Primary Stage Viewport (Fills remaining hero height cleanly above Chat Dock) */}
@@ -570,16 +576,17 @@ function WorkspacePage() {
                 contractOpen={contractOpen}
                 onOpenGateModal={() => setGateModalOpen(true)}
                 onOpenStage={openExplicitStage}
+                onUploadFile={(file) => void onFile(file)}
               />
             ) : (
               /* Classic Multi-Stage Canvas Card */
-              <div className="hf-stage-enter relative flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-3xl border border-[#d1c5b8]/45 bg-[#161412] shadow-[0_24px_48px_-12px_rgba(27,28,26,0.18)] dark:border-[#a9bdc9]/25 dark:bg-[#050f1b]">
+              <div className="hf-stage-enter relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#d1c5b8]/45 bg-[#161412] shadow-[0_18px_36px_-12px_rgba(27,28,26,0.18)] dark:border-[#a9bdc9]/25 dark:bg-[#050f1b]">
 
             {/* Vaethat-Inspired ArchViz Enhancement Studio Bar */}
             {enhanceBarOpen ? (
               <div
                 data-testid="vaethat-enhance-bar"
-                className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#1e1b18] px-3.5 py-2 text-xs text-[#dfd5c6] dark:bg-[#08131f]"
+                className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-b border-white/10 bg-[#1e1b18] px-2.5 py-1 text-[10.5px] text-[#dfd5c6] dark:bg-[#08131f]"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-[#e0c298]">Enhance:</span>
@@ -657,8 +664,15 @@ function WorkspacePage() {
                     </button>
                     <button
                       type="button"
+                      data-testid="enhance-compare-btn"
+                      aria-pressed={view === "compare"}
                       onClick={showCompare}
-                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-2.5 text-[11px] text-[#f6efe4] hover:border-[#e0c298]"
+                      className={cn(
+                        "inline-flex h-7 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-medium transition",
+                        view === "compare"
+                          ? "border-[#e0c298] bg-[#c5a880] font-semibold text-[#281800]"
+                          : "border-white/15 bg-white/5 text-[#f6efe4] hover:border-[#e0c298]",
+                      )}
                     >
                       Compare
                     </button>
@@ -683,7 +697,7 @@ function WorkspacePage() {
               </div>
             ) : null}
 
-            <div className="relative flex min-h-[250px] flex-1 flex-col">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
               {view === "3d" ? (
                 <Viewport3D
                   aspect={aspect}
@@ -874,9 +888,9 @@ function WorkspacePage() {
                     </div>
                   )}
                 </div>
-              ) : view === "compare" && (upload || sketchDataUrl) && plate?.url ? (
+              ) : view === "compare" && compareBeforeSrc && plate?.url ? (
                 <Compare
-                  before={upload || sketchDataUrl || "/viz/p01-pavilion-day.jpg"}
+                  before={compareBeforeSrc}
                   after={plate.url}
                   beforeLabel="Source"
                   afterLabel="Result"
@@ -887,18 +901,18 @@ function WorkspacePage() {
                 />
               ) : view === "result" ? (
                 plate?.url ? (
-                  <div className="relative flex flex-1 min-h-0 items-center justify-center bg-[#08131f] p-3">
-                    <div className="relative flex h-full min-h-[240px] w-full items-center justify-center" style={{ containerType: "size" }}>
+                  <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[#08131f] p-1.5">
+                    <div className="relative flex h-full w-full items-center justify-center" style={{ containerType: "size" }}>
                       <div
                         data-testid="studio-aspect-frame"
                         data-ratio={frame.ratio}
-                        className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#050f1b] shadow-[0_18px_48px_rgba(0,0,0,0.45)] transition-[width,height] duration-200"
+                        className="relative overflow-hidden rounded-xl border border-white/15 bg-[#050f1b] shadow-[0_14px_36px_rgba(0,0,0,0.45)] transition-[width,height] duration-200"
                         style={{
                           width: `min(100cqw, calc(100cqh * ${aspectNumber}))`,
                           height: `min(100cqh, calc(100cqw / ${aspectNumber}))`,
                         }}
                       >
-                        <span className="pointer-events-none absolute top-3 left-3 z-10 rounded-full border border-white/15 bg-[#050f1b]/80 px-2.5 py-0.5 font-mono text-[10px] text-[#e8c98a] backdrop-blur-md">
+                        <span className="pointer-events-none absolute top-2 left-2 z-10 rounded-full border border-white/15 bg-[#050f1b]/80 px-2 py-0.5 font-mono text-[9.5px] text-[#e8c98a] backdrop-blur-md">
                           Result
                         </span>
                         <ResilientPlateImage
@@ -913,23 +927,23 @@ function WorkspacePage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid min-h-[240px] flex-1 place-items-center bg-[#08131f] p-4 text-center text-sm text-[#e8eff3]">
+                  <div className="grid min-h-[220px] flex-1 place-items-center bg-[#08131f] p-4 text-center text-xs text-[#e8eff3]">
                     No plate yet. Choose 3D Viewport, Sketch, or Upload, then press Render Plate.
                   </div>
                 )
               ) : upload ? (
-                <div className="relative flex flex-1 min-h-0 items-center justify-center bg-[#08131f] p-3">
-                  <div className="relative flex h-full min-h-[240px] w-full items-center justify-center" style={{ containerType: "size" }}>
+                <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[#08131f] p-1.5">
+                  <div className="relative flex h-full w-full items-center justify-center" style={{ containerType: "size" }}>
                     <div
                       data-testid="studio-aspect-frame"
                       data-ratio={frame.ratio}
-                      className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#050f1b] shadow-[0_18px_48px_rgba(0,0,0,0.45)] transition-[width,height] duration-200"
+                      className="relative overflow-hidden rounded-xl border border-white/15 bg-[#050f1b] shadow-[0_14px_36px_rgba(0,0,0,0.45)] transition-[width,height] duration-200"
                       style={{
                         width: `min(100cqw, calc(100cqh * ${aspectNumber}))`,
                         height: `min(100cqh, calc(100cqw / ${aspectNumber}))`,
                       }}
                     >
-                      <span className="pointer-events-none absolute top-3 left-3 z-10 rounded-full border border-white/15 bg-[#050f1b]/80 px-2.5 py-0.5 font-mono text-[10px] text-[#e8c98a] backdrop-blur-md">
+                      <span className="pointer-events-none absolute top-2 left-2 z-10 rounded-full border border-white/15 bg-[#050f1b]/80 px-2 py-0.5 font-mono text-[9.5px] text-[#e8c98a] backdrop-blur-md">
                         Source
                       </span>
                       <ResilientPlateImage src={upload} alt="Source" busy={busy} className="object-contain" />
@@ -937,8 +951,8 @@ function WorkspacePage() {
                   </div>
                 </div>
               ) : (
-                <div className="relative z-0 flex flex-1 min-h-0 items-center justify-center bg-[#08131f] p-3">
-                  <div className="relative flex h-full min-h-[240px] w-full items-center justify-center" style={{ containerType: "size" }}>
+                <div className="relative z-0 flex min-h-0 flex-1 items-center justify-center bg-[#08131f] p-1.5">
+                  <div className="relative flex h-full w-full items-center justify-center" style={{ containerType: "size" }}>
                     <div
                       data-testid="studio-aspect-frame"
                       data-ratio={frame.ratio}
@@ -1001,7 +1015,7 @@ function WorkspacePage() {
                 </div>
               )}
 
-              {selecting ? (
+              {selecting && view !== "compare" ? (
                 <div className="absolute inset-x-3 top-3 z-30 flex flex-wrap gap-2">
                   {pins.map((group) => (
                     <button
@@ -1020,12 +1034,12 @@ function WorkspacePage() {
               ) : null}
             </div>
 
-            {/* Bottom Frame Info & Overlay Tools */}
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-[#050f1b] px-3.5 py-2">
-              <span className="inline-flex items-center gap-2 font-mono text-[11px] text-[#cfe3f0] tabular-nums">
+            {/* Compact Bottom Frame Info & Overlay Tools */}
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-t border-white/10 bg-[#050f1b] px-2.5 py-1">
+              <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-[#cfe3f0] tabular-nums">
                 {label} · {room} · {frame.ratio} · {frame.resolution.toUpperCase()}
                 {view === "3d" ? (
-                  <span className="hidden text-[11px] text-[#a9bdc9] md:inline">· Drag to orbit · Scroll to zoom</span>
+                  <span className="hidden text-[10px] text-[#a9bdc9] md:inline">· Drag to orbit · Scroll to zoom</span>
                 ) : null}
               </span>
 
@@ -1036,6 +1050,20 @@ function WorkspacePage() {
               >
                 <button
                   type="button"
+                  data-testid="stage-upload-btn"
+                  aria-label="Upload photo or 3D file into Scene"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    fileRef.current?.click();
+                  }}
+                  className="inline-flex h-6 items-center gap-1 rounded-full border border-[#e8c98a]/45 bg-[#e8c98a]/12 px-2 text-[10px] font-semibold text-[#e8c98a] transition hover:bg-[#e8c98a] hover:text-[#1b1407]"
+                >
+                  <ImagePlus className="size-2.5" />
+                  Upload
+                </button>
+                <button
+                  type="button"
                   aria-label="Pin architectural element"
                   aria-pressed={selecting}
                   onClick={(event) => {
@@ -1044,14 +1072,14 @@ function WorkspacePage() {
                     setSelecting(!selecting);
                   }}
                   className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition",
+                    "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium transition",
                     selecting
                       ? "border-transparent bg-[#c5a880] text-[#281800]"
                       : "border-white/15 bg-white/5 text-white/90 hover:border-[#e8c98a]",
                   )}
                 >
-                  <MousePointer2 className="size-3" />
-                  Pin Element
+                  <MousePointer2 className="size-2.5" />
+                  Pin
                 </button>
                 <button
                   type="button"
@@ -1061,10 +1089,10 @@ function WorkspacePage() {
                     event.stopPropagation();
                     cycleTargetElement();
                   }}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 text-[11px] font-medium text-white/90 transition hover:border-[#e8c98a]"
+                  className="inline-flex h-6 items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2 text-[10px] font-medium text-white/90 transition hover:border-[#e8c98a]"
                 >
-                  <Crosshair className="size-3 text-[#e8c98a]" />
-                  Target: {design.target}
+                  <Crosshair className="size-2.5 text-[#e8c98a]" />
+                  {design.target}
                 </button>
                 <button
                   type="button"
@@ -1075,9 +1103,9 @@ function WorkspacePage() {
                     event.stopPropagation();
                     setVisionOpen(true);
                   }}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 text-[11px] font-medium text-white/90 transition hover:border-[#e8c98a]"
+                  className="inline-flex h-6 items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2 text-[10px] font-medium text-white/90 transition hover:border-[#e8c98a]"
                 >
-                  <ScanEye className="size-3 text-[#e8c98a]" />
+                  <ScanEye className="size-2.5 text-[#e8c98a]" />
                   Vision AI
                 </button>
               </div>
@@ -1101,43 +1129,43 @@ function WorkspacePage() {
           {/* Thin Lean Camera & Optics Strip above Chat Box */}
           <CameraOpticsBar />
 
-          {/* Frosted Studio Prompt Dock & Controls */}
+          {/* Compact Studio Prompt Dock & Controls */}
           <Composer />
         </div>
       </section>
 
-      {/* Right Rail: Switch cleanly between Prompt Preset Matrix (200+100) & Classic Scene/Optics Panel */}
+      {/* Compact Right Rail: Switch cleanly between Prompt Preset Matrix & Scene/Optics Panel */}
       {!inspectorCollapsed ? (
         <aside
           id="studio-properties"
-          className="flex w-full shrink-0 flex-col gap-2 px-3 pb-4 lg:h-full lg:w-[372px] lg:overflow-hidden lg:border-l lg:border-[#d1c5b8]/35 lg:py-3 lg:pr-4 lg:pl-3 dark:lg:border-[#a9bdc9]/20"
+          className="flex w-full shrink-0 flex-col gap-1.5 px-2 pb-2 lg:h-full lg:w-[296px] xl:w-[312px] lg:overflow-hidden lg:border-l lg:border-[#d1c5b8]/35 lg:py-1.5 lg:pr-2 lg:pl-2 dark:lg:border-[#a9bdc9]/20"
         >
-          <div className="grid shrink-0 grid-cols-2 gap-1 rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/85 p-1 dark:border-[#a9bdc9]/20 dark:bg-[#121c29]">
+          <div className="grid shrink-0 grid-cols-2 gap-0.5 rounded-full border border-[#d1c5b8]/45 bg-[#efeeea]/85 p-0.5 dark:border-[#a9bdc9]/20 dark:bg-[#121c29]">
             <button
               type="button"
               data-testid="right-tab-matrix"
               onClick={() => setRightTab("matrix")}
               className={cn(
-                "inline-flex h-7 items-center justify-center gap-1 rounded-full text-[11px] font-semibold transition",
+                "inline-flex h-6 items-center justify-center gap-1 rounded-full text-[10px] font-semibold transition",
                 rightTab === "matrix"
                   ? "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
                   : "text-[#4d463c] dark:text-[#a9bdc9]",
               )}
             >
-              <Sparkles className="size-3" /> Presets (200+100)
+              <Sparkles className="size-3" /> Presets
             </button>
             <button
               type="button"
               data-testid="right-tab-optics"
               onClick={() => setRightTab("optics")}
               className={cn(
-                "inline-flex h-7 items-center justify-center gap-1 rounded-full text-[11px] font-semibold transition",
+                "inline-flex h-6 items-center justify-center gap-1 rounded-full text-[10px] font-semibold transition",
                 rightTab === "optics"
                   ? "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
                   : "text-[#4d463c] dark:text-[#a9bdc9]",
               )}
             >
-              <SlidersHorizontal className="size-3" /> Scene & Optics
+              <SlidersHorizontal className="size-3" /> Scene &amp; Optics
             </button>
           </div>
 

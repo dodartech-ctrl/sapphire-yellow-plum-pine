@@ -1,21 +1,20 @@
 import {
-  AlertTriangle,
-  BookmarkCheck,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Eye,
+  Image as ImageIcon,
   Languages,
+  Lock,
   Minus,
+  Play,
   Plus,
   Search,
   ShieldAlert,
   Sparkles,
-  Wand2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { RATIOS, type Ratio } from "@/lib/frame";
+import { parseImageDimensionsFromDataUrl } from "@/lib/image-aspect";
 import {
   resolveArchviz100Preview,
   resolveLookPreview,
@@ -23,6 +22,12 @@ import {
   resolveZukeVizPreview,
   type PresetBeforeAfterPreview,
 } from "@/lib/preset-previews";
+import {
+  buildArchviz100AppliedPrompt,
+  buildZuke119AppliedPrompt,
+  resolveSmartPlaceholders,
+  rewritePromptForUploadedImage,
+} from "@/lib/preset-transform";
 import {
   ARCHVIZ_100_CATEGORIES,
   INTENT_LOOKS_40,
@@ -36,7 +41,6 @@ import {
 } from "@/lib/presets-catalog";
 import {
   ZUKE_VIZ_CATEGORIES_14,
-  fillZukePromptPlaceholders,
   filterZukeViz119,
   inferZukeVertical,
   type ZukeVizPrompt,
@@ -50,17 +54,27 @@ type MatrixTab = "presets200" | "archviz100" | "zuke119" | "looks40" | "question
 function PresetBeforeAfterStrip({
   preview,
   alt,
+  uploadSrc,
   heightClass = "h-20",
   badge,
   testId,
 }: {
   preview: PresetBeforeAfterPreview;
   alt: string;
+  uploadSrc?: string | null;
   heightClass?: string;
   badge?: string;
   testId?: string;
 }) {
   const [split, setSplit] = useState(46);
+  const usingUpload = Boolean(uploadSrc);
+  const effectiveBeforeSrc = usingUpload ? (uploadSrc as string) : preview.beforeSrc;
+  const effectiveAfterSrc = usingUpload ? (uploadSrc as string) : preview.afterSrc;
+  const effectiveBeforeLabel = usingUpload ? "Your Upload" : preview.beforeLabel;
+  const effectiveAfterLabel = usingUpload ? `+ ${alt}` : preview.afterLabel;
+  const effectiveAfterFilter = usingUpload
+    ? preview.afterFilterClass || "contrast-[1.06] saturate-[1.12]"
+    : preview.afterFilterClass;
 
   return (
     <div
@@ -79,12 +93,12 @@ function PresetBeforeAfterStrip({
     >
       {/* After layer (base full width) */}
       <img
-        src={preview.afterSrc}
+        src={effectiveAfterSrc}
         alt={`${alt} after`}
         loading="lazy"
         decoding="async"
         referrerPolicy="no-referrer"
-        className={cn("h-full w-full object-cover", preview.afterFilterClass)}
+        className={cn("h-full w-full object-cover", effectiveAfterFilter)}
       />
       {preview.afterTintClass !== "bg-transparent" ? (
         <div className={cn("pointer-events-none absolute inset-0", preview.afterTintClass)} />
@@ -96,12 +110,12 @@ function PresetBeforeAfterStrip({
         style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}
       >
         <img
-          src={preview.beforeSrc}
+          src={effectiveBeforeSrc}
           alt={`${alt} before`}
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
-          className={cn("h-full w-full object-cover", preview.beforeFilterClass)}
+          className={cn("h-full w-full object-cover", usingUpload ? "" : preview.beforeFilterClass)}
         />
       </div>
 
@@ -117,10 +131,10 @@ function PresetBeforeAfterStrip({
 
       {/* Corner Before / After tags */}
       <span className="pointer-events-none absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-white/95 backdrop-blur-xs">
-        {preview.beforeLabel}
+        {effectiveBeforeLabel}
       </span>
       <span className="pointer-events-none absolute top-1 right-1 max-w-[54%] truncate rounded bg-black/75 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-[#e8c98a] backdrop-blur-xs">
-        {preview.afterLabel}
+        {effectiveAfterLabel}
       </span>
       {badge ? (
         <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-[#cfe3f0]">
@@ -132,13 +146,15 @@ function PresetBeforeAfterStrip({
 }
 
 export function PresetMatrixPanel() {
-  const idea = useOriel((s) => s.idea);
+  const { generate } = useGenerate();
+  const upload = useOriel((s) => s.upload);
+  const busy = useOriel((s) => s.busy);
   const setIdea = useOriel((s) => s.setIdea);
   const setVertical = useOriel((s) => s.setVertical);
   const setFrame = useOriel((s) => s.setFrame);
   const design = useOriel((s) => s.design);
-  const engine = useOriel((s) => s.engine);
   const frame = useOriel((s) => s.frame);
+  const engine = useOriel((s) => s.engine);
   const activePresetIds = useOriel((s) => s.activePresetIds);
   const negativePresetIds = useOriel((s) => s.negativePresetIds);
   const presetStrengths = useOriel((s) => s.presetStrengths);
@@ -150,7 +166,6 @@ export function PresetMatrixPanel() {
   const clearPresets200 = useOriel((s) => s.clearPresets200);
   const setQuestionPick = useOriel((s) => s.setQuestionPick);
   const applyIntentLook = useOriel((s) => s.applyIntentLook);
-  const { busy, generate } = useGenerate();
 
   const [tab, setTab] = useState<MatrixTab>("presets200");
   const [query, setQuery] = useState("");
@@ -166,6 +181,8 @@ export function PresetMatrixPanel() {
   const [zukeSlots, setZukeSlots] = useState<Record<string, Record<string, string>>>({});
   const [zukeShowOriginal, setZukeShowOriginal] = useState<Record<string, boolean>>({});
   const [hoverBeforeAfter, setHoverBeforeAfter] = useState(50);
+
+  const uploadDims = useMemo(() => parseImageDimensionsFromDataUrl(upload), [upload]);
 
   const filtered200 = useMemo(
     () => filterPresets200(query, category200, "all"),
@@ -184,19 +201,13 @@ export function PresetMatrixPanel() {
     [query, lookModeFilter],
   );
 
-  const compiled = useMemo(
-    () =>
-      compileSentencePrompt({
-        baseIdea: idea,
-        activePresetIds,
-        negativePresetIds,
-        presetStrengths,
-        questionPicks,
-        design,
-        engine,
-        preserveClause: designContract.lockedPreserve ? designContract.preserveClause : undefined,
-      }),
-    [idea, activePresetIds, negativePresetIds, presetStrengths, questionPicks, design, engine, designContract],
+  const transformCtx = useMemo(
+    () => ({
+      hasUpload: Boolean(upload),
+      design,
+      preserveClause: designContract.lockedPreserve ? designContract.preserveClause : undefined,
+    }),
+    [upload, design, designContract],
   );
 
   const activeLook = INTENT_LOOKS_40.find((l) => l.id === intentLookId) ?? INTENT_LOOKS_40[0];
@@ -205,20 +216,52 @@ export function PresetMatrixPanel() {
     [activePresetIds, negativePresetIds],
   );
 
-  function injectAndRender() {
-    setIdea(compiled.sentence);
-    void generate("plate");
+  function syncPillsIntoUploadedPrompt() {
+    const st = useOriel.getState();
+    if (!st.upload) return;
+    const compiled = compileSentencePrompt({
+      baseIdea: st.idea,
+      activePresetIds: st.activePresetIds,
+      negativePresetIds: st.negativePresetIds,
+      presetStrengths: st.presetStrengths,
+      questionPicks: st.questionPicks,
+      design: st.design,
+      engine: st.engine,
+      preserveClause: st.designContract.lockedPreserve ? st.designContract.preserveClause : undefined,
+    });
+    const anchored = rewritePromptForUploadedImage(compiled.sentence, {
+      hasUpload: true,
+      design: st.design,
+      preserveClause: st.designContract.lockedPreserve ? st.designContract.preserveClause : undefined,
+    });
+    st.setIdea(anchored);
   }
 
-  function applyZukePrompt(item: ZukeVizPrompt) {
-    const slotValues = zukeSlots[item.id] ?? {};
-    const finalText = fillZukePromptPlaceholders(item.prompt, slotValues);
-    setIdea(finalText);
-    setVertical(inferZukeVertical(item));
-    if (item.aspectRatio && (RATIOS as readonly string[]).includes(item.aspectRatio)) {
-      setFrame({ ...frame, ratio: item.aspectRatio as Ratio });
+  function handleTogglePreset200(id: string, polarity: "positive" | "negative") {
+    togglePreset200(id, polarity);
+    if (upload) {
+      syncPillsIntoUploadedPrompt();
     }
-    toast.success(`Applied ${item.id} · ${item.title}`);
+  }
+
+  function applyZukePrompt(item: ZukeVizPrompt, runImmediately = false) {
+    const slotValues = zukeSlots[item.id] ?? {};
+    const finalText = buildZuke119AppliedPrompt(item, slotValues, transformCtx);
+    setIdea(finalText);
+    if (!upload) {
+      setVertical(inferZukeVertical(item));
+      if (item.aspectRatio && (RATIOS as readonly string[]).includes(item.aspectRatio)) {
+        setFrame({ ...frame, ratio: item.aspectRatio as Ratio });
+      }
+    }
+    toast.success(
+      upload
+        ? `Injected ${item.id} onto uploaded image (pixel & camera locked)`
+        : `Applied ${item.id} · ${item.title} to main prompt`,
+    );
+    if (runImmediately && upload && !busy) {
+      void generate("plate");
+    }
   }
 
   const activeCount =
@@ -233,25 +276,76 @@ export function PresetMatrixPanel() {
   return (
     <aside
       data-testid="preset-matrix-panel"
-      className="arctic-glass flex h-full min-h-[420px] flex-col justify-between gap-2 overflow-hidden rounded-[24px] p-3 text-[#1b1c1a] dark:text-[#d8e3f5]"
+      className="arctic-glass flex h-full min-h-0 flex-col gap-1.5 overflow-hidden rounded-2xl p-2 text-[#1b1c1a] dark:text-[#d8e3f5]"
     >
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-[#d1c5b8]/35 pb-1.5 dark:border-[#a9bdc9]/20">
-        <div className="flex min-w-0 items-center gap-2">
-          <Sparkles className="size-4 shrink-0 text-[#725b38] dark:text-[#e8c98a]" />
+      {/* Compact Header + Uploaded Target Badge */}
+      <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-[#d1c5b8]/35 pb-1 dark:border-[#a9bdc9]/20">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Sparkles className="size-3.5 shrink-0 text-[#725b38] dark:text-[#e8c98a]" />
           <div className="min-w-0">
-            <h2 className="truncate font-display text-xs font-semibold uppercase tracking-[0.14em] text-[#1b1c1a] dark:text-[#e8eff3]">
+            <h2 className="truncate font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1b1c1a] dark:text-[#e8eff3]">
               Prompt Preset Matrix
             </h2>
-            <p className="truncate text-[10px] text-[#7f766a] dark:text-[#a9bdc9]">
+            <p className="truncate text-[9px] text-[#7f766a] dark:text-[#a9bdc9]">
               200 Pills · 100 ArchViz · 119 ZUKE · 40 Looks
             </p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full border border-[#c5a880]/45 bg-[#c5a880]/15 px-2 py-0.5 text-[10px] font-semibold text-[#725b38] dark:border-[#e8c98a]/40 dark:bg-[#584411]/70 dark:text-[#e8c98a]">
-          v2.5 Live
-        </span>
+        {upload ? (
+          <span
+            data-testid="matrix-upload-lock-badge"
+            title="All presets inject directly onto your uploaded photo using existing image reference — camera & pixels locked"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/12 px-1.5 py-0.5 text-[8.5px] font-semibold text-emerald-700 dark:text-emerald-300"
+          >
+            <Lock className="size-2.5" />
+            On Upload
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full border border-[#c5a880]/45 bg-[#c5a880]/15 px-1.5 py-0.2 text-[9px] font-semibold text-[#725b38] dark:border-[#e8c98a]/40 dark:bg-[#584411]/70 dark:text-[#e8c98a]">
+            v2.5
+          </span>
+        )}
       </div>
+
+      {/* Live Uploaded Reference Context Strip (injects onto upload, never creates new base) */}
+      {upload ? (
+        <div
+          data-testid="matrix-active-upload-banner"
+          className="flex shrink-0 items-center justify-between gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-2 py-1.5"
+        >
+          <div className="flex min-w-0 items-center gap-1.5">
+            <img
+              src={upload}
+              alt="Active uploaded reference"
+              className="size-7 shrink-0 rounded-md border border-emerald-400/40 object-cover"
+            />
+            <div className="min-w-0 leading-tight">
+              <div className="flex items-center gap-1 text-[9.5px] font-semibold text-emerald-800 dark:text-emerald-200">
+                <ImageIcon className="size-2.5 shrink-0" />
+                <span className="truncate">Uploaded Ref Locked</span>
+              </div>
+              <div className="truncate font-mono text-[8.5px] text-emerald-700/90 dark:text-emerald-300/85">
+                {uploadDims
+                  ? `${uploadDims.width}×${uploadDims.height} · ${uploadDims.geminiRatio} · ${engine.geometryLock}%`
+                  : `${frame.ratio} · ${engine.geometryLock}% pixel lock`}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            data-testid="matrix-apply-to-upload-btn"
+            onClick={() => {
+              syncPillsIntoUploadedPrompt();
+              void generate("plate");
+            }}
+            className="inline-flex h-6.5 shrink-0 items-center gap-1 rounded-full bg-emerald-600 px-2 text-[9.5px] font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50 dark:bg-emerald-500 dark:text-[#04130c]"
+          >
+            <Play className="size-2.5 fill-current" />
+            Apply
+          </button>
+        </div>
+      ) : null}
 
       {/* Mode Switcher */}
       <div className="grid shrink-0 grid-cols-5 gap-0.5 rounded-full bg-[#efeeea]/80 p-0.5 dark:bg-[#121c29]/80">
@@ -399,7 +493,7 @@ export function PresetMatrixPanel() {
                   <button
                     type="button"
                     title="Toggle Positive (+)"
-                    onClick={() => togglePreset200(pill.id, "positive")}
+                    onClick={() => handleTogglePreset200(pill.id, "positive")}
                     className="font-bold hover:opacity-75"
                   >
                     +
@@ -415,7 +509,7 @@ export function PresetMatrixPanel() {
                   <button
                     type="button"
                     title="Toggle Negative (−)"
-                    onClick={() => togglePreset200(pill.id, "negative")}
+                    onClick={() => handleTogglePreset200(pill.id, "negative")}
                     className="font-bold hover:text-rose-500"
                   >
                     −
@@ -452,6 +546,7 @@ export function PresetMatrixPanel() {
                   <PresetBeforeAfterStrip
                     preview={preview}
                     alt={item.name}
+                    uploadSrc={upload}
                     heightClass="h-[74px]"
                     testId={`preset200-ba-${item.id}`}
                   />
@@ -467,7 +562,7 @@ export function PresetMatrixPanel() {
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => togglePreset200(item.id, "positive")}
+                        onClick={() => handleTogglePreset200(item.id, "positive")}
                         aria-label={`Include ${item.name}`}
                         className={cn(
                           "grid size-5 place-items-center rounded-full border text-[10px]",
@@ -480,7 +575,7 @@ export function PresetMatrixPanel() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => togglePreset200(item.id, "negative")}
+                        onClick={() => handleTogglePreset200(item.id, "negative")}
                         aria-label={`Exclude ${item.name}`}
                         className={cn(
                           "grid size-5 place-items-center rounded-full border text-[10px]",
@@ -538,6 +633,7 @@ export function PresetMatrixPanel() {
                   <PresetBeforeAfterStrip
                     preview={preview}
                     alt={preset.title}
+                    uploadSrc={upload}
                     heightClass="h-24"
                     testId={`archviz100-ba-${preset.id}`}
                   />
@@ -550,16 +646,36 @@ export function PresetMatrixPanel() {
                         {preset.title}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIdea(preset.prompt);
-                        toast.success(`Applied ArchViz preset: ${preset.title}`);
-                      }}
-                      className="shrink-0 rounded-full bg-[#c5a880] px-2.5 py-0.5 text-[10px] font-semibold text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
-                    >
-                      Apply
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIdea(buildArchviz100AppliedPrompt(preset, transformCtx));
+                          toast.success(
+                            upload
+                              ? `Injected "${preset.title}" onto uploaded image (camera locked)`
+                              : `Applied ArchViz preset: ${preset.title}`,
+                          );
+                        }}
+                        className="shrink-0 rounded-full bg-[#c5a880] px-2.5 py-0.5 text-[10px] font-semibold text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]"
+                      >
+                        {upload ? "Inject" : "Apply"}
+                      </button>
+                      {upload ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          title={`Inject "${preset.title}" & render directly on uploaded photo`}
+                          onClick={() => {
+                            setIdea(buildArchviz100AppliedPrompt(preset, transformCtx));
+                            void generate("plate");
+                          }}
+                          className="grid size-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-500 disabled:opacity-50 dark:bg-emerald-500 dark:text-[#04130c]"
+                        >
+                          <Play className="size-2.5 fill-current" />
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <p className="line-clamp-2 text-[10px] text-[#4d463c] dark:text-[#a9bdc9]">{preset.prompt}</p>
                   <div className="flex flex-wrap gap-1">
@@ -593,7 +709,7 @@ export function PresetMatrixPanel() {
               const slotValues = zukeSlots[item.id] ?? {};
               const displayedPrompt = showPt
                 ? (item.originalPrompt ?? item.prompt)
-                : fillZukePromptPlaceholders(item.prompt, slotValues);
+                : resolveSmartPlaceholders(item.prompt, slotValues, transformCtx);
 
               return (
                 <div
@@ -604,6 +720,7 @@ export function PresetMatrixPanel() {
                   <PresetBeforeAfterStrip
                     preview={preview}
                     alt={item.title}
+                    uploadSrc={upload}
                     heightClass="h-22"
                     badge={item.aspectRatio ?? item.batch}
                     testId={`zuke119-ba-${item.id}`}
@@ -617,14 +734,27 @@ export function PresetMatrixPanel() {
                         {item.title}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      data-testid={`zuke119-apply-${item.id}`}
-                      onClick={() => applyZukePrompt(item)}
-                      className="shrink-0 rounded-full bg-[#c5a880] px-2.5 py-0.5 text-[10px] font-semibold text-[#281800] transition hover:brightness-95 dark:bg-[#cfe3f0] dark:text-[#08131f]"
-                    >
-                      Apply
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        data-testid={`zuke119-apply-${item.id}`}
+                        onClick={() => applyZukePrompt(item, false)}
+                        className="shrink-0 rounded-full bg-[#c5a880] px-2.5 py-0.5 text-[10px] font-semibold text-[#281800] transition hover:brightness-95 dark:bg-[#cfe3f0] dark:text-[#08131f]"
+                      >
+                        {upload ? "Inject" : "Apply"}
+                      </button>
+                      {upload ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          title={`Inject ${item.id} & render onto uploaded photo`}
+                          onClick={() => applyZukePrompt(item, true)}
+                          className="grid size-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-500 disabled:opacity-50 dark:bg-emerald-500 dark:text-[#04130c]"
+                        >
+                          <Play className="size-2.5 fill-current" />
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
 
                   <p className={cn("text-[10px] leading-relaxed text-[#4d463c] dark:text-[#a9bdc9]", isExpanded ? "" : "line-clamp-2")}>
@@ -728,17 +858,20 @@ export function PresetMatrixPanel() {
               }}
             >
               <img
-                src={activeLook.thumbnail}
+                src={upload ?? activeLook.thumbnail}
                 alt={activeLook.name}
                 referrerPolicy="no-referrer"
-                className="h-full w-full object-cover"
+                className={cn(
+                  "h-full w-full object-cover",
+                  upload ? resolveLookPreview(activeLook).afterFilterClass : "",
+                )}
               />
               <div
                 className="pointer-events-none absolute inset-0"
                 style={{ clipPath: `inset(0 ${100 - hoverBeforeAfter}% 0 0)` }}
               >
                 <img
-                  src={activeLook.beforeThumb}
+                  src={upload ?? activeLook.beforeThumb}
                   alt="Before"
                   referrerPolicy="no-referrer"
                   className="h-full w-full object-cover"
@@ -749,7 +882,7 @@ export function PresetMatrixPanel() {
                 style={{ left: `${hoverBeforeAfter}%` }}
               />
               <span className="pointer-events-none absolute top-1.5 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[9px] text-white">
-                Before
+                {upload ? "Your Upload" : "Before"}
               </span>
               <span className="pointer-events-none absolute top-1.5 right-2 rounded-full bg-black/75 px-2 py-0.5 text-[9px] text-[#e8c98a]">
                 {activeLook.code} · {activeLook.name}
@@ -774,9 +907,11 @@ export function PresetMatrixPanel() {
                     onClick={() => {
                       applyIntentLook(look.id);
                       toast.success(
-                        look.rules
-                          ? `Look ${look.code}: ${look.name} · Rule: ${look.rules}`
-                          : `Look ${look.code}: ${look.name} (${look.fidelity} lock)`,
+                        upload
+                          ? `Injected Look ${look.code}: ${look.name} onto uploaded image`
+                          : look.rules
+                            ? `Look ${look.code}: ${look.name} · Rule: ${look.rules}`
+                            : `Look ${look.code}: ${look.name} (${look.fidelity} lock)`,
                       );
                     }}
                     className={cn(
@@ -789,6 +924,7 @@ export function PresetMatrixPanel() {
                     <PresetBeforeAfterStrip
                       preview={preview}
                       alt={look.name}
+                      uploadSrc={upload}
                       heightClass="h-16"
                       badge={look.fidelity}
                     />
@@ -847,57 +983,6 @@ export function PresetMatrixPanel() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* Live Linter + Sentence Preview + Synthesize & Inject (8 CR) */}
-      <div className="flex shrink-0 flex-col gap-1.5 rounded-xl border border-[#d1c5b8]/50 bg-white/75 p-2 dark:border-[#43474b]/55 dark:bg-[#16202d]/80">
-        <div className="flex items-center justify-between gap-2 text-[10px]">
-          <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-[#1b1c1a] dark:text-[#e8eff3]">
-            <BookmarkCheck className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" />
-            Sentence & Linter
-          </span>
-          {compiled.issues.length === 0 ? (
-            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-300">
-              <CheckCircle2 className="size-3" /> L01–L08 Clear
-            </span>
-          ) : (
-            <span
-              title={compiled.issues.map((i) => i.message).join("\n")}
-              className="inline-flex items-center gap-1 font-medium text-amber-600 dark:text-[#e8c98a]"
-            >
-              <AlertTriangle className="size-3" /> {compiled.issues.length} lint note{compiled.issues.length > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        <textarea
-          value={idea}
-          onChange={(e) => setIdea(e.target.value)}
-          rows={2}
-          placeholder="Append custom architectural direction or compile active presets…"
-          className="w-full resize-none rounded-lg border border-[#d1c5b8]/45 bg-[#fbf9f5] p-1.5 text-[11px] leading-snug text-[#1b1c1a] outline-none focus:border-[#725b38] dark:border-[#43474b]/45 dark:bg-[#050f1b]/85 dark:text-[#e8eff3] dark:placeholder:text-[#5f7f98] dark:focus:border-[#cfe3f0]"
-        />
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => {
-              setIdea(compiled.sentence);
-              toast.success(`Injected compiled prompt (${frame.ratio}, Keep rule locked)`);
-            }}
-            className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-full border border-[#d1c5b8]/60 bg-white text-[10px] font-semibold text-[#1b1c1a] hover:border-[#725b38] dark:border-[#a9bdc9]/30 dark:bg-[#202b38] dark:text-[#cfe3f0] dark:hover:border-[#cfe3f0]"
-          >
-            <Wand2 className="size-3" /> Compile Brief
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            data-testid="matrix-synthesize-btn"
-            onClick={injectAndRender}
-            className="ice-cta inline-flex h-8 flex-[1.5] items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-bold tracking-wide disabled:opacity-60"
-          >
-            <Eye className="size-3.5" />
-            <span>{busy ? "Rendering…" : `Synthesize (${compiled.estimatedCredits} CR)`}</span>
-          </button>
-        </div>
       </div>
     </aside>
   );

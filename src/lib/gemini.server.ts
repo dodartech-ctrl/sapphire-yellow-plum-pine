@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, type Part } from "@google/genai";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Frame, Ratio } from "@/lib/frame";
+import { buildPixelLockedCameraContract, parseImageDimensionsFromDataUrl } from "@/lib/image-aspect";
 
 export const GEMINI_TEXT_MODEL = "gemini-4-hydrogen";
 export const GEMINI_IMAGE_FAST_MODEL = "gemini-3.1-flash-lite-image";
@@ -68,7 +69,26 @@ function createGeminiClient(apiKey: string, vertexai = false): GoogleGenAI {
   });
 }
 
-async function withGeminiClient<T>(fn: (ai: GoogleGenAI) => Promise<T>): Promise<T> {
+function withRequestTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  const safeMs = Math.max(3_000, Math.min(90_000, Math.round(timeoutMs)));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(safeMs / 1000)}s.`));
+    }, safeMs);
+    promise
+      .then((value) => {
+        if (timer) clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        if (timer) clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+async function withGeminiClient<T>(fn: (ai: GoogleGenAI) => Promise<T>, timeoutMs = 24_000, label = "Gemini"): Promise<T> {
   const keys = resolveGeminiApiKeys();
   if (keys.length === 0) {
     throw new Error("GEMINI_API_KEY is not configured on the server.");
@@ -79,7 +99,7 @@ async function withGeminiClient<T>(fn: (ai: GoogleGenAI) => Promise<T>): Promise
     const modes = key.startsWith("AQ.") ? [false, true] : [false];
     for (let m = 0; m < modes.length; m++) {
       try {
-        return await fn(createGeminiClient(key, modes[m]));
+        return await withRequestTimeout(fn(createGeminiClient(key, modes[m])), timeoutMs, label);
       } catch (error) {
         lastErr = error;
         const cleaned = cleanGeminiError(error);
@@ -99,11 +119,10 @@ export function toGeminiAspectRatio(ratio: Ratio): GeminiRatio {
   switch (ratio) {
     case "1:1":
     case "4:3":
+    case "3:2":
     case "9:16":
     case "16:9":
       return ratio;
-    case "3:2":
-      return "4:3";
   }
 }
 
@@ -137,15 +156,18 @@ export function cleanGeminiError(error: unknown): Error {
 
 export async function enhanceIdeaWithGemini(facts: string): Promise<string> {
   try {
-    const response = await withGeminiClient((ai) =>
-      ai.models.generateContent({
-        model: GEMINI_TEXT_MODEL,
-        contents: facts,
-        config: {
-          systemInstruction:
-            "Rewrite this architectural visualization request as one sentence a designer would type. Name the space, the materials, and the light. Keep the camera and layout. No labels, no bullet list, under 40 words.",
-        },
-      }),
+    const response = await withGeminiClient(
+      (ai) =>
+        ai.models.generateContent({
+          model: GEMINI_TEXT_MODEL,
+          contents: facts,
+          config: {
+            systemInstruction:
+              "Rewrite this architectural visualization request as one sentence a designer would type. Name the space, the materials, and the light. Keep the camera and layout. No labels, no bullet list, under 40 words.",
+          },
+        }),
+      10_000,
+      "Gemini prompt enhance",
     );
     const text = response.text?.replace(/\s+/g, " ").trim();
     if (!text) {
@@ -171,42 +193,45 @@ export async function detectGroundedSam2BoxesWithGemini(
     const clickPrompt = clickPoint
       ? `The user clicked at normalized coordinate (y=${Math.round(clickPoint.yNorm * 1000)}, x=${Math.round(clickPoint.xNorm * 1000)}) in 0..1000 space. Identify the exact architectural element or furniture item at that point (e.g. window glazing, facade panel, sofa, dining table, floor rug, ceiling) and return its tight 2D bounding box [ymin, xmin, ymax, xmax] with concise label and confidence score.`
       : `Locate every "${cleanPrompt}" instance in this architectural scene. Return tight 2D bounding boxes in normalized 0..1000 coordinates [ymin, xmin, ymax, xmax] with concise label and confidence score.`;
-    const response = await withGeminiClient((ai) =>
-      ai.models.generateContent({
-        model: GEMINI_TEXT_MODEL,
-        contents: {
-          parts: [
-            { inlineData: parsed },
-            {
-              text: clickPrompt,
-            },
-          ],
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              boxes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    label: { type: Type.STRING },
-                    box_2d: {
-                      type: Type.ARRAY,
-                      items: { type: Type.NUMBER },
+    const response = await withGeminiClient(
+      (ai) =>
+        ai.models.generateContent({
+          model: GEMINI_TEXT_MODEL,
+          contents: {
+            parts: [
+              { inlineData: parsed },
+              {
+                text: clickPrompt,
+              },
+            ],
+          },
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                boxes: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      label: { type: Type.STRING },
+                      box_2d: {
+                        type: Type.ARRAY,
+                        items: { type: Type.NUMBER },
+                      },
+                      confidence: { type: Type.NUMBER },
                     },
-                    confidence: { type: Type.NUMBER },
+                    required: ["label", "box_2d", "confidence"],
                   },
-                  required: ["label", "box_2d", "confidence"],
                 },
               },
+              required: ["boxes"],
             },
-            required: ["boxes"],
           },
-        },
-      }),
+        }),
+      12_000,
+      "Gemini SAM-2 detection",
     );
 
     const rawText = response.text?.trim();
@@ -249,19 +274,33 @@ export async function generateImageWithGemini(
     lightingRefImage?: string;
     exampleRefImage?: string;
     aspectOverride?: GeminiRatio;
+    lockSourceAspect?: boolean;
+    geometryLock?: number;
     modelOverride?: string;
-    imageSizeOverride?: "1K" | "2K" | "4K";
+    imageSizeOverride?: "512" | "1K" | "2K" | "4K";
+    timeoutMs?: number;
+    maxPromptChars?: number;
+    maxReferences?: number;
   },
 ): Promise<string> {
   try {
-    const useHq = frame.resolution === "2k" || Boolean(options?.imageSizeOverride && options.imageSizeOverride !== "1K");
-    const model = options?.modelOverride || (useHq ? GEMINI_IMAGE_HQ_MODEL : GEMINI_IMAGE_FAST_MODEL);
+    const requestedSize = options?.imageSizeOverride ?? (frame.resolution === "2k" ? "2K" : "1K");
+    const useHq = requestedSize === "2K" || requestedSize === "4K";
+    const model = options?.modelOverride || GEMINI_IMAGE_HQ_MODEL;
+    const maxRefs = Math.max(1, Math.min(8, options?.maxReferences ?? 4));
+    const maxChars = Math.max(600, Math.min(8_000, options?.maxPromptChars ?? 3_200));
+    const timeoutMs = options?.timeoutMs ?? (model === GEMINI_IMAGE_FAST_MODEL ? 16_000 : useHq ? 34_000 : 22_000);
+    const sourceDims = parseImageDimensionsFromDataUrl(options?.sourceImage);
+    const lockSource = Boolean(options?.sourceImage) && options?.lockSourceAspect !== false && !options?.aspectOverride;
+    const resolvedAspectRatio: GeminiRatio =
+      options?.aspectOverride ??
+      (lockSource && sourceDims ? sourceDims.geminiRatio : toGeminiAspectRatio(frame.ratio));
 
     const parts: Part[] = [];
     const attachments: Array<[string, string | undefined]> = [
-      ["Architectural base scene to preserve and render", options?.sourceImage],
-      ["Line sketch / perspective structural contour guide", options?.sketchImage !== options?.sourceImage ? options?.sketchImage : undefined],
+      ["Uploaded architectural source image to preserve pixel-for-pixel (locked camera, framing, and geometry)", options?.sourceImage],
       ["Mask overlay highlighting the ONLY editable target region", options?.maskImage],
+      ["Line sketch / perspective structural contour guide", options?.sketchImage !== options?.sourceImage ? options?.sketchImage : undefined],
       ["True 3D WebGL Z-depth buffer map for spatial distance lock", options?.depthImage],
       ["Surface normal XYZ orientation map for plane alignment", options?.normalImage],
       ["Untextured clay AO massing geometry reference", options?.clayImage],
@@ -275,6 +314,7 @@ export async function generateImageWithGemini(
     const notes: string[] = [];
     let idx = 1;
     for (const [desc, rawUrl] of attachments) {
+      if (idx > maxRefs) break;
       const parsed = parseDataUrl(rawUrl);
       if (parsed) {
         parts.push({ inlineData: parsed });
@@ -283,27 +323,39 @@ export async function generateImageWithGemini(
       }
     }
 
+    const pixelCameraLock =
+      lockSource && options?.sourceImage
+        ? buildPixelLockedCameraContract(sourceDims, options?.geometryLock ?? 90)
+        : "";
+
     const maskConstraint = options?.maskImage
       ? "CRITICAL INPAINTING CONSTRAINT: Keep all unmasked pixels in Image #1 pixel-identical. Apply edits strictly inside the highlighted region of the mask image with seamless contact shadows and matching lighting."
       : "";
 
-    parts.push({
-      text: [notes.length > 0 ? notes.join(" ") : "", maskConstraint, prompt].filter(Boolean).join("\n\n"),
-    });
+    const concisePrompt = [notes.length > 0 ? notes.join(" ") : "", pixelCameraLock, maskConstraint, prompt]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, maxChars);
 
-    const response = await withGeminiClient((ai) =>
-      ai.models.generateContent({
-        model,
-        contents: { parts },
-        config: {
-          imageConfig: {
-            aspectRatio: options?.aspectOverride ?? toGeminiAspectRatio(frame.ratio),
-            ...(model !== GEMINI_IMAGE_FAST_MODEL
-              ? { imageSize: options?.imageSizeOverride ?? (useHq ? "2K" : "1K") }
-              : {}),
+    parts.push({ text: concisePrompt });
+
+    const resolvedImageSize =
+      requestedSize === "2K" || requestedSize === "4K" || requestedSize === "1K" ? requestedSize : "1K";
+
+    const response = await withGeminiClient(
+      (ai) =>
+        ai.models.generateContent({
+          model,
+          contents: { parts },
+          config: {
+            imageConfig: {
+              aspectRatio: resolvedAspectRatio,
+              ...(model !== GEMINI_IMAGE_FAST_MODEL ? { imageSize: resolvedImageSize } : {}),
+            },
           },
-        },
-      }),
+        }),
+      timeoutMs,
+      `Gemini ${model}`,
     );
 
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
