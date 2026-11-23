@@ -327,7 +327,7 @@ export function SplitViewportStage({
               <div className="flex items-center gap-1.5 rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/80 px-2.5 py-1 backdrop-blur-xl">
                 <span className="size-2 rounded-full bg-[#e8c98a] shadow-[0_0_8px_#e8c98a]" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#e8eff3]">
-                  {plate?.url ? "Live AI Diffusion" : "Reference Preview"}
+                  {plate?.url ? (plate.fallback ? "Preview Render · AI offline" : "Live AI Diffusion") : "Reference Preview"}
                 </span>
               </div>
               <span className="rounded-full border border-[#a9bdc9]/25 bg-[#050f1b]/80 px-2.5 py-1 text-[10px] font-semibold text-[#cfe3f0] backdrop-blur-xl">

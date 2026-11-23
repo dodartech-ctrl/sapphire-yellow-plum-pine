@@ -16,6 +16,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Compare } from "@/components/compare";
+import { AgentDock } from "@/components/agent-dock";
 import { Composer } from "@/components/composer";
 import { CvPreprocessorStage } from "@/components/cv-preprocessor-stage";
 import { GroundedSAM2Tool } from "@/components/grounded-sam2-tool";
@@ -1095,6 +1096,7 @@ function WorkspacePage() {
                 onExportPlate={exportLayeredBundle}
               />
             )}
+            <AgentDock />
           </div>
         </aside>
       ) : null}

@@ -42,6 +42,16 @@
 
 html.dark {
   color-scheme: dark;
+  /* Shared design tokens (bg-surface, text-fg, border-line, ...) follow the theme. */
+  --color-bg: #08131f;
+  --color-surface: #0e1f31;
+  --color-raised: #13293d;
+  --color-line: #2c4358;
+  --color-fg: #e8eff3;
+  --color-muted: #a9bdc9;
+  --color-faint: #8197a6;
+  --color-bronze: #e8c98a;
+  --color-terracotta: #e59a73;
   --ah-bg: #08131f;
   --ah-surface: #091420;
   --ah-glass: rgba(22, 49, 74, 0.42);

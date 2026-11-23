@@ -15,6 +15,8 @@ function ProjectsPage() {
   const removeBrief = useOriel((state) => state.removeBrief);
   const setIdea = useOriel((state) => state.setIdea);
   const [name, setName] = useState("");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState("");
   const navigate = useNavigate();
 
   return (
@@ -25,27 +27,42 @@ function ProjectsPage() {
         className="mt-6 flex max-w-lg gap-2"
         onSubmit={(event) => {
           event.preventDefault();
+          const label = name.trim() || "Untitled";
           saveProject(name);
           setName("");
+          setSavedNote(`Saved “${label}”. Opening it later restores your properties and prompt.`);
         }}
       >
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Project name"
-          className="h-11 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-sm outline-none"
+          placeholder="Project name (e.g. Villa lobby, evening)"
+          aria-label="Project name"
+          maxLength={48}
+          className="h-11 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-sm text-fg outline-none placeholder:text-faint focus:border-lime"
         />
         <button type="submit" className="gold-fill h-11 rounded-full px-5 text-sm font-semibold text-[#2a1c0c]">
           Save
         </button>
       </form>
+      {savedNote ? (
+        <p role="status" className="mt-3 max-w-lg text-xs text-muted">
+          {savedNote}
+        </p>
+      ) : null}
       <ul className="mt-6 max-w-lg space-y-2">
-        {projects.length === 0 ? <li className="text-sm text-muted">No saved projects yet.</li> : null}
+        {projects.length === 0 ? (
+          <li className="rounded-2xl border border-dashed border-line px-4 py-6 text-sm text-muted">
+            No saved projects yet. Set up a look in the Studio, then name and save it here to come back to it later.
+          </li>
+        ) : null}
         {projects.map((project) => (
           <li key={project.id} className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3">
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{project.name}</span>
-              <span className="block text-xs text-faint">{project.design.vertical}</span>
+              <span className="block text-xs capitalize text-faint">
+                {project.design.vertical} · {new Date(project.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+              </span>
             </span>
             <button
               type="button"
@@ -57,9 +74,27 @@ function ProjectsPage() {
             >
               Open
             </button>
-            <button type="button" className="text-sm text-muted hover:text-fg" onClick={() => removeProject(project.id)}>
-              Delete
-            </button>
+            {confirmId === project.id ? (
+              <>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-terracotta hover:underline"
+                  onClick={() => {
+                    removeProject(project.id);
+                    setConfirmId(null);
+                  }}
+                >
+                  Confirm delete
+                </button>
+                <button type="button" className="text-sm text-muted hover:text-fg" onClick={() => setConfirmId(null)}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button type="button" className="text-sm text-muted hover:text-fg" onClick={() => setConfirmId(project.id)}>
+                Delete
+              </button>
+            )}
           </li>
         ))}
       </ul>

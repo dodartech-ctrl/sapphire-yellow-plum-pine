@@ -230,7 +230,7 @@ export function useGenerate() {
       if ("warning" in result && typeof result.warning === "string" && result.warning) {
         toast.message(result.warning);
       } else {
-        toast.success(result.fallback ? "Studio preview plate rendered" : "Plate rendered");
+        toast.success(result.fallback ? "Preview render ready — the AI model was unavailable, so no credits were used" : "Plate rendered");
       }
       if (pathname !== "/") void navigate({ to: "/" });
     } catch (error) {

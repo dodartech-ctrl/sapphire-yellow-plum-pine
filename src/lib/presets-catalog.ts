@@ -1,6 +1,6 @@
-import presets200Raw from "../../public/assets/aistudio/presets200_e7afd19d.json";
-import archviz100Raw from "../../public/assets/aistudio/archviz-presets_afcc8bdf.json";
-import looksNew24Raw from "../../public/assets/aistudio/looks_new24_038cd411.json";
+import presets200Raw from "@/data/presets200_e7afd19d.json";
+import archviz100Raw from "@/data/archviz-presets_afcc8bdf.json";
+import looksNew24Raw from "@/data/looks_new24_038cd411.json";
 import type { Frame } from "@/lib/frame";
 import type { EngineState, Scene3DState } from "@/lib/engines";
 import type { DesignState, VerticalId } from "@/lib/properties";
