@@ -905,8 +905,24 @@ export function Viewport3D({ aspect: _aspect, compactSplit = false, onCaptureSna
         const { FBXLoader } = await import("three/examples/jsm/loaders/FBXLoader.js");
         const loader = new FBXLoader();
         loadedRoot = await loader.loadAsync(objectUrl);
+      } else if (ext === "stl") {
+        const { STLLoader } = await import("three/examples/jsm/loaders/STLLoader.js");
+        const loader = new STLLoader();
+        const geometry = await loader.loadAsync(objectUrl);
+        geometry.computeVertexNormals();
+        const mat = new THREE.MeshStandardMaterial({
+          name: "STL Architectural Clay",
+          color: 0xd8cfc2,
+          roughness: 0.72,
+          metalness: 0.05,
+        });
+        const stlMesh = new THREE.Mesh(geometry, mat);
+        stlMesh.name = file.name.replace(/\.stl$/i, "") || "STL Mesh";
+        stlMesh.castShadow = true;
+        stlMesh.receiveShadow = true;
+        loadedRoot = stlMesh;
       } else {
-        toast.error("Unsupported 3D format. Use .glb, .gltf, .obj, or .fbx.");
+        toast.error("Unsupported 3D format. Use .glb, .gltf, .obj, .fbx, or .stl.");
         return;
       }
 
@@ -941,7 +957,7 @@ export function Viewport3D({ aspect: _aspect, compactSplit = false, onCaptureSna
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    if (["glb", "gltf", "obj", "fbx"].includes(ext)) {
+    if (["glb", "gltf", "obj", "fbx", "stl"].includes(ext)) {
       e.preventDefault();
       void loadCadFile(file);
     }
@@ -1322,7 +1338,7 @@ export function Viewport3D({ aspect: _aspect, compactSplit = false, onCaptureSna
             />
           )}
 
-          <input ref={cadInputRef} type="file" accept=".glb,.gltf,.obj,.fbx" className="sr-only" onChange={handleCadInput} />
+          <input ref={cadInputRef} type="file" accept=".glb,.gltf,.obj,.fbx,.stl" className="sr-only" onChange={handleCadInput} />
 
           {/* Discrete top-right Inspector + Rig toggles */}
           <div className="absolute top-2 right-2 z-20 flex items-center gap-1">

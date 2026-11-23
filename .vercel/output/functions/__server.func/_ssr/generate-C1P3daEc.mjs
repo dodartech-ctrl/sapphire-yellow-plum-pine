@@ -477,7 +477,7 @@ var segmentObjectWithSam2 = createServerFn({ method: "POST" }).validator((input)
 		clickPoint: cp
 	};
 }).handler(segmentObjectWithSam2_createServerFn_handler, async ({ data }) => {
-	const { heuristicSemanticBoxesForPrompt, normalizeGroundedBoxes } = await import("./cv-pipeline-B2TJrqsi.mjs").then((n) => n.n).then((n) => n.n);
+	const { heuristicSemanticBoxesForPrompt, normalizeGroundedBoxes } = await import("./cv-pipeline-B2TJrqsi.mjs").then((n) => n.n);
 	const { hasNvidiaKey, detectGroundedSam2BoxesWithNvidia } = await import("./nvidia-vision.server-C9wJzhVA.mjs");
 	const { hasGeminiKey, detectGroundedSam2BoxesWithGemini, isGeminiAuthError } = await import("./gemini.server-DtmVtL-S.mjs");
 	const prompt = data.prompt || "architectural element";

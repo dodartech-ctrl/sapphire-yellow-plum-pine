@@ -875,6 +875,30 @@ var FileCheck2 = createLucideIcon("file-check-2", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var FileCode2 = createLucideIcon("file-code-2", [
+	["path", {
+		d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4",
+		key: "1pf5j1"
+	}],
+	["path", {
+		d: "M14 2v4a2 2 0 0 0 2 2h4",
+		key: "tnqrlb"
+	}],
+	["path", {
+		d: "m5 12-3 3 3 3",
+		key: "oke12k"
+	}],
+	["path", {
+		d: "m9 18 3-3-3-3",
+		key: "112psh"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var FileSpreadsheet = createLucideIcon("file-spreadsheet", [
 	["path", {
 		d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
@@ -3377,4 +3401,4 @@ var ZoomIn = createLucideIcon("zoom-in", [
 		key: "durymu"
 	}]
 ]);
-export { PanelLeftClose as $, Crosshair as $t, Shuffle as A, Hexagon as At, Save as B, FlipHorizontal as Bt, Stamp as C, BadgeCheck as Cn, Info as Ct, Sparkles as D, ImagePlus as Dt, Split as E, Armchair as En, Image as Et, Search as F, Globe as Ft, Plus as G, FileCheck2 as Gt, RefreshCw as H, FileUp as Ht, Scissors as I, GitBranch as It, Pencil as J, ExternalLink as Jt, Play as K, Eye as Kt, ScanSearch as L, Funnel as Lt, ShieldAlert as M, GripVertical as Mt, Share2 as N, Grid2x2 as Nt, SlidersVertical as O, ImageOff as Ot, Send as P, Grid3x3 as Pt, PanelLeftOpen as Q, Crown as Qt, ScanLine as R, Folder as Rt, Star as S, Bell as Sn, Landmark as St, SquareDashed as T, ArrowUpRight as Tn, Images as Tt, Radio as U, FileText as Ut, RotateCcw as V, Film as Vt, QrCode as W, FileSpreadsheet as Wt, PanelRightOpen as X, Eraser as Xt, Pause as Y, Expand as Yt, PanelRightClose as Z, Download as Zt, SwatchBook as _, Box as _n, Lightbulb as _t, Wrench as a, CodeXml as an, Moon as at, SunMoon as b, BookOpen as bn, Layers as bt, Video as c, CircleCheck as cn, MessageSquareQuote as ct, User as d, ChevronDown as dn, Maximize2 as dt, Cpu as en, Palette as et, UserCheck as f, Check as fn, MapPin as ft, Trash2 as g, Building2 as gn, Link2 as gt, TriangleAlert as h, Calendar as hn, LoaderCircle as ht, X as i, Columns2 as in, MousePointer2 as it, ShieldCheck as j, Heart as jt, SlidersHorizontal as k, History as kt, VideoOff as l, CircleAlert as ln, MessageSquarePlus as lt, Type as m, Camera as mn, LockOpen as mt, ZoomOut as n, Contrast as nn, MoveRight as nt, Workflow as o, CloudUpload as on, Minus as ot, Upload as p, ChartColumn as pn, Lock as pt, Pin as q, EyeOff as qt, Zap as r, Compass as rn, Move3d as rt, WandSparkles as s, Clock as sn, MessageSquare as st, ZoomIn as t, Copy as tn, Paintbrush as tt, Users as u, ChevronUp as un, Menu as ut, Sunset as v, Bot as vn, Library as vt, Square as w, ArrowUp as wn, IndianRupee as wt, SunMedium as x, Binary as xn, Languages as xt, Sun as y, BookmarkPlus as yn, LayoutGrid as yt, ScanEye as z, FolderKanban as zt };
+export { PanelLeftClose as $, Crown as $t, Shuffle as A, Hexagon as At, Save as B, FlipHorizontal as Bt, Stamp as C, Bell as Cn, Info as Ct, Sparkles as D, Armchair as Dn, ImagePlus as Dt, Split as E, ArrowUpRight as En, Image as Et, Search as F, Globe as Ft, Plus as G, FileCode2 as Gt, RefreshCw as H, FileUp as Ht, Scissors as I, GitBranch as It, Pencil as J, EyeOff as Jt, Play as K, FileCheck2 as Kt, ScanSearch as L, Funnel as Lt, ShieldAlert as M, GripVertical as Mt, Share2 as N, Grid2x2 as Nt, SlidersVertical as O, ImageOff as Ot, Send as P, Grid3x3 as Pt, PanelLeftOpen as Q, Download as Qt, ScanLine as R, Folder as Rt, Star as S, Binary as Sn, Landmark as St, SquareDashed as T, ArrowUp as Tn, Images as Tt, Radio as U, FileText as Ut, RotateCcw as V, Film as Vt, QrCode as W, FileSpreadsheet as Wt, PanelRightOpen as X, Expand as Xt, Pause as Y, ExternalLink as Yt, PanelRightClose as Z, Eraser as Zt, SwatchBook as _, Building2 as _n, Lightbulb as _t, Wrench as a, Columns2 as an, Moon as at, SunMoon as b, BookmarkPlus as bn, Layers as bt, Video as c, Clock as cn, MessageSquareQuote as ct, User as d, ChevronUp as dn, Maximize2 as dt, Crosshair as en, Palette as et, UserCheck as f, ChevronDown as fn, MapPin as ft, Trash2 as g, Calendar as gn, Link2 as gt, TriangleAlert as h, Camera as hn, LoaderCircle as ht, X as i, Compass as in, MousePointer2 as it, ShieldCheck as j, Heart as jt, SlidersHorizontal as k, History as kt, VideoOff as l, CircleCheck as ln, MessageSquarePlus as lt, Type as m, ChartColumn as mn, LockOpen as mt, ZoomOut as n, Copy as nn, MoveRight as nt, Workflow as o, CodeXml as on, Minus as ot, Upload as p, Check as pn, Lock as pt, Pin as q, Eye as qt, Zap as r, Contrast as rn, Move3d as rt, WandSparkles as s, CloudUpload as sn, MessageSquare as st, ZoomIn as t, Cpu as tn, Paintbrush as tt, Users as u, CircleAlert as un, Menu as ut, Sunset as v, Box as vn, Library as vt, Square as w, BadgeCheck as wn, IndianRupee as wt, SunMedium as x, BookOpen as xn, Languages as xt, Sun as y, Bot as yn, LayoutGrid as yt, ScanEye as z, FolderKanban as zt };

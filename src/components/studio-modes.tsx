@@ -4,8 +4,10 @@ import {
   Check,
   Compass,
   Download,
+  FileCode2,
   Film,
   Layers,
+  Loader2,
   MapPin,
   Palette,
   Pause,
@@ -16,14 +18,26 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  Upload,
+  Video,
   Wand2,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { PanoramaViewer } from "@/components/panorama-viewer";
 import { PRD_LIGHT_PALETTE, PRD_MATERIAL_PALETTE } from "@/lib/presets-catalog";
 import type { TourHotspotType, TourUnitRecord } from "@/lib/prd-studio-data";
 import { appendSuggestionToIdea } from "@/lib/archviz-dictionary";
+import { generatePlate } from "@/lib/generate";
+import { resolveRuntimeModelOverride } from "@/lib/nano-banana-client";
+import { synthesizeFallbackComposite } from "@/lib/fallback-render";
+import {
+  buildStandalone360TourHtml,
+  renderKumTimelineToWebm,
+  triggerBlobDownload,
+} from "@/lib/studio-exports";
+import { formatPaiseShort } from "@/lib/budget-guard";
 import { useOriel } from "@/lib/store";
 import { useGenerate } from "@/lib/use-generate";
 import { cn } from "@/lib/utils";
@@ -329,8 +343,11 @@ export function King360StudioPanel({
 }) {
   const tourConfig = useOriel((s) => s.tourConfig);
   const updateTourConfig = useOriel((s) => s.updateTourConfig);
+  const addTourScene = useOriel((s) => s.addTourScene);
   const addTourHotspot = useOriel((s) => s.addTourHotspot);
+  const removeTourHotspot = useOriel((s) => s.removeTourHotspot);
   const updateUnitStatus = useOriel((s) => s.updateUnitStatus);
+  const governance = useOriel((s) => s.governance);
   const plate = useOriel((s) => s.plate);
   const upload = useOriel((s) => s.upload);
 
@@ -338,13 +355,22 @@ export function King360StudioPanel({
   const [unitFilter, setUnitFilter] = useState<"all" | TourUnitRecord["status"]>("all");
   const [hsType, setHsType] = useState<TourHotspotType>("info");
   const [hsLabel, setHsLabel] = useState("Fjord Timber Reveal");
+  const [activePinId, setActivePinId] = useState<string | null>(null);
+  const [generatingPano, setGeneratingPano] = useState(false);
   const [tourPrompt, setTourPrompt] = useState(
     "Start at Harbor Arrival Deck -> Enter Fjord Living Pavilion -> Highlight Unit 3B panoramic corner.",
   );
+  const panoUploadRef = useRef<HTMLInputElement>(null);
 
   const activeScene =
     tourConfig.scenes.find((sc) => sc.id === tourConfig.activeSceneId) ?? tourConfig.scenes[0];
-  const panoUrl = plate?.url || activeScene?.imageUrl || upload || "/viz/p01-pavilion-dusk.jpg";
+  const panoUrl = activeScene?.imageUrl || plate?.url || upload || "/viz/p01-pavilion-dusk.jpg";
+
+  const sceneHotspots = useMemo(
+    () => tourConfig.hotspots.filter((h) => h.sceneId === activeScene?.id),
+    [tourConfig.hotspots, activeScene?.id],
+  );
+  const activePin = sceneHotspots.find((h) => h.id === activePinId) ?? null;
 
   const visibleUnits = useMemo(
     () => tourConfig.units.filter((u) => unitFilter === "all" || u.status === unitFilter),
@@ -352,6 +378,97 @@ export function King360StudioPanel({
   );
 
   const cssFilter = `brightness(${1 + tourConfig.exposure * 0.04}) contrast(${1 + tourConfig.contrast * 0.03}) saturate(${1 + tourConfig.saturation * 0.05}) sepia(${tourConfig.lutPreset === "Nordic Warm" ? 0.16 : 0})`;
+
+  async function handleGenerate360Panorama() {
+    if (generatingPano) return;
+    setGeneratingPano(true);
+    const st = useOriel.getState();
+    try {
+      const panoPrompt = `Seamless 360-degree 2:1 equirectangular architectural panorama. ${st.idea.trim() || `${st.design.look} ${st.design.vertical} architectural space`}. Level horizon, zero seam distortion, crisp material reflections, ${tourConfig.dayNightMode === "dusk" ? "warm architectural twilight blue hour" : "soft natural architectural daylight"}.`;
+      const result = await generatePlate({
+        data: {
+          idea: panoPrompt,
+          image: st.upload && st.upload.startsWith("data:image/") ? st.upload : undefined,
+          design: st.design,
+          frame: { ...st.frame, ratio: "16:9" },
+          engine: st.engine,
+          scene3d: st.scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(st.nanoBanana.requestedModel),
+          nanoBananaResolution: "1K",
+          budgetCostMode: st.budget.costMode,
+          budgetCapPaise: st.budget.capPaise,
+          budgetMaxPerImagePaise: st.budget.maxPerImagePaise,
+        },
+      });
+      st.setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        st.setBudgetState(result.budget);
+      }
+      let finalUrl = result.url;
+      if (result.fallback) {
+        finalUrl = await synthesizeFallbackComposite({
+          baseImage: st.upload ?? st.plate?.url ?? undefined,
+          serverFallbackUrl: result.url,
+          design: st.design,
+          engine: st.engine,
+          scene3d: st.scene3d,
+          idea: panoPrompt,
+          variantIndex: 0,
+        });
+      }
+      const sceneNum = tourConfig.scenes.length + 1;
+      addTourScene({
+        id: `sc-pano-${Date.now()}`,
+        label: `360° ${st.design.look.slice(0, 14)} #${sceneNum}`,
+        level: `L${Math.min(4, sceneNum)}`,
+        imageUrl: finalUrl,
+        mapX: Math.min(84, 22 + sceneNum * 15),
+        mapY: Math.min(78, 30 + (sceneNum % 3) * 18),
+      });
+      toast.success(
+        result.fallback
+          ? "Generated Free (₹0) 360° Equirectangular Scene"
+          : `Generated 360° Panorama (${formatPaiseShort(result.costPaise)})`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate 360° panorama.");
+    } finally {
+      setGeneratingPano(false);
+    }
+  }
+
+  function handleUpload360File(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      if (!dataUrl.startsWith("data:image/")) return;
+      const cleanName = file.name.replace(/\.[^.]+$/, "").slice(0, 20) || "Uploaded 360°";
+      addTourScene({
+        id: `sc-upload-${Date.now()}`,
+        label: cleanName,
+        level: "Custom",
+        imageUrl: dataUrl,
+        mapX: 52,
+        mapY: 54,
+      });
+      toast.success(`Loaded 360° panorama "${cleanName}"`);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleExportStandaloneHtml() {
+    const html = buildStandalone360TourHtml(
+      tourConfig,
+      panoUrl,
+      governance.brandKitName || "Oriel Studio",
+    );
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    triggerBlobDownload(blob, `oriel-360-tour-${tourConfig.slug || "studio"}.html`);
+    toast.success("Downloaded standalone interactive 360° Tour (.HTML)");
+  }
 
   return (
     <div data-testid="king-360-studio" className="flex flex-col gap-3">
@@ -365,7 +482,10 @@ export function King360StudioPanel({
             <button
               key={sc.id}
               type="button"
-              onClick={() => updateTourConfig({ activeSceneId: sc.id })}
+              onClick={() => {
+                updateTourConfig({ activeSceneId: sc.id });
+                setActivePinId(null);
+              }}
               className={cn(
                 "rounded-full px-2.5 py-1 text-[10px] font-medium transition",
                 sc.id === activeScene?.id
@@ -378,7 +498,30 @@ export function King360StudioPanel({
           ))}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <input
+            ref={panoUploadRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={handleUpload360File}
+          />
+          <button
+            type="button"
+            onClick={() => panoUploadRef.current?.click()}
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white px-2.5 text-[10px] font-semibold text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#202b38] dark:text-[#e8eff3]"
+          >
+            <Upload className="size-3" /> Upload 360°
+          </button>
+          <button
+            type="button"
+            disabled={generatingPano}
+            onClick={() => void handleGenerate360Panorama()}
+            className="ice-cta inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-bold disabled:opacity-60"
+          >
+            {generatingPano ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+            Generate 360°
+          </button>
           {(["grade", "hotspots", "inventory", "publish"] as const).map((t) => (
             <button
               key={t}
@@ -397,11 +540,49 @@ export function King360StudioPanel({
         </div>
       </div>
 
-      {/* Live 360° Sphere Viewer + Color Filter */}
+      {/* Live 360° Sphere Viewer + Interactive Hotspots + Color Filter */}
       <div className="relative overflow-hidden rounded-2xl border border-[#d1c5b8]/45 dark:border-[#a9bdc9]/25" style={{ filter: cssFilter }}>
         <PanoramaViewer imageUrl={panoUrl} aspect={aspect} />
+
+        {/* Interactive Hotspot Pins Anchored Over Active Scene */}
+        {sceneHotspots.map((hs) => {
+          const leftPct = Math.max(10, Math.min(86, 50 + hs.yaw * 0.42));
+          const topPct = Math.max(16, Math.min(76, 48 - hs.pitch * 0.7));
+          const selected = activePinId === hs.id;
+          return (
+            <button
+              key={hs.id}
+              type="button"
+              onClick={() => setActivePinId(selected ? null : hs.id)}
+              style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+              className={cn(
+                "absolute z-20 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-md transition",
+                selected
+                  ? "border-[#e8c98a] bg-[#e8c98a] text-[#261a00]"
+                  : "border-[#e8c98a]/80 bg-[#08131f]/85 text-[#e8eff3] hover:bg-[#16202d]",
+              )}
+            >
+              <MapPin className="size-3 shrink-0" />
+              <span className="max-w-[120px] truncate">{hs.label}</span>
+            </button>
+          );
+        })}
+
+        {activePin ? (
+          <div className="absolute top-3 left-3 z-30 max-w-xs rounded-xl border border-[#e8c98a]/50 bg-[#08131f]/90 p-2.5 text-[11px] text-[#e8eff3] shadow-lg">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[9px] font-bold uppercase text-[#e8c98a]">{activePin.type}</span>
+              <button type="button" onClick={() => setActivePinId(null)} className="text-[#a9bdc9] hover:text-white">
+                <X className="size-3.5" />
+              </button>
+            </div>
+            <p className="mt-0.5 font-semibold">{activePin.label}</p>
+            <p className="mt-0.5 text-[10px] text-[#a9bdc9]">{activePin.detail}</p>
+          </div>
+        ) : null}
+
         {/* Interactive Mini-Map Radar Overlay */}
-        <div className="pointer-events-auto absolute right-3 bottom-12 z-20 w-32 rounded-xl border border-[#a9bdc9]/35 bg-[#08131f]/85 p-2 text-[9px] text-[#e8eff3] backdrop-blur-md">
+        <div className="pointer-events-auto absolute right-3 bottom-12 z-20 w-32 rounded-xl border border-[#a9bdc9]/35 bg-[#08131f]/85 p-2 text-[9px] text-[#e8eff3]">
           <div className="mb-1 flex items-center justify-between text-[#e8c98a]">
             <span>MINI-MAP</span>
             <span>{activeScene?.level}</span>
@@ -579,7 +760,28 @@ export function King360StudioPanel({
                     <span className="text-[11px] font-semibold text-[#1b1c1a] dark:text-[#e8eff3]">{hs.label}</span>
                     <p className="truncate text-[10px] text-[#7f766a] dark:text-[#a9bdc9]">{hs.detail}</p>
                   </div>
-                  <MapPin className="size-3.5 shrink-0 text-[#725b38] dark:text-[#e8c98a]" />
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setActivePinId(hs.id)}
+                      className="text-[#725b38] hover:opacity-80 dark:text-[#e8c98a]"
+                      title="Focus hotspot"
+                    >
+                      <MapPin className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        removeTourHotspot(hs.id);
+                        if (activePinId === hs.id) setActivePinId(null);
+                        toast.message(`Removed hotspot "${hs.label}"`);
+                      }}
+                      className="text-rose-500 hover:opacity-80"
+                      title="Remove hotspot"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -682,17 +884,26 @@ export function King360StudioPanel({
                 </div>
                 <QrCode className="size-7 text-[#725b38] dark:text-[#e8c98a]" />
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  updateTourConfig({ publishedVersion: tourConfig.publishedVersion + 1 });
-                  void navigator.clipboard?.writeText(`${window.location.origin}/?tour=${tourConfig.slug}`);
-                  toast.success(`Published Tour v${tourConfig.publishedVersion + 1} & copied share link`);
-                }}
-                className="ice-cta inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-bold"
-              >
-                <Check className="size-3.5" /> Publish & Copy Tour Link
-              </button>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateTourConfig({ publishedVersion: tourConfig.publishedVersion + 1 });
+                    void navigator.clipboard?.writeText(`${window.location.origin}/?tour=${tourConfig.slug}`);
+                    toast.success(`Published Tour v${tourConfig.publishedVersion + 1} & copied share link`);
+                  }}
+                  className="ice-cta inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-bold"
+                >
+                  <Check className="size-3.5" /> Publish &amp; Copy Link
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportStandaloneHtml}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#d1c5b8]/55 bg-white px-3 text-[11px] font-semibold text-[#1b1c1a] dark:border-[#a9bdc9]/30 dark:bg-[#202b38] dark:text-[#e8eff3]"
+                >
+                  <FileCode2 className="size-3.5 text-[#725b38] dark:text-[#e8c98a]" /> Download 360° HTML
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -709,6 +920,7 @@ export function KumVideoStudioPanel() {
   const videoProject = useOriel((s) => s.videoProject);
   const updateVideoProject = useOriel((s) => s.updateVideoProject);
   const addClipToKumVideo = useOriel((s) => s.addClipToKumVideo);
+  const updateClipInKumVideo = useOriel((s) => s.updateClipInKumVideo);
   const removeClipFromKumVideo = useOriel((s) => s.removeClipFromKumVideo);
   const plate = useOriel((s) => s.plate);
   const design = useOriel((s) => s.design);
@@ -716,6 +928,16 @@ export function KumVideoStudioPanel() {
   const [playing, setPlaying] = useState(false);
   const [playheadSec, setPlayheadSec] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [renderPct, setRenderPct] = useState(0);
+  const [renderedVideoUrl, setRenderedVideoUrl] = useState<string | null>(null);
+  const [renderedFilename, setRenderedFilename] = useState<string>("oriel-kum-film.webm");
+  const clipUploadRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (renderedVideoUrl) URL.revokeObjectURL(renderedVideoUrl);
+    };
+  }, [renderedVideoUrl]);
 
   const videoClips = useMemo(
     () => videoProject.clips.filter((c) => c.track === "video"),
@@ -755,34 +977,74 @@ export function KumVideoStudioPanel() {
         : 1.04;
   const kenBurnsX = activeClip?.cameraMove === "pan" ? (progressWithinClip - 0.5) * 28 : 0;
 
-  async function handleExportTimeline() {
+  async function handleRenderWebmVideo() {
+    if (exporting) return;
     setExporting(true);
+    setRenderPct(4);
     try {
-      const payload = {
-        exportedAt: new Date().toISOString(),
-        project: `${design.look} Film Edit`,
-        settings: {
-          aspect: videoProject.aspect,
-          fps: videoProject.fps,
-          resolution: videoProject.resolution,
-          codec: videoProject.codec,
-          lut: videoProject.lut,
-          musicTrack: videoProject.musicTrack,
-        },
-        durationSec: totalSec,
-        clips: videoProject.clips,
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `oriel-kum-video-timeline-${videoProject.aspect.replace(":", "x")}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Exported KUM Video Director bundle (${videoProject.resolution} · ${videoProject.aspect})`);
+      const rendered = await renderKumTimelineToWebm(
+        videoProject,
+        `${design.look} Architectural Film`,
+        (pct) => setRenderPct(pct),
+      );
+      if (renderedVideoUrl) URL.revokeObjectURL(renderedVideoUrl);
+      if (rendered.isWebm) {
+        setRenderedVideoUrl(rendered.url);
+        setRenderedFilename(rendered.filename);
+      }
+      triggerBlobDownload(rendered.blob, rendered.filename);
+      toast.success(
+        rendered.isWebm
+          ? `Rendered & downloaded ${rendered.filename} (${videoProject.aspect} · ${videoClips.length} clips)`
+          : `Exported storyboard frame (${rendered.filename})`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not render KUM Video file.");
     } finally {
       setExporting(false);
+      setRenderPct(0);
     }
+  }
+
+  function handleExportTimelineJson() {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      project: `${design.look} Film Edit`,
+      settings: {
+        aspect: videoProject.aspect,
+        fps: videoProject.fps,
+        resolution: videoProject.resolution,
+        codec: videoProject.codec,
+        lut: videoProject.lut,
+        musicTrack: videoProject.musicTrack,
+      },
+      durationSec: totalSec,
+      clips: videoProject.clips,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    triggerBlobDownload(blob, `oriel-kum-video-timeline-${videoProject.aspect.replace(":", "x")}.json`);
+    toast.success("Downloaded KUM Video EDL / JSON timeline spec");
+  }
+
+  function handleUploadClipFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      if (!dataUrl.startsWith("data:image/")) return;
+      addClipToKumVideo({
+        track: "video",
+        label: file.name.replace(/\.[^.]+$/, "").slice(0, 24) || "Uploaded Clip",
+        imageUrl: dataUrl,
+        durationSec: 5,
+        cameraMove: "dolly-in",
+        transition: "cross-dissolve",
+      });
+      toast.success(`Added "${file.name}" to Video Track`);
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -822,7 +1084,21 @@ export function KumVideoStudioPanel() {
           </select>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <input
+            ref={clipUploadRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={handleUploadClipFile}
+          />
+          <button
+            type="button"
+            onClick={() => clipUploadRef.current?.click()}
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white px-2.5 text-[10px] font-semibold text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#202b38] dark:text-[#e8eff3]"
+          >
+            <Upload className="size-3" /> Upload Clip
+          </button>
           {plate?.url ? (
             <button
               type="button"
@@ -845,13 +1121,58 @@ export function KumVideoStudioPanel() {
           <button
             type="button"
             disabled={exporting}
-            onClick={() => void handleExportTimeline()}
-            className="ice-cta inline-flex h-7 items-center gap-1 rounded-full px-3 text-[10px] font-bold"
+            onClick={() => void handleRenderWebmVideo()}
+            className="ice-cta inline-flex h-7 items-center gap-1 rounded-full px-3 text-[10px] font-bold disabled:opacity-65"
           >
-            <Download className="size-3" /> Export {videoProject.resolution} MP4 Spec
+            {exporting ? <Loader2 className="size-3 animate-spin" /> : <Video className="size-3" />}
+            {exporting ? `Rendering ${renderPct}%` : "Render WebM Film"}
+          </button>
+          <button
+            type="button"
+            onClick={handleExportTimelineJson}
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-[#d1c5b8]/55 bg-white px-2.5 text-[10px] font-semibold text-[#1b1c1a] dark:border-[#a9bdc9]/25 dark:bg-[#202b38] dark:text-[#e8eff3]"
+            title="Download timeline EDL JSON"
+          >
+            <Download className="size-3" /> EDL JSON
           </button>
         </div>
       </div>
+
+      {/* Rendered WebM Film Player (when freshly exported) */}
+      {renderedVideoUrl ? (
+        <div className="arctic-glass-z2 flex flex-wrap items-center justify-between gap-2 rounded-2xl p-2.5 text-xs">
+          <div className="flex items-center gap-2.5">
+            <video
+              src={renderedVideoUrl}
+              controls
+              playsInline
+              className="h-20 w-36 rounded-xl border border-[#a9bdc9]/25 bg-black object-cover"
+            />
+            <div>
+              <p className="font-semibold text-[#1b1c1a] dark:text-[#e8eff3]">Rendered WebM Film Ready</p>
+              <p className="text-[10px] text-[#7f766a] dark:text-[#a9bdc9]">
+                {renderedFilename} · {videoProject.aspect} · {videoProject.lut}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <a
+              href={renderedVideoUrl}
+              download={renderedFilename}
+              className="ice-cta inline-flex h-7 items-center gap-1 rounded-full px-3 text-[10px] font-bold"
+            >
+              <Download className="size-3" /> Save .WebM
+            </a>
+            <button
+              type="button"
+              onClick={() => setRenderedVideoUrl(null)}
+              className="grid size-7 place-items-center rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Live Preview Stage */}
       <div className="relative flex h-[280px] items-center justify-center overflow-hidden rounded-2xl border border-[#d1c5b8]/45 bg-[#050f1b] dark:border-[#a9bdc9]/25">
@@ -869,7 +1190,7 @@ export function KumVideoStudioPanel() {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050f1b]/85 via-transparent to-[#050f1b]/35" />
 
         {videoProject.captionsEnabled ? (
-          <div className="pointer-events-none absolute top-4 left-4 rounded-xl border border-[#e8c98a]/35 bg-[#08131f]/75 px-3 py-1.5 backdrop-blur-md">
+          <div className="pointer-events-none absolute top-4 left-4 rounded-xl border border-[#e8c98a]/35 bg-[#08131f]/75 px-3 py-1.5">
             <p className="font-display text-xs font-medium tracking-wider text-[#e8eff3] uppercase">
               {activeClip?.label ?? "Establishing Shot"}
             </p>
@@ -879,7 +1200,26 @@ export function KumVideoStudioPanel() {
           </div>
         ) : null}
 
-        <div className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-full border border-[#a9bdc9]/30 bg-[#08131f]/85 px-3 py-1.5 backdrop-blur-xl">
+        {activeClip ? (
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 rounded-full border border-[#a9bdc9]/30 bg-[#08131f]/85 px-2.5 py-1 text-[10px] text-[#e8eff3]">
+            <span className="text-[#a9bdc9]">Move:</span>
+            {(["dolly-in", "pan", "rise", "static"] as const).map((mv) => (
+              <button
+                key={mv}
+                type="button"
+                onClick={() => updateClipInKumVideo(activeClip.id, { cameraMove: mv })}
+                className={cn(
+                  "rounded-full px-2 py-0.5 font-mono text-[9px] uppercase",
+                  activeClip.cameraMove === mv ? "bg-[#e8c98a] font-bold text-[#261a00]" : "hover:bg-white/10",
+                )}
+              >
+                {mv}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-full border border-[#a9bdc9]/30 bg-[#08131f]/85 px-3 py-1.5">
           <button
             type="button"
             onClick={() => setPlaying((v) => !v)}

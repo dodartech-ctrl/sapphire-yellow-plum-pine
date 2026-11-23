@@ -1,4 +1,3 @@
-import { r as __exportAll$1 } from "../_runtime.mjs";
 // node_modules/.nitro/vite/services/ssr/assets/rolldown-runtime-D8jQpDG7.js
 var __defProp = Object.defineProperty;
 var __exportAll = (all, no_symbols) => {
@@ -11,7 +10,6 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 // node_modules/.nitro/vite/services/ssr/assets/cv-pipeline-B2TJrqsi.js
-var cv_pipeline_B2TJrqsi_exports = /* @__PURE__ */ __exportAll$1({ n: () => cv_pipeline_exports });
 /**
 * Extracts a strict binary bitmap (0 or 1 per pixel) from an RGBA canvas buffer.
 * Supports both alpha-matted masks (e.g. amber paint strokes / SAM overlays)
@@ -1861,4 +1859,4 @@ async function runLocalTextureReplacePass(src, maskDataUrl, instruction, strengt
 	ctx.putImageData(imgData, 0, 0);
 	return canvas.toDataURL("image/jpeg", .93);
 }
-export { runRemoveBgPlugin as C, toCompactDataUrlForSegmentation as D, runTiledUpscalePass as E, __exportAll as O, runRelightWeatherPass as S, runSam2RegionSegment as T, runLocalAnyText as _, estimateDataUrlBytes as a, runLocalTextureReplacePass as b, heuristicSemanticBoxesForPrompt as c, runClientOutpaintCanvas as d, runDepthAnythingPass as f, runInteractiveSamMultiPointMask as g, runGroundedSamMask as h, encodeBinaryBitmapToRgba as i, refineMaskBuffer as l, runGroundedSam2Segment as m, cv_pipeline_B2TJrqsi_exports as n, extractBinaryBitmapFromRgba as o, runDirectionalOutpaintPad as p, encodeBinaryBitmapToOverlayRgba as r, extractFloorPlanGrid as s, MATERIAL_ID_CLASSES as t, runAnnotatorPass as u, runLocalLamaErasePass as v, runRestoreFacesPlugin as w, runMaterialIdPass as x, runLocalPaintByExample as y };
+export { toCompactDataUrlForSegmentation as C, extractBinaryBitmapFromRgba as D, estimateDataUrlBytes as E, __exportAll as O, runTiledUpscalePass as S, encodeBinaryBitmapToRgba as T, runMaterialIdPass as _, refineMaskBuffer as a, runRestoreFacesPlugin as b, runDepthAnythingPass as c, runGroundedSamMask as d, runInteractiveSamMultiPointMask as f, runLocalTextureReplacePass as g, runLocalPaintByExample as h, heuristicSemanticBoxesForPrompt as i, runDirectionalOutpaintPad as l, runLocalLamaErasePass as m, cv_pipeline_exports as n, runAnnotatorPass as o, runLocalAnyText as p, extractFloorPlanGrid as r, runClientOutpaintCanvas as s, MATERIAL_ID_CLASSES as t, runGroundedSam2Segment as u, runRelightWeatherPass as v, encodeBinaryBitmapToOverlayRgba as w, runSam2RegionSegment as x, runRemoveBgPlugin as y };
