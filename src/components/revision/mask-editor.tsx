@@ -166,7 +166,7 @@ export function MaskEditor({ base, editable, others, protectedMask, onCommit }: 
     commit();
   }
 
-  const chip = (active: boolean) => cn("h-8 rounded-full border px-3 text-xs font-semibold", active ? "border-lime bg-lime/20 text-fg" : "border-line text-muted hover:text-fg");
+  const chip = (active: boolean) => cn("h-9 rounded-full border px-3 text-xs font-semibold sm:h-8", active ? "border-lime bg-lime/20 text-fg" : "border-line text-muted hover:text-fg");
 
   return (
     <div className="space-y-3">

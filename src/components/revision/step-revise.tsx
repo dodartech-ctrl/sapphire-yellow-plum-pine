@@ -11,7 +11,7 @@ function CandidateRow({ project, view, candidate, onOpen, open }: { project: Rev
   const src = useBlobUrl(candidate.resultKey);
   const stale = candidate.note.startsWith("Mask changed");
   return (
-    <li className={cn("rounded-2xl border p-3", candidate.status === "accepted" ? "border-[#5f8a62]/60 bg-[#5f8a62]/10" : "border-line bg-raised")} data-testid="candidate-row">
+    <li className={cn("rounded-2xl border p-3", candidate.status === "accepted" ? "border-ok/60 bg-ok/10" : "border-line bg-raised")} data-testid="candidate-row">
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={onOpen} aria-label="Inspect this preview" className="h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-line bg-black/20">
           {src ? <img src={src} alt={`${view.name}, attempt ${candidate.attempt}`} className="h-full w-full object-cover" /> : null}

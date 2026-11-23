@@ -59,7 +59,7 @@ function Landing() {
     <main className="h-full overflow-y-auto px-4 py-6 md:px-8">
       <div className="mx-auto max-w-4xl space-y-6">
         <header>
-          <p className="text-xs font-semibold uppercase tracking-wide text-lime">Revision Studio</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-bronze">Revision Studio</p>
           <h1 className="mt-1 font-syne text-3xl font-bold md:text-4xl">Change one thing. Prove nothing else moved.</h1>
           <p className="mt-3 max-w-2xl text-sm text-muted md:text-base">
             A client asks to change a finish on a render you already delivered. Bring the approved views, mark exactly what may change and what must stay, and get coordinated revisions plus a record of what the client approved.
@@ -70,7 +70,7 @@ function Landing() {
           <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {STEPS.map((s, i) => (
               <li key={s.title} className="rounded-xl border border-line bg-raised p-3 text-xs">
-                <span className="font-syne text-lg font-bold text-lime">{i + 1}</span>
+                <span className="font-syne text-lg font-bold text-bronze">{i + 1}</span>
                 <p className="mt-1 font-semibold">{s.title}</p>
                 <p className="mt-1 text-muted">{s.why}</p>
               </li>
@@ -144,6 +144,7 @@ function Workspace({ project }: { project: RevProject }) {
   return (
     <main className="h-full overflow-y-auto px-4 py-5 md:px-8" data-testid="revision-workspace">
       <div className="mx-auto max-w-5xl space-y-4">
+        <h1 className="sr-only">Revision Studio: {project.name}</h1>
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className={btnGhost} onClick={() => useRevision.setState({ activeId: null })}>
             <ArrowLeft className="size-4" /> All projects

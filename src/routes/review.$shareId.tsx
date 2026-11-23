@@ -19,6 +19,8 @@ function ReviewPage() {
   const [note, setNote] = useState("");
   const [pins, setPins] = useState<ReviewPin[]>([]);
   const [pinning, setPinning] = useState(false);
+  const [draftPin, setDraftPin] = useState<{ viewId: string; x: number; y: number } | null>(null);
+  const [draftText, setDraftText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<"approved" | "changes_requested" | null>(null);
@@ -64,7 +66,7 @@ function ReviewPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 md:px-6" data-testid="client-review">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-wide text-lime">Revision for your approval</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-bronze">Revision for your approval</p>
         <h1 className="mt-1 font-syne text-2xl font-bold md:text-3xl">{review.projectName}</h1>
         {review.changeRequest ? <p className="mt-2 text-sm text-muted">You asked: “{review.changeRequest}”</p> : null}
         <p className="mt-1 text-xs text-muted">
@@ -102,18 +104,39 @@ function ReviewPage() {
         onClick={(e) => {
           if (!pinning || !image) return;
           const rect = e.currentTarget.getBoundingClientRect();
-          const body = window.prompt("What should change here?")?.trim();
           setPinning(false);
-          if (body) setPins((cur) => [...cur, { viewId: image.viewId, x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height, body: body.slice(0, 300) }]);
+          setDraftText("");
+          setDraftPin({ viewId: image.viewId, x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
         }}
       >
         {image ? <img src={mode === "before" ? image.before : image.after} alt={`${image.name}, ${mode}`} className="block w-full" /> : null}
+        {draftPin && draftPin.viewId === image?.viewId ? (
+          <span aria-hidden="true" className="absolute size-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-[#c5a880] bg-[#c5a880]/30" style={{ left: `${draftPin.x * 100}%`, top: `${draftPin.y * 100}%` }} />
+        ) : null}
         {pins.filter((p) => p.viewId === image?.viewId).map((p, i) => (
           <span key={i} title={p.body} className="absolute grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#c5a880] text-[11px] font-bold text-[#281800]" style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}>
             {i + 1}
           </span>
         ))}
       </div>
+      {draftPin ? (
+        <form
+          className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const body = draftText.trim();
+            if (body) setPins((cur) => [...cur, { ...draftPin, body: body.slice(0, 300) }]);
+            setDraftPin(null);
+          }}
+        >
+          <label className="min-w-0 flex-1 text-xs font-semibold text-muted">
+            What should change at pin {pins.length + 1}?
+            <input autoFocus value={draftText} onChange={(e) => setDraftText(e.target.value)} maxLength={300} className="mt-1 h-10 w-full rounded-xl border border-line bg-raised px-3 text-sm text-fg outline-none focus:border-lime" data-testid="pin-text" />
+          </label>
+          <button type="submit" className="gold-fill h-10 rounded-full px-5 text-sm font-semibold" data-testid="pin-save">Add comment</button>
+          <button type="button" className="h-10 rounded-full border border-line px-4 text-sm font-semibold" onClick={() => setDraftPin(null)}>Cancel</button>
+        </form>
+      ) : null}
       <p className="mt-2 text-[11px] text-faint">Presentation visual. Colour under rendered light is an approximation of the supplied sample. This does not certify dimensions, structure or cost.</p>
 
       {pins.length ? (
@@ -128,8 +151,8 @@ function ReviewPage() {
       ) : null}
 
       {done ? (
-        <section role="status" className="mt-6 rounded-2xl border border-[#5f8a62]/50 bg-[#5f8a62]/10 p-5" data-testid="review-done">
-          <p className="flex items-center gap-2 font-semibold"><Check className="size-5 text-[#5f8a62]" /> {done === "approved" ? "Thank you. You approved this version." : "Thank you. Your requested changes were sent."}</p>
+        <section role="status" className="mt-6 rounded-2xl border border-ok/50 bg-ok/10 p-5" data-testid="review-done">
+          <p className="flex items-center gap-2 font-semibold"><Check className="size-5 text-ok" /> {done === "approved" ? "Thank you. You approved this version." : "Thank you. Your requested changes were sent."}</p>
           <p className="mt-1 text-sm text-muted">The designer can see your response. You can close this page.</p>
         </section>
       ) : (
@@ -146,7 +169,7 @@ function ReviewPage() {
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-line bg-raised px-3 py-2 text-sm text-fg outline-none focus:border-lime" data-testid="reviewer-note" />
             </label>
           </div>
-          {error ? <p role="alert" className="mt-2 text-sm text-[#c4604d]">{error}</p> : null}
+          {error ? <p role="alert" className="mt-2 text-sm text-bad">{error}</p> : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <button type="button" disabled={busy || !name.trim()} onClick={() => void submit("approved")} className="gold-fill inline-flex h-11 items-center rounded-full px-6 text-sm font-semibold disabled:opacity-50" data-testid="approve-btn">
               Approve this version

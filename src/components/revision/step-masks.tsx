@@ -105,7 +105,7 @@ export function StepMasks({ project, onNext, onBack }: { project: RevProject; on
         {project.views.map((v) => {
           const isMissing = missing.includes(v.name);
           return (
-            <button key={v.id} type="button" role="tab" aria-selected={v.id === view.id} onClick={() => setViewId(v.id)} className={cn("inline-flex h-9 items-center gap-2 rounded-full border px-4 text-xs font-semibold", v.id === view.id ? "border-lime bg-lime/20" : "border-line text-muted hover:text-fg")}>
+            <button key={v.id} type="button" role="tab" aria-selected={v.id === view.id} onClick={() => setViewId(v.id)} className={cn("inline-flex h-10 items-center gap-2 rounded-full border px-4 text-xs font-semibold sm:h-9", v.id === view.id ? "border-lime bg-lime/20" : "border-line text-muted hover:text-fg")}>
               {v.name}
               {isMissing ? <Pill tone="warn">not marked</Pill> : <Pill tone="ok">marked</Pill>}
             </button>

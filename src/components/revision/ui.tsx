@@ -11,12 +11,12 @@ export const textarea =
 export const btnPrimary =
   "gold-fill inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50";
 export const btnGhost =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-line px-4 text-xs font-semibold text-fg hover:border-lime disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-line px-4 sm:h-9 text-xs font-semibold text-fg hover:border-lime disabled:cursor-not-allowed disabled:opacity-50";
 
 export function Card({ title, hint, children, className }: { title?: string; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn("rounded-2xl border border-line bg-surface p-4", className)}>
-      {title ? <h3 className="font-syne text-base font-semibold">{title}</h3> : null}
+      {title ? <h2 className="font-syne text-base font-semibold">{title}</h2> : null}
       {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
       <div className={title || hint ? "mt-3" : ""}>{children}</div>
     </section>
@@ -25,9 +25,9 @@ export function Card({ title, hint, children, className }: { title?: string; hin
 
 export function Pill({ tone, children }: { tone: "ok" | "warn" | "bad" | "idle"; children: ReactNode }) {
   const tones = {
-    ok: "border-[#5f8a62]/50 text-[#5f8a62]",
+    ok: "border-ok/50 text-ok",
     warn: "border-[#c5a880]/60 text-bronze",
-    bad: "border-[#b4513f]/60 text-[#c4604d]",
+    bad: "border-bad/60 text-bad",
     idle: "border-line text-muted",
   } as const;
   return <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold", tones[tone])}>{children}</span>;

@@ -97,11 +97,11 @@ export function JourneyGuide({
                   "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold",
                   step.status === "current" && "bg-[#c5a880] text-[#281800] dark:bg-[#cfe3f0] dark:text-[#08131f]",
                   step.status === "done" && "text-[#4d463c] dark:text-[#a9bdc9]",
-                  step.status === "upcoming" && "text-[#7f766a] dark:text-[#8197a6]",
+                  step.status === "upcoming" && "text-[#6b6257] dark:text-[#8197a6]",
                 )}
               >
                 {step.status === "done" ? (
-                  <Check className="size-3.5 text-[#5f8a62]" aria-label="done" />
+                  <Check className="size-3.5 text-ok" aria-label="done" />
                 ) : (
                   <span className="grid size-4 place-items-center rounded-full border border-current text-[9px]">{step.number}</span>
                 )}
@@ -110,7 +110,7 @@ export function JourneyGuide({
             </li>
           ))}
         </ol>
-        <span className="hidden shrink-0 text-[11px] text-[#7f766a] sm:inline dark:text-[#8197a6]">{doneCount}/{steps.length}</span>
+        <span className="hidden shrink-0 text-[11px] text-[#6b6257] sm:inline dark:text-[#8197a6]">{doneCount}/{steps.length}</span>
         <button
           type="button"
           onClick={toggle}
@@ -129,10 +129,10 @@ export function JourneyGuide({
               <div className="min-w-0 flex-1 basis-64">
                 <p className="text-xs font-semibold">
                   Step {current.number}: {current.title}
-                  {current.optional ? <span className="ml-1.5 font-normal text-[#7f766a] dark:text-[#8197a6]">(optional)</span> : null}
+                  {current.optional ? <span className="ml-1.5 font-normal text-[#6b6257] dark:text-[#8197a6]">(optional)</span> : null}
                 </p>
                 <p className="mt-0.5 text-xs text-[#4d463c] dark:text-[#a9bdc9]">{current.purpose}</p>
-                <p className="mt-0.5 text-[11px] text-[#7f766a] dark:text-[#8197a6]">Where: {current.where}</p>
+                <p className="mt-0.5 text-[11px] text-[#6b6257] dark:text-[#8197a6]">Where: {current.where}</p>
               </div>
               <button
                 type="button"

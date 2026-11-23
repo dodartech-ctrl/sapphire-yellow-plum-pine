@@ -444,7 +444,13 @@ export async function freezeSet(projectId: string, opts?: { branch?: string; lab
 export async function setImages(projectId: string, set: VersionSet): Promise<{ viewId: string; name: string; before: string | null; after: string | null }[]> {
   const p = project(projectId);
   const out = [];
-  for (const sv of set.views) {
+  // Keep the designer's own view order, not the hash-sorted order inside the set.
+  const ordered = [...set.views].sort((a, b) => {
+    const ia = p.views.findIndex((v) => v.id === a.viewId);
+    const ib = p.views.findIndex((v) => v.id === b.viewId);
+    return (ia === -1 ? 1e9 : ia) - (ib === -1 ? 1e9 : ib);
+  });
+  for (const sv of ordered) {
     const view = p.views.find((v) => v.id === sv.viewId);
     out.push({
       viewId: sv.viewId,

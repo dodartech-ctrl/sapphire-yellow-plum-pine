@@ -52,7 +52,7 @@ export function DiffInspector({ project, view, candidate }: { project: RevProjec
     canvas.getContext("2d")?.putImageData(new ImageData(new Uint8ClampedArray(source.data), source.width, source.height), 0, 0);
   }, [rasters, mode]);
 
-  if (error) return <p className="text-sm text-[#c4604d]">{error}</p>;
+  if (error) return <p className="text-sm text-bad">{error}</p>;
   const report = rasters?.report;
 
   return (
@@ -68,7 +68,7 @@ export function DiffInspector({ project, view, candidate }: { project: RevProjec
           <input type="range" min={1} max={4} step={0.25} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} aria-label="Zoom" />
         </label>
       </div>
-      <div className="max-h-[480px] overflow-auto rounded-2xl border border-line bg-black/30">
+      <div tabIndex={0} role="region" aria-label="Comparison image, scrollable when zoomed" className="max-h-[480px] overflow-auto rounded-2xl border border-line bg-black/30">
         <canvas ref={canvasRef} style={{ width: `${zoom * 100}%`, maxWidth: "none", display: "block" }} />
       </div>
       {report ? (

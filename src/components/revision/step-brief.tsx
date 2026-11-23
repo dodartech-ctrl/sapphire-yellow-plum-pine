@@ -34,7 +34,7 @@ export function StepBrief({ project, onNext, onBack }: { project: RevProject; on
           <ul className="mt-3 space-y-2" data-testid="brief-checklist">
             {brief.checklist.map((item) => (
               <li key={item.id} className="flex items-start gap-2 rounded-xl border border-line bg-raised px-3 py-2 text-sm">
-                {item.status === "found" ? <Check className="mt-0.5 size-4 shrink-0 text-[#5f8a62]" /> : <CircleHelp className="mt-0.5 size-4 shrink-0 text-faint" />}
+                {item.status === "found" ? <Check className="mt-0.5 size-4 shrink-0 text-ok" /> : <CircleHelp className="mt-0.5 size-4 shrink-0 text-faint" />}
                 <span className="min-w-0">
                   <span className="font-semibold">{item.label}: </span>
                   {item.value ? <span>{item.value}</span> : <span className="text-faint">not stated, you will mark it on the image</span>}

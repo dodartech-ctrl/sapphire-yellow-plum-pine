@@ -15,7 +15,9 @@
   --color-line: #d1c5b8;
   --color-fg: #1b1c1a;
   --color-muted: #4d463c;
-  --color-faint: #7f766a;
+  --color-faint: #6b6257;
+  --color-ok: #3f6b43;
+  --color-bad: #a8412f;
   --color-lime: #c5a880;
   --color-bronze: #725b38;
   --color-terracotta: #964824;
@@ -49,7 +51,9 @@ html.dark {
   --color-line: #2c4358;
   --color-fg: #e8eff3;
   --color-muted: #a9bdc9;
-  --color-faint: #8197a6;
+  --color-faint: #9db1bf;
+  --color-ok: #7fb583;
+  --color-bad: #e58a78;
   --color-bronze: #e8c98a;
   --color-terracotta: #e59a73;
   --ah-bg: #08131f;
