@@ -15,7 +15,7 @@ export const CAMERAS = ["Eye level", "Elevated", "Close detail", "Wide"] as cons
 export const LIGHTS = ["Soft overcast", "Daylight", "Golden hour", "Evening", "Night"] as const;
 export const MOODS = ["Quiet", "Warm", "Dramatic", "Serene", "Vibrant"] as const;
 export const PEOPLE = ["None", "Few", "Medium", "Crowd"] as const;
-export const ACTIVITIES = ["Sitting", "Walking", "Dining", "Working", "Swimming"] as const;
+export const ACTIVITIES = ["Sitting", "Walking", "Dining", "Working", "Swimming", "Exercising", "Playing"] as const;
 export const COLORS = ["Warm white", "Sand", "Oak", "Charcoal", "Sage", "Ink blue"] as const;
 export const WEATHER = ["Clear", "Cloudy", "Mist"] as const;
 export const TIMES = ["Morning", "Day", "Golden hour", "Evening", "Night"] as const;
@@ -54,38 +54,44 @@ export type Group = { id: string; label: string; options: string[] };
 
 export const GROUPS: Record<VerticalId, Group[]> = {
   interior: [
-    { id: "room", label: "Room", options: ["Living room", "Bedroom", "Kitchen", "Bath", "Dining", "Office"] },
-    { id: "floor", label: "Flooring", options: ["Italian marble", "Travertine", "Hardwood", "Terrazzo", "Microcement"] },
-    { id: "rug", label: "Rug", options: ["None", "Wool", "Jute", "Silk"] },
-    { id: "wall", label: "Walls", options: ["Limewash", "Fluted oak", "Stone", "Matte paint"] },
-    { id: "ceiling", label: "Ceiling", options: ["Cove light", "Coffered", "Gypsum", "Timber"] },
-    { id: "furniture", label: "Furniture", options: ["Sectional", "Lounge chairs", "Dining set", "Minimal"] },
-    { id: "fixture", label: "Fixtures", options: ["Chandelier", "Pendants", "Cove", "Sconces"] },
-    { id: "kitchen", label: "Kitchen", options: ["Unchanged", "Stone island", "Timber cabinets", "Minimal"] },
-    { id: "bath", label: "Bath", options: ["Unchanged", "Stone", "Warm tile", "Freestanding tub"] },
-    { id: "openings", label: "Openings", options: ["Keep", "Bronze frames", "Slim black", "Sheer curtains"] },
-    { id: "decor", label: "Decor", options: ["Sparse", "Art", "Plants", "Layered"] },
+    { id: "room", label: "Room", options: ["Living room", "Master bedroom", "Guest bedroom", "Children's bedroom", "Kitchen", "Dining room", "Bathroom", "Powder room", "Home office", "Home theatre", "Balcony", "Foyer", "Corridor", "Staircase", "Utility room", "Walk-in wardrobe"] },
+    { id: "floor", label: "Flooring", options: ["Italian marble", "Travertine", "Granite", "Porcelain", "Ceramic", "Hardwood", "Engineered wood", "SPC", "Vinyl", "Microcement", "Carpet", "Terrazzo"] },
+    { id: "rug", label: "Rug", options: ["None", "Persian", "Modern", "Geometric", "Abstract", "Wool", "Jute", "Silk"] },
+    { id: "wall", label: "Walls", options: ["Limewash", "Fluted oak", "Stone", "Matte paint", "Satin paint", "Eggshell paint", "Gloss paint", "Textured paint", "Wallpaper", "Wood cladding", "Microcement", "Fabric panels"] },
+    { id: "ceiling", label: "Ceiling", options: ["Cove light", "Coffered", "Gypsum", "Timber", "False ceiling", "Tray ceiling", "Acoustic"] },
+    { id: "furniture", label: "Furniture", options: ["Sectional", "Sofa", "Lounge chairs", "Accent chair", "Coffee table", "Dining set", "Desk", "Console", "Minimal"] },
+    { id: "fixture", label: "Fixtures", options: ["Chandelier", "Pendants", "Recessed", "Cove", "Track", "Sconces", "Floor lamp", "Table lamp", "LED strip"] },
+    { id: "kitchen", label: "Kitchen", options: ["Unchanged", "Stone island", "Timber cabinets", "Minimal", "Stone backsplash", "Integrated appliances"] },
+    { id: "bath", label: "Bath", options: ["Unchanged", "Stone", "Warm tile", "Freestanding tub", "Walk-in shower", "Floating vanity"] },
+    { id: "openings", label: "Openings", options: ["Keep", "Bronze frames", "Slim black", "Sheer curtains", "Sliding doors", "Pivot door", "Glass door", "Skylight"] },
+    { id: "decor", label: "Decor", options: ["Sparse", "Art", "Sculpture", "Mirrors", "Plants", "Vases", "Curtains", "Layered"] },
   ],
   exterior: [
-    { id: "facade", label: "Facade", options: ["Stone", "Timber", "Glass", "Metal", "Concrete", "Brick"] },
-    { id: "roof", label: "Roof", options: ["Flat", "Pitched", "Green roof"] },
+    { id: "facade", label: "Facade", options: ["Stone", "Timber", "Glass", "Metal", "Concrete", "Brick", "ACP", "HPL"] },
+    { id: "roof", label: "Roof", options: ["Flat", "Pitched", "Sloped", "Green roof", "Pergola roof"] },
     { id: "windows", label: "Windows", options: ["Floor-to-ceiling", "Bronze frames", "Dark metal"] },
-    { id: "entry", label: "Entrance", options: ["Portico", "Pivot door", "Canopy"] },
-    { id: "balcony", label: "Balcony", options: ["Keep", "Glass rail", "Metal rail"] },
-    { id: "terrace", label: "Terrace", options: ["None", "Pergola", "Planters"] },
-    { id: "drive", label: "Driveway", options: ["Clay pavers", "Stone", "Gravel"] },
-    { id: "parking", label: "Parking", options: ["Open", "Carport", "Garage"] },
-    { id: "water", label: "Water", options: ["None", "Pool", "Fountain"] },
+    { id: "entry", label: "Entrance", options: ["Portico", "Pivot door", "Canopy", "Sliding door", "Garage door"] },
+    { id: "balcony", label: "Balcony", options: ["Keep", "Glass rail", "Metal rail", "Parapet", "Deck"] },
+    { id: "terrace", label: "Terrace", options: ["None", "Pergola", "Planters", "Outdoor seating", "Outdoor flooring"] },
+    { id: "drive", label: "Driveway", options: ["Clay pavers", "Stone", "Gravel", "Concrete", "Cobblestone", "Asphalt"] },
+    { id: "parking", label: "Parking", options: ["Open", "Carport", "Garage", "Covered"] },
+    { id: "water", label: "Water", options: ["None", "Pool", "Fountain", "Reflecting pool", "Cascade"] },
+    { id: "columns", label: "Columns", options: ["None", "Concrete", "Stone", "Decorative", "Metal"] },
+    { id: "stairs", label: "Staircase", options: ["None", "Floating", "Exterior", "Landscape steps"] },
+    { id: "compound", label: "Compound", options: ["Open", "Boundary wall", "Fencing", "Gate"] },
+    { id: "extlight", label: "Lighting", options: ["None", "Facade lighting", "Garden lights", "Bollards", "Wall lights"] },
+    { id: "style", label: "Style", options: ["Modern", "Contemporary", "Minimalist", "Tropical", "Mediterranean", "Classical", "Neoclassical", "Colonial", "Industrial", "Brutalist", "Scandinavian", "Futuristic", "Sustainable", "Parametric"] },
   ],
   amenities: [
-    { id: "water", label: "Water", options: ["Infinity pool", "Lap pool", "Spa", "Fountain"] },
-    { id: "wellness", label: "Wellness", options: ["Gym", "Spa", "Yoga deck"] },
-    { id: "social", label: "Social", options: ["Lounge", "Restaurant", "Clubhouse"] },
-    { id: "sport", label: "Sport", options: ["None", "Tennis", "Court"] },
-    { id: "outdoor", label: "Outdoor", options: ["Fire pit", "Outdoor kitchen", "Pergola"] },
-    { id: "family", label: "Family", options: ["Playground", "Lawn", "None"] },
-    { id: "work", label: "Work", options: ["None", "Coworking", "Meeting room"] },
-    { id: "security", label: "Arrival", options: ["Open", "Gate", "Lobby"] },
+    { id: "water", label: "Water", options: ["Infinity pool", "Swimming pool", "Lap pool", "Jacuzzi", "Splash pool", "Spa", "Fountain"] },
+    { id: "wellness", label: "Wellness", options: ["Gym", "Spa", "Yoga deck", "Meditation room"] },
+    { id: "social", label: "Social", options: ["Lounge", "Restaurant", "Cafe", "Party hall", "Event lawn", "Clubhouse", "Gaming room", "Library"] },
+    { id: "sport", label: "Sport", options: ["None", "Tennis", "Basketball", "Badminton", "Football", "Cricket", "Court"] },
+    { id: "outdoor", label: "Outdoor", options: ["BBQ", "Fire pit", "Outdoor kitchen", "Pergola"] },
+    { id: "family", label: "Family", options: ["Playground", "Daycare", "Family seating", "Lawn", "None"] },
+    { id: "work", label: "Work", options: ["None", "Coworking", "Meeting room", "Business lounge"] },
+    { id: "security", label: "Arrival", options: ["Open", "Gate", "Lobby", "CCTV", "Security cabin"] },
+    { id: "mobility", label: "Mobility", options: ["None", "Parking", "EV charging", "Bicycle stand"] },
   ],
   landscape: [
     { id: "trees", label: "Trees", options: ["Palms", "Shade trees", "Ornamental", "Few"] },
