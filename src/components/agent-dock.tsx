@@ -80,7 +80,7 @@ export function AgentDock() {
               value={instruction}
               onChange={(event) => setInstruction(event.target.value)}
               placeholder="Warm the light, 16:9, 2K"
-              className="h-10 min-w-0 flex-1 rounded-full border border-line bg-white px-3 text-sm outline-none"
+              className="h-10 min-w-0 flex-1 rounded-full border border-line bg-raised px-3 text-sm text-fg outline-none"
               aria-label="Instruction for the agent"
             />
             <button type="submit" disabled={busy || !instruction.trim()} className="gold-fill h-10 rounded-full px-4 text-sm disabled:opacity-50">

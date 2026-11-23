@@ -28,10 +28,10 @@ function modelContext(): ModelContext | undefined {
   return host.document?.modelContext ?? host.navigator?.modelContext;
 }
 
-export function registerStudioTools(signal: AbortSignal) {
-  const mc = modelContext();
-  if (!mc || typeof mc.registerTool !== "function") return;
-  const tools: StudioTool[] = [
+const VERTICALS = ["interior", "exterior", "amenities", "landscape"] as const;
+
+function buildStudioTools(): StudioTool[] {
+  return [
     {
       name: "read_studio",
       description: "Read the current Oriel prompt, frame, and whether a source and result exist.",
@@ -64,6 +64,21 @@ export function registerStudioTools(signal: AbortSignal) {
         if (!idea) return text("Prompt was empty.");
         useOriel.getState().setIdea(idea);
         return text(`Prompt set: ${idea}`);
+      },
+    },
+    {
+      name: "set_vertical",
+      description: "Switch the studio vertical: interior, exterior, amenities or landscape.",
+      inputSchema: {
+        type: "object",
+        properties: { vertical: { type: "string", enum: [...VERTICALS] } },
+        required: ["vertical"],
+      },
+      async execute(input) {
+        const vertical = VERTICALS.find((item) => item === input.vertical);
+        if (!vertical) return text("Unknown vertical. Use interior, exterior, amenities or landscape.");
+        useOriel.getState().setVertical(vertical);
+        return text(`Vertical set to ${vertical}.`);
       },
     },
     {
@@ -124,5 +139,37 @@ export function registerStudioTools(signal: AbortSignal) {
       },
     },
   ];
+}
+
+export const STUDIO_TOOL_NAMES = buildStudioTools().map((tool) => tool.name);
+
+/** True when the browser exposes a WebMCP model context the tools can be registered with. */
+export function webmcpAvailable(): boolean {
+  const mc = modelContext();
+  return Boolean(mc && typeof mc.registerTool === "function");
+}
+
+/**
+ * Run a studio tool directly in the page. The in-app agent uses this so it works
+ * whether or not the browser has a WebMCP host attached.
+ */
+export async function callStudioTool(
+  name: string,
+  input: Record<string, unknown> = {},
+): Promise<{ ok: boolean; summary: string }> {
+  const tool = buildStudioTools().find((item) => item.name === name);
+  if (!tool) return { ok: false, summary: `Unknown tool ${name}.` };
+  try {
+    const result = await tool.execute(input);
+    return { ok: true, summary: result.content.map((part) => part.text).join(" ") };
+  } catch (error) {
+    return { ok: false, summary: error instanceof Error ? error.message : "Tool failed." };
+  }
+}
+
+export function registerStudioTools(signal: AbortSignal) {
+  const mc = modelContext();
+  if (!mc || typeof mc.registerTool !== "function") return;
+  const tools = buildStudioTools();
   for (const tool of tools) void Promise.resolve(mc.registerTool(tool, { signal })).catch(() => undefined);
 }

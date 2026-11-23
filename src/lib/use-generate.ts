@@ -278,7 +278,7 @@ export function useGenerate() {
       if ("warning" in result && typeof result.warning === "string" && result.warning) {
         toast.message(result.warning);
       } else {
-        toast.success(result.fallback ? "Free (₹0) Studio preview rendered" : `Plate rendered (${costTag})`);
+        toast.success(result.fallback ? "Free (₹0) preview ready: the AI model was unavailable, so nothing was charged" : `Plate rendered (${costTag})`);
       }
       if (pathname !== "/") void navigate({ to: "/" });
     } catch (error) {

@@ -61,7 +61,7 @@ function AssetsPage() {
   function applyLook(vertical: VerticalId, name: string) {
     setVertical(vertical);
     setDesignField("look", name);
-    setActiveStudio("mas2d");
+    setActiveStudio("mas-2d");
     toast.success(`Applied ${name} (${vertical}) to Studio`);
     void navigate({ to: "/" });
   }
@@ -74,7 +74,7 @@ function AssetsPage() {
       return;
     }
     setPending3DFile(file);
-    setActiveStudio("sam3d");
+    setActiveStudio("sam-3d");
     toast.success(`Loading ${file.name} in SAM 3D Viewport…`);
     void navigate({ to: "/" });
   }
@@ -95,7 +95,7 @@ function AssetsPage() {
     if (!spec) return;
     if (spec.presetKey) {
       setScene3DField("preset", spec.presetKey);
-      setActiveStudio("sam3d");
+      setActiveStudio("sam-3d");
       toast.success(`Loaded ${spec.name} into live 3D Viewport`);
       void navigate({ to: "/" });
       return;
@@ -104,7 +104,7 @@ function AssetsPage() {
     try {
       const { file, meshCount } = await exportProceduralAssetToGlbFile(assetId);
       setPending3DFile(file);
-      setActiveStudio("sam3d");
+      setActiveStudio("sam-3d");
       toast.success(`Loaded ${spec.name} (${meshCount} meshes) into 3D Viewport`);
       void navigate({ to: "/" });
     } catch (error) {
@@ -135,7 +135,7 @@ function AssetsPage() {
         : `${idea.replace(/[,.;\s]+$/, "")}, featuring ${snippet}`
       : `Architectural visualization featuring ${snippet}`;
     setIdea(nextIdea);
-    setActiveStudio("mas2d");
+    setActiveStudio("mas-2d");
     toast.success(`Injected "${swatchLabel}" PBR material into Studio prompt`);
     void navigate({ to: "/" });
   }

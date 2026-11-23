@@ -1,4 +1,4 @@
-import { createFileRoute, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   Box,
   Crosshair,
@@ -16,6 +16,10 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Compare } from "@/components/compare";
+import { AgentDock } from "@/components/agent-dock";
+import { JourneyGuide } from "@/components/journey-guide";
+import type { JourneyAction } from "@/lib/journey";
+import { SAMPLE_PROJECTS } from "@/lib/sample-project";
 import { Composer } from "@/components/composer";
 import { CvPreprocessorStage } from "@/components/cv-preprocessor-stage";
 import { GroundedSAM2Tool } from "@/components/grounded-sam2-tool";
@@ -122,6 +126,7 @@ function WorkspacePage() {
   const [pubDiscipline, setPubDiscipline] = useState<PublishedGalleryProject["discipline"]>("Exterior");
   const [pubType, setPubType] = useState<PublishedGalleryProject["comparisonType"]>("Material Restyle");
 
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollSectionRef = useRef<HTMLElement>(null);
   const didAutoShowHydratedPlateRef = useRef(false);
@@ -268,6 +273,32 @@ function WorkspacePage() {
     setView("compare");
   }
 
+  function runJourneyAction(action: JourneyAction) {
+    switch (action) {
+      case "upload":
+        fileRef.current?.click();
+        return;
+      case "properties":
+        setInspectorCollapsed(false);
+        setRightTab("matrix");
+        document.getElementById("studio-properties")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      case "prompt":
+        document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Your idea"]')?.focus();
+        return;
+      case "render":
+        if (!busy) void generate();
+        return;
+      case "review":
+        if (canCompare) setView("compare");
+        else toast.message("Use 4-Up in the prompt bar to see four variations, or add a source photo to compare against.");
+        return;
+      case "keep":
+        void navigate({ to: "/projects" });
+        return;
+    }
+  }
+
   function cycleTargetElement() {
     const order = ["whole", ...pins.map((group) => group.id)];
     const nextTarget = order[(Math.max(order.indexOf(design.target), 0) + 1) % order.length];
@@ -318,6 +349,28 @@ function WorkspacePage() {
       setView("source");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not read that image.");
+    }
+  }
+
+  /** One click: load a sample source, properties and prompt for the current vertical. */
+  async function loadSample() {
+    const sample = SAMPLE_PROJECTS[design.vertical];
+    try {
+      const response = await fetch(sample.src);
+      if (!response.ok) throw new Error("The sample image could not be loaded.");
+      const blob = await response.blob();
+      const file = new File([blob], "sample.jpg", { type: blob.type || "image/jpeg" });
+      const dataUrl = await readImage(file, frameEdge(frame.resolution));
+      const store = useOriel.getState();
+      store.setUpload(dataUrl);
+      for (const [id, value] of Object.entries(sample.picks)) store.setPick(id, value);
+      store.setIdea(sample.idea);
+      setEnhanceBarOpen(false);
+      setSplitHubEnabled(false);
+      setView("source");
+      toast.success(`Sample loaded: ${sample.title}. Press Render Plate to see it restyled.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load the sample.");
     }
   }
 
@@ -499,6 +552,8 @@ function WorkspacePage() {
         ref={scrollSectionRef}
         className="studio-scroll relative flex min-w-0 flex-1 flex-col gap-1.5 px-2 pt-1.5 pb-1.5 md:px-2.5 lg:h-full lg:overflow-y-auto"
       >
+        <JourneyGuide compared={view === "compare"} onAction={runJourneyAction} onSample={() => void loadSample()} />
+
         {/* Screen-Fit Hero Workspace (Primary Stage + Camera Strip + Compact Chat Box) */}
         <div
           id="studio-hero-fit"
@@ -945,6 +1000,14 @@ function WorkspacePage() {
                           >
                             <ImagePlus className="size-3.5 text-[#e8c98a]" /> Upload Photo / GLB
                           </button>
+                          <button
+                            type="button"
+                            data-testid="stage-sample-btn"
+                            onClick={() => void loadSample()}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/25 bg-[#08131f]/80 px-3.5 text-[11px] font-medium text-[#e8eff3] backdrop-blur-md hover:border-[#e8c98a] sm:h-9 sm:px-4 sm:text-xs"
+                          >
+                            <Sparkles className="size-3.5 text-[#e8c98a]" /> Try a sample
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1123,6 +1186,7 @@ function WorkspacePage() {
                 onExportPlate={exportLayeredBundle}
               />
             )}
+            <AgentDock />
           </div>
         </aside>
       ) : null}

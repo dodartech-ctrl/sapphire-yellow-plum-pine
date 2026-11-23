@@ -17,6 +17,18 @@ export function AppErrorComponent({ error }: ErrorComponentProps) {
       </span>
       <h1 className="font-syne text-lg font-semibold">Something went wrong</h1>
       <p className="max-w-md text-sm break-words text-muted">{errorMessage(error)}</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="h-10 rounded-full bg-lime px-5 text-sm font-semibold text-[#2a1c0c]"
+        >
+          Reload
+        </button>
+        <a href="/" className="inline-flex h-10 items-center rounded-full border border-line px-5 text-sm font-medium">
+          Back to Studio
+        </a>
+      </div>
     </main>
   );
 }

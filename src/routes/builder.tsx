@@ -950,7 +950,7 @@ function BriefBuilderPage() {
                 type="button"
                 onClick={() => void handleSyncSharedSnapshot()}
                 disabled={isSyncingShare}
-                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-line bg-white px-2.5 text-[11px] font-medium text-fg hover:border-[#b08a45]"
+                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 text-[11px] font-medium text-fg hover:border-[#b08a45]"
               >
                 Push Brief Edits
               </button>
