@@ -7,8 +7,9 @@
  * local `npm run preview` check) crashed the whole server the first time any
  * page touched the database (the studio reads credits on every page).
  *
- * With DATABASE_URL set (a real deployment) PGLite is never loaded, so nothing
- * is copied and the deployed function stays small.
+ * The copy is unconditional on purpose: whether PGLite or a real database is used
+ * is decided at RUNTIME, and the build and runtime environments can differ (a
+ * missing file there is a crash, an extra 13 MB here is not).
  */
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,9 +17,8 @@ import { fileURLToPath } from "node:url";
 
 export const PGLITE_ASSETS = ["pglite.wasm", "pglite.data", "initdb.wasm"];
 
-/** Returns the list of files copied (empty when skipped). */
-export function copyPgliteAssets(root, env = process.env) {
-  if (env.DATABASE_URL && env.DATABASE_URL.trim()) return [];
+/** Returns the list of files copied (empty when there is no server build yet). */
+export function copyPgliteAssets(root) {
   const target = join(root, ".vercel", "output", "functions", "__server.func", "_libs");
   if (!existsSync(join(root, ".vercel", "output", "functions", "__server.func"))) return [];
   const source = join(root, "node_modules", "@electric-sql", "pglite", "dist");
@@ -36,5 +36,5 @@ export function copyPgliteAssets(root, env = process.env) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = dirname(dirname(fileURLToPath(import.meta.url)));
   const copied = copyPgliteAssets(root);
-  console.log(copied.length ? `[pglite] copied ${copied.join(", ")} for the local production preview` : "[pglite] nothing to copy (database URL set or no server build)");
+  console.log(copied.length ? `[pglite] copied ${copied.join(", ")} for the local production preview` : "[pglite] nothing to copy (no server build)");
 }
