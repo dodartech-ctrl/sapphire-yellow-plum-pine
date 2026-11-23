@@ -32,7 +32,9 @@ import {
   type NodeWorkflow,
   type WorkflowNodeInstance,
 } from "@/lib/node-studio";
+import { resolveRuntimeModelOverride } from "@/lib/nano-banana-client";
 import type { DesignState } from "@/lib/properties";
+import { useOriel } from "@/lib/store";
 
 export interface StudioRuntimeContext {
   activeImageUrl: string;
@@ -42,6 +44,25 @@ export interface StudioRuntimeContext {
   engine: EngineState;
   scene3d: Scene3DState;
   onAssetPromoted?: (imageUrl: string, title: string) => void;
+}
+
+function getNodeBudgetCloudConfig() {
+  const st = useOriel.getState();
+  return {
+    nanoBananaModel: resolveRuntimeModelOverride(st.nanoBanana.requestedModel),
+    nanoBananaResolution: "1K" as const,
+    budgetCostMode: st.budget.costMode,
+    budgetCapPaise: st.budget.capPaise,
+    budgetMaxPerImagePaise: st.budget.maxPerImagePaise,
+  };
+}
+
+function syncNodeCloudResponse(res: { credits?: number; budget?: unknown }) {
+  const st = useOriel.getState();
+  if (typeof res.credits === "number") st.setCredits(res.credits);
+  if (res.budget && typeof res.budget === "object") {
+    st.setBudgetState(res.budget as Parameters<typeof st.setBudgetState>[0]);
+  }
 }
 
 interface NodeWirePayload {
@@ -763,8 +784,10 @@ export async function executeNodeWorkflow(
                     geometryLock: incoming.conditioning?.conditioning?.geometryLockWeight ?? 90,
                   },
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.url) {
                 outUrl = res.url;
                 engineNote = "Cloud Masked Material Replace";
@@ -805,8 +828,10 @@ export async function executeNodeWorkflow(
                   frame: studioContext.frame,
                   engine: studioContext.engine,
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.url) outUrl = res.url;
             } catch {
               // fallback below
@@ -858,8 +883,10 @@ export async function executeNodeWorkflow(
                   frame: studioContext.frame,
                   engine: { ...studioContext.engine, outpaintRatio: ratio },
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.url) outUrl = res.url;
             } catch {
               // keep local canvas outpaint
@@ -895,8 +922,10 @@ export async function executeNodeWorkflow(
                   frame: studioContext.frame,
                   engine: { ...studioContext.engine, relightPreset: preset },
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.url) outUrl = res.url;
             } catch {
               // keep deterministic relight fallback
@@ -927,8 +956,10 @@ export async function executeNodeWorkflow(
                   frame: { ...studioContext.frame, ratio: aspect as Frame["ratio"] },
                   engine: studioContext.engine,
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.url) outUrl = res.url;
             } catch {
               // fallback already rendered
@@ -959,8 +990,10 @@ export async function executeNodeWorkflow(
                   frame: studioContext.frame,
                   engine: studioContext.engine,
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.url) outUrl = res.url;
             } catch {
               // fallback applied
@@ -993,8 +1026,10 @@ export async function executeNodeWorkflow(
                   frame: studioContext.frame,
                   engine: { ...studioContext.engine, upscaleFactor: factor, esrganModel: model },
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.url) outUrl = res.url;
             } catch {
               // keep local tiled pass
@@ -1034,8 +1069,10 @@ export async function executeNodeWorkflow(
                   frame: studioContext.frame,
                   engine: studioContext.engine,
                   scene3d: studioContext.scene3d,
+                  ...getNodeBudgetCloudConfig(),
                 },
               });
+              syncNodeCloudResponse(res);
               if (!res.fallback && res.urls.length > 0) urls = res.urls;
             } catch {
               // keep deterministic 4-up

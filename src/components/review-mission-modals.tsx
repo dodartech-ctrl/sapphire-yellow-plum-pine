@@ -2,6 +2,8 @@ import {
   Bot,
   CheckCircle2,
   Download,
+  FileText,
+  Loader2,
   Lock,
   MessageSquarePlus,
   Moon,
@@ -18,6 +20,13 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { runAnnotatorPass, runDepthAnythingPass, runTiledUpscalePass } from "@/lib/cv-pipeline";
+import { synthesizeFallbackComposite } from "@/lib/fallback-render";
+import { generatePlate } from "@/lib/generate";
+import { resolveRuntimeModelOverride } from "@/lib/nano-banana-client";
+import { evaluateFidelityGate } from "@/lib/presets-catalog";
+import { formatPaiseShort } from "@/lib/budget-guard";
+import { exportClientApprovalPdf } from "@/lib/studio-exports";
 import { useOriel } from "@/lib/store";
 import type { ReviewStatus } from "@/lib/prd-studio-data";
 import { cn } from "@/lib/utils";
@@ -505,12 +514,12 @@ export function TrackedReviewModal({ open, onClose }: { open: boolean; onClose: 
           <div className="mt-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d1c5b8]/45 bg-white/70 p-3 dark:border-[#a9bdc9]/20 dark:bg-[#16202d]/85">
               <div>
-                <p className="font-semibold">Client Sign-Off & Print-Ready Export</p>
+                <p className="font-semibold">Client Sign-Off &amp; Print-Ready Export</p>
                 <p className="text-[10px] text-[#7f766a] dark:text-[#a9bdc9]">
-                  Clean gallery contact sheet · Select final tiled resolution (8K / 12K / 15K)
+                  Generates a real print-ready PDF contact sheet with C2PA disclosure &amp; review audit log
                 </p>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {(["8K", "12K", "15K"] as const).map((tier) => (
                   <button
                     key={tier}
@@ -529,12 +538,49 @@ export function TrackedReviewModal({ open, onClose }: { open: boolean; onClose: 
                 <button
                   type="button"
                   onClick={() => {
-                    toast.success(`Client Approval Link copied (${exportSpec} tiled export ready)`);
-                    void navigator.clipboard?.writeText(window.location.href);
+                    const st = useOriel.getState();
+                    const approvalPlates =
+                      iterations.length > 0
+                        ? iterations.slice(0, 6).map((it) => ({
+                            id: it.id,
+                            url: it.url,
+                            label: it.look || "Studio Plate",
+                          }))
+                        : [
+                            {
+                              id: "cur",
+                              url: plate?.url || upload || "/viz/p01-pavilion-dusk.jpg",
+                              label: `${st.design.look} (${st.design.vertical})`,
+                            },
+                          ];
+                    void exportClientApprovalPdf({
+                      projectTitle: `${st.design.look} · ${st.design.vertical}`,
+                      exportTier: exportSpec,
+                      plates: approvalPlates,
+                      reviews: trackedReviews,
+                      governance: st.governance,
+                    })
+                      .then(({ filename, plateCount }) => {
+                        st.appendAuditEvent("Architect", `Exported ${exportSpec} Approval PDF`, filename);
+                        toast.success(`Downloaded ${filename} (${plateCount} plates embedded)`);
+                      })
+                      .catch((err) => {
+                        toast.error(err instanceof Error ? err.message : "Could not export Approval PDF.");
+                      });
                   }}
                   className="ice-cta inline-flex h-8 items-center gap-1 rounded-full px-3 text-[10px] font-bold"
                 >
-                  <Share2 className="size-3" /> Send Approval Link
+                  <FileText className="size-3" /> Export {exportSpec} PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.success(`Client Approval Link copied (${exportSpec} sheet ready)`);
+                    void navigator.clipboard?.writeText(window.location.href);
+                  }}
+                  className="inline-flex h-8 items-center gap-1 rounded-full border border-[#d1c5b8]/55 px-2.5 text-[10px] font-semibold dark:border-[#a9bdc9]/30"
+                >
+                  <Share2 className="size-3" /> Copy Link
                 </button>
               </div>
             </div>
@@ -546,9 +592,19 @@ export function TrackedReviewModal({ open, onClose }: { open: boolean; onClose: 
               ).map((item) => (
                 <div key={item.id} className="overflow-hidden rounded-xl border border-[#d1c5b8]/45 bg-black/20 dark:border-[#a9bdc9]/20">
                   <img src={item.url} alt={item.label} className="aspect-[16/10] w-full object-cover" />
-                  <div className="flex items-center justify-between p-2 text-[10px]">
+                  <div className="flex items-center justify-between gap-1 p-2 text-[10px]">
                     <span className="truncate font-semibold">{item.label}</span>
-                    <span className="text-emerald-500">Approved</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-emerald-500">Approved</span>
+                      <a
+                        href={item.url}
+                        download={`${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${exportSpec.toLowerCase()}.png`}
+                        className="rounded-full bg-black/15 px-1.5 py-0.5 font-mono text-[9px] hover:bg-black/25 dark:bg-white/10"
+                        title="Download Plate Image"
+                      >
+                        <Download className="size-2.5" />
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -569,30 +625,144 @@ export function AgentZukeDrawer({ open, onClose }: { open: boolean; onClose: () 
   const advanceAgentMissionStep = useOriel((s) => s.advanceAgentMissionStep);
   const updateAgentMission = useOriel((s) => s.updateAgentMission);
   const resetAgentMission = useOriel((s) => s.resetAgentMission);
-  const credits = useOriel((s) => s.credits);
-  const setCredits = useOriel((s) => s.setCredits);
+  const [runningPipeline, setRunningPipeline] = useState(false);
 
   if (!open) return null;
 
-  function runToGateOrFinish() {
-    let spent = agentMission.spentCr;
-    for (const step of agentMission.steps) {
-      if (step.status === "done") continue;
-      if (spent + step.costCr > agentMission.budgetCapCr) {
-        toast.error("Mission paused: budget cap reached");
-        return;
+  async function runToGateOrFinish() {
+    if (runningPipeline) return;
+    setRunningPipeline(true);
+    updateAgentMission({ active: true });
+    let spent = useOriel.getState().agentMission.spentCr;
+
+    try {
+      const steps = useOriel.getState().agentMission.steps;
+      for (const step of steps) {
+        if (step.status === "done") continue;
+        if (spent + step.costCr > useOriel.getState().agentMission.budgetCapCr) {
+          toast.error("Mission paused: credit budget cap reached");
+          return;
+        }
+        if (step.order === 5) {
+          advanceAgentMissionStep(step.id, "waiting_approval", "Awaiting human approval before 4K Enhance & Video export");
+          updateAgentMission({ awaitingApproval: true, active: false, spentCr: spent });
+          toast.message("Agent Zuke paused at Step 5: Human Approval Gate required before Final Enhance & KUM Video");
+          return;
+        }
+
+        advanceAgentMissionStep(step.id, "running");
+        const st = useOriel.getState();
+        const activeSrc = st.plate?.url ?? st.upload ?? "/viz/p01-pavilion-dusk.jpg";
+        let summary = step.outputSummary;
+
+        if (step.order === 1) {
+          const lockedWeight = Math.max(90, st.engine.geometryLock);
+          st.setEngineField("geometryLock", lockedWeight);
+          st.updateDesignContract({ lockedPreserve: true });
+          summary = `Geometry locked at ${lockedWeight}% · Source: ${st.upload ? "Uploaded Photo" : "Studio Scene"}`;
+        } else if (step.order === 2) {
+          const [depth, mlsd] = await Promise.all([
+            runDepthAnythingPass(activeSrc, true, 55),
+            runAnnotatorPass(activeSrc, "mlsd", 60),
+          ]);
+          st.setConditioningChannel("depth", depth.dataUrl);
+          st.setConditioningChannel("annotator", mlsd.dataUrl);
+          summary = "Extracted real Z-Depth & MLSD structural edge conditioning maps";
+        } else if (step.order === 3) {
+          const res = await generatePlate({
+            data: {
+              idea: st.idea.trim() || `${st.design.look} ${st.design.vertical} architectural plate`,
+              image: st.upload && st.upload.startsWith("data:image/") ? st.upload : undefined,
+              design: st.design,
+              frame: st.frame,
+              engine: st.engine,
+              scene3d: st.scene3d,
+              nanoBananaModel: resolveRuntimeModelOverride(st.nanoBanana.requestedModel),
+              nanoBananaResolution: "1K",
+              budgetCostMode: st.budget.costMode,
+              budgetCapPaise: st.budget.capPaise,
+              budgetMaxPerImagePaise: st.budget.maxPerImagePaise,
+            },
+          });
+          st.setCredits(res.credits);
+          if ("budget" in res && res.budget) {
+            st.setBudgetState(res.budget);
+          }
+          let outUrl = res.url;
+          if (res.fallback) {
+            outUrl = await synthesizeFallbackComposite({
+              baseImage: st.upload ?? st.plate?.url ?? undefined,
+              serverFallbackUrl: res.url,
+              design: st.design,
+              engine: st.engine,
+              scene3d: st.scene3d,
+              idea: st.idea,
+              variantIndex: 0,
+            });
+          }
+          st.setPlate({
+            url: outUrl,
+            upload: st.upload ?? undefined,
+            templateId: "agent-zuke",
+            idea: st.idea.trim() || `${st.design.look} Agent Zuke Plate`,
+            fallback: res.fallback,
+            seed: res.seed,
+            summary: res.summary,
+          });
+          summary = res.fallback
+            ? `Rendered Free (₹0) Studio Plate (Seed #${res.seed})`
+            : `Rendered Nano Banana plate (${formatPaiseShort(res.costPaise)} billed)`;
+        } else if (step.order === 4) {
+          const report = evaluateFidelityGate({
+            geometryLock: st.engine.geometryLock,
+            seedLocked: st.engine.seedLocked,
+            hasSource: Boolean(st.upload || st.plate?.url),
+            isFallback: Boolean(st.plate?.fallback),
+            hasMask: Boolean(st.maskDataUrl),
+            disclosureRequired: st.governance.aiDisclosureFooter,
+            idea: st.idea,
+            scene3d: st.scene3d,
+            frame: st.frame,
+          });
+          st.setFidelityReport(report);
+          summary = `Fidelity Gate C1–C10: ${Math.round(report.overallScore * 100)}/100 (${report.status.toUpperCase()})`;
+        } else if (step.order === 6) {
+          const upscaled = await runTiledUpscalePass(activeSrc, 2, "4x-ArchSharp", 18, true);
+          st.setPlate({
+            url: upscaled,
+            upload: st.upload ?? undefined,
+            templateId: "agent-zuke-enhance",
+            idea: `${st.idea.trim() || st.design.look} (2× ArchSharp Enhance)`,
+            fallback: true,
+          });
+          summary = "2× Tiled ArchSharp detail & fixture enhancement applied to active plate";
+        } else if (step.order === 7) {
+          st.addClipToKumVideo({
+            track: "video",
+            label: `Agent Zuke · ${st.design.look}`,
+            imageUrl: useOriel.getState().plate?.url ?? activeSrc,
+            durationSec: 5,
+            cameraMove: "dolly-in",
+            transition: "cross-dissolve",
+          });
+          summary = "Appended enhanced plate to KUM Video Studio multi-track timeline";
+        } else {
+          st.appendAuditEvent("Agent Zuke", "Completed 8-Step ArchViz Mission", `${st.design.look} · ${st.design.vertical}`);
+          summary = "Logged C2PA delivery & governance audit trail; ready for Client Approval PDF";
+        }
+
+        spent += step.costCr;
+        advanceAgentMissionStep(step.id, "done", summary);
+        updateAgentMission({ spentCr: spent });
       }
-      if (step.order === 5) {
-        advanceAgentMissionStep(step.id, "waiting_approval");
-        updateAgentMission({ awaitingApproval: true, active: false });
-        toast.message("Agent Zuke paused at Step 5: Human Approval Gate required before 8K & Video renders");
-        return;
-      }
-      spent += step.costCr;
-      advanceAgentMissionStep(step.id, "done");
+      updateAgentMission({ active: false, awaitingApproval: false, spentCr: spent });
+      toast.success("All 8 Agent Zuke mission steps executed on live studio pipeline!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Agent Zuke step failed.");
+      updateAgentMission({ active: false });
+    } finally {
+      setRunningPipeline(false);
     }
-    setCredits(Math.max(0, credits - Math.max(0, spent - agentMission.spentCr)));
-    toast.success("All 8 Agent Zuke mission steps completed!");
   }
 
   return (
@@ -629,9 +799,11 @@ export function AgentZukeDrawer({ open, onClose }: { open: boolean; onClose: () 
                   "flex items-start justify-between gap-2 rounded-xl border p-2.5",
                   step.status === "done"
                     ? "border-emerald-500/40 bg-emerald-500/10"
-                    : step.status === "waiting_approval"
-                      ? "border-[#e8c98a] bg-[#c5a880]/20 dark:bg-[#584411]/55"
-                      : "border-[#d1c5b8]/40 bg-white/55 dark:border-[#43474b]/60 dark:bg-[#16202d]/70",
+                    : step.status === "running"
+                      ? "border-sky-400 bg-sky-500/10"
+                      : step.status === "waiting_approval"
+                        ? "border-[#e8c98a] bg-[#c5a880]/20 dark:bg-[#584411]/55"
+                        : "border-[#d1c5b8]/40 bg-white/55 dark:border-[#43474b]/60 dark:bg-[#16202d]/70",
                 )}
               >
                 <div>
@@ -641,7 +813,13 @@ export function AgentZukeDrawer({ open, onClose }: { open: boolean; onClose: () 
                   <p className="text-[10px] text-[#7f766a] dark:text-[#a9bdc9]">{step.outputSummary}</p>
                 </div>
                 <span className="shrink-0 rounded-full bg-black/15 px-2 py-0.5 font-mono text-[9px] uppercase">
-                  {step.status === "done" ? "Done" : step.status === "waiting_approval" ? "Approve" : `${step.costCr} CR`}
+                  {step.status === "done"
+                    ? "Done"
+                    : step.status === "running"
+                      ? "Running…"
+                      : step.status === "waiting_approval"
+                        ? "Approve"
+                        : `${step.costCr} CR`}
                 </span>
               </div>
             ))}
@@ -652,31 +830,36 @@ export function AgentZukeDrawer({ open, onClose }: { open: boolean; onClose: () 
           {agentMission.awaitingApproval ? (
             <button
               type="button"
+              disabled={runningPipeline}
               onClick={() => {
-                advanceAgentMissionStep("ms-5", "done");
+                advanceAgentMissionStep("ms-5", "done", "Human gate approved — proceeding to Enhance, Video & Audit");
                 updateAgentMission({ awaitingApproval: false });
-                toast.success("Step 5 Approved — click Resume to finish 8K Finals & KUM Video");
+                void runToGateOrFinish();
               }}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full bg-emerald-500 px-3 text-[11px] font-bold text-white"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full bg-emerald-500 px-3 text-[11px] font-bold text-white disabled:opacity-60"
             >
-              <CheckCircle2 className="size-3.5" /> Approve Gate & Continue
+              {runningPipeline ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+              Approve Gate &amp; Finish
             </button>
           ) : (
             <button
               type="button"
-              onClick={runToGateOrFinish}
-              className="ice-cta inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-bold"
+              disabled={runningPipeline}
+              onClick={() => void runToGateOrFinish()}
+              className="ice-cta inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-bold disabled:opacity-60"
             >
-              <Play className="size-3.5" /> Run Pipeline
+              {runningPipeline ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+              {runningPipeline ? "Executing Live Pipeline…" : "Run Live Pipeline"}
             </button>
           )}
           <button
             type="button"
+            disabled={runningPipeline}
             onClick={() => {
               resetAgentMission();
               toast.message("Mission queue reset");
             }}
-            className="inline-flex h-9 items-center gap-1 rounded-full border border-[#d1c5b8]/55 px-3 text-[11px] dark:border-[#a9bdc9]/30"
+            className="inline-flex h-9 items-center gap-1 rounded-full border border-[#d1c5b8]/55 px-3 text-[11px] disabled:opacity-50 dark:border-[#a9bdc9]/30"
           >
             <RotateCcw className="size-3" /> Reset
           </button>

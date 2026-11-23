@@ -362,6 +362,7 @@ type State = {
   setSelecting: (selecting: boolean) => void;
   pushChat: (role: ChatLine["role"], text: string) => void;
   saveProject: (name: string) => void;
+  importProjectsBundle: (items: SavedProject[]) => number;
   openProject: (id: string) => void;
   removeProject: (id: string) => void;
   undo: () => void;
@@ -411,9 +412,11 @@ type State = {
   updateTourConfig: (patch: Partial<VirtualTourState>) => void;
   addTourScene: (scene: TourSceneNode) => void;
   addTourHotspot: (hotspot: Omit<TourHotspot, "id">) => void;
+  removeTourHotspot: (id: string) => void;
   updateUnitStatus: (unitId: string, status: TourUnitRecord["status"]) => void;
   updateVideoProject: (patch: Partial<KumVideoState>) => void;
   addClipToKumVideo: (clip: Omit<KumTimelineClip, "id" | "startSec">) => void;
+  updateClipInKumVideo: (id: string, patch: Partial<Pick<KumTimelineClip, "cameraMove" | "durationSec" | "label" | "transition">>) => void;
   removeClipFromKumVideo: (id: string) => void;
   updateAgentMission: (patch: Partial<AgentMissionState>) => void;
   advanceAgentMissionStep: (stepId: string, status: AgentMissionState["steps"][number]["status"], summary?: string) => void;
@@ -1015,6 +1018,25 @@ export const useOriel = create<State>()(
             ...state.projects,
           ].slice(0, 24),
         })),
+      importProjectsBundle: (items) => {
+        const valid = items.filter((p) => p && typeof p.id === "string" && typeof p.name === "string" && p.design);
+        if (valid.length === 0) return 0;
+        set((state) => {
+          const existingIds = new Set(state.projects.map((p) => p.id));
+          const merged = [
+            ...valid
+              .filter((p) => !existingIds.has(p.id))
+              .map((p) => ({
+                ...p,
+                name: p.name.trim().slice(0, 48) || "Imported Project",
+                design: sanitizeDesign(p.design),
+              })),
+            ...state.projects,
+          ].slice(0, 32);
+          return { projects: merged };
+        });
+        return valid.length;
+      },
       openProject: (id) =>
         set((state) => {
           const project = state.projects.find((item) => item.id === id);
@@ -1406,6 +1428,13 @@ export const useOriel = create<State>()(
             ].slice(0, 40),
           },
         })),
+      removeTourHotspot: (id) =>
+        set((state) => ({
+          tourConfig: {
+            ...state.tourConfig,
+            hotspots: state.tourConfig.hotspots.filter((h) => h.id !== id),
+          },
+        })),
       updateUnitStatus: (unitId, status) =>
         set((state) => ({
           tourConfig: {
@@ -1421,7 +1450,7 @@ export const useOriel = create<State>()(
           const endSec = videoClips.reduce((acc, c) => Math.max(acc, c.startSec + c.durationSec), 0);
           const created: KumTimelineClip = {
             ...clip,
-            id: `vc-${Date.now()}`,
+            id: `vc-${Date.now()}-${Math.floor(Math.random() * 999)}`,
             startSec: clip.track === "video" ? endSec : 0,
           };
           return {
@@ -1431,13 +1460,40 @@ export const useOriel = create<State>()(
             },
           };
         }),
+      updateClipInKumVideo: (id, patch) =>
+        set((state) => {
+          let cursor = 0;
+          const updated = state.videoProject.clips.map((c) => {
+            const next = c.id === id ? { ...c, ...patch } : c;
+            if (next.track === "video") {
+              const positioned = { ...next, startSec: cursor };
+              cursor += Math.max(1, positioned.durationSec);
+              return positioned;
+            }
+            return next;
+          });
+          return { videoProject: { ...state.videoProject, clips: updated } };
+        }),
       removeClipFromKumVideo: (id) =>
-        set((state) => ({
-          videoProject: {
-            ...state.videoProject,
-            clips: state.videoProject.clips.filter((c) => c.id !== id),
-          },
-        })),
+        set((state) => {
+          let cursor = 0;
+          const remaining = state.videoProject.clips
+            .filter((c) => c.id !== id)
+            .map((c) => {
+              if (c.track === "video") {
+                const positioned = { ...c, startSec: cursor };
+                cursor += Math.max(1, positioned.durationSec);
+                return positioned;
+              }
+              return c;
+            });
+          return {
+            videoProject: {
+              ...state.videoProject,
+              clips: remaining,
+            },
+          };
+        }),
       updateAgentMission: (patch) =>
         set((state) => ({ agentMission: { ...state.agentMission, ...patch } })),
       advanceAgentMissionStep: (stepId, status, summary) =>

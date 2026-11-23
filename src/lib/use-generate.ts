@@ -573,6 +573,7 @@ export function useGenerate() {
     try {
       const { paddedUrl, maskDataUrl: borderMask } = await runDirectionalOutpaintPad(targetBase, pad);
       const conditioning = await buildConditioningPayload();
+      const curBudget = useOriel.getState().budget;
       const result = await inpaintPlate({
         data: {
           idea: `Outpaint directional border T:${pad.top} R:${pad.right} B:${pad.bottom} L:${pad.left}px. ${idea}`.trim(),
@@ -585,9 +586,17 @@ export function useGenerate() {
           frame,
           engine: nextEngine,
           scene3d,
+          nanoBananaModel: resolveRuntimeModelOverride(useOriel.getState().nanoBanana.requestedModel),
+          nanoBananaResolution: "1K",
+          budgetCostMode: curBudget.costMode,
+          budgetCapPaise: curBudget.capPaise,
+          budgetMaxPerImagePaise: curBudget.maxPerImagePaise,
         },
       });
       setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        useOriel.getState().setBudgetState(result.budget);
+      }
       const finalUrl = result.fallback ? paddedUrl : result.url;
       setPlate({
         url: finalUrl,
@@ -899,9 +908,17 @@ export function useGenerate() {
           frame: st.frame,
           engine: nextEngine,
           scene3d: nextScene3D,
+          nanoBananaModel: resolveRuntimeModelOverride(st.nanoBanana.requestedModel),
+          nanoBananaResolution: "1K",
+          budgetCostMode: st.budget.costMode,
+          budgetCapPaise: st.budget.capPaise,
+          budgetMaxPerImagePaise: st.budget.maxPerImagePaise,
         },
       });
       st.setCredits(result.credits);
+      if ("budget" in result && result.budget) {
+        st.setBudgetState(result.budget);
+      }
       const variantIndex = job.light === "Evening" ? 2 : job.light === "Golden hour" ? 1 : 0;
       const finalUrl = result.fallback
         ? await synthesizeFallbackComposite({
